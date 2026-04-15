@@ -1,0 +1,16 @@
+services:
+  questdb:
+    image: questdb/questdb:latest
+    container_name: abm-questdb
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+    ports:
+      - "9000:9000"
+      - "8812:8812"
+      - "9009:9009"
+    volumes:
+      - questdb-data:/var/lib/questdb
+
+volumes:
+  questdb-data:

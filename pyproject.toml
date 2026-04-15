@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astro-abm"
+version = "0.1.0"
+description = "Astro ABM hourly data pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "python-binance>=1.0.19",
+  "requests>=2.31.0",
+  "psycopg[binary]>=3.1.18",
+  "pyswisseph>=2.10.3.2",
+  "pandas>=2.2.0",
+  "apscheduler>=3.10.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
