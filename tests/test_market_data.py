@@ -246,3 +246,62 @@ def test_questdb_fact_writer_executes_batch_insert_for_hourly_facts():
     assert row[9] == 72.5
     assert row[17] is None
     assert fake_connection.committed is True
+
+
+def test_questdb_etl_run_writer_executes_insert_for_run_log():
+    from astro_abm.storage.questdb import ETLRunRecord, QuestDBETLRunWriter
+
+    executed = {}
+
+    class FakeCursor:
+        def execute(self, sql, row):
+            executed["sql"] = sql
+            executed["row"] = row
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeConnection:
+        def __init__(self):
+            self.committed = False
+
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            self.committed = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    started_at = datetime(2024, 4, 15, 15, 0, tzinfo=UTC)
+    finished_at = datetime(2024, 4, 15, 15, 1, tzinfo=UTC)
+    writer = QuestDBETLRunWriter(connection_factory=lambda: FakeConnection())
+
+    writer.write(
+        ETLRunRecord(
+            started_at=started_at,
+            run_id="run-1",
+            job_type="askgrok_backfill",
+            provider="ASKGROK_WEB",
+            window_start=started_at,
+            window_end=datetime(2024, 4, 15, 16, 0, tzinfo=UTC),
+            status="success",
+            rows_written=8,
+            skipped_existing=1,
+            errors=0,
+            finished_at=finished_at,
+            notes="ok",
+        )
+    )
+
+    assert "INSERT INTO etl_runs" in executed["sql"]
+    assert executed["row"][1] == "run-1"
+    assert executed["row"][2] == "askgrok_backfill"
+    assert executed["row"][7] == 8

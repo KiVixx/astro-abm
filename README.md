@@ -484,6 +484,7 @@ Why these matter:
 Module:
 
 - `live.py`
+- `backfill_askgrok.py`
 
 What it does:
 
@@ -496,7 +497,25 @@ What it does:
 astro-abm-live
 ```
 
+Controlled ASKGROK backfill:
+
+```bash
+astro-abm-backfill-askgrok \
+  --start 2022-05-20T00:00:00Z \
+  --end 2022-05-21T00:00:00Z \
+  --assets BTC,ETH,LUNA,UST \
+  --max-hours 24
+```
+
 The live entrypoint is unit-tested with fake providers. A conservative local smoke run has been validated for QuestDB, ephemeris, NOAA facts, Binance, and Polygon. ASKGROK requires the separate local ASKGROK service to be running.
+
+Backfill safety defaults:
+
+- hourly windows only
+- `--max-hours` default 24 and hard cap 168
+- existing ASKGROK sentiment rows are skipped by default
+- provider errors are recorded without stopping the entire batch
+- one summary row is written to `etl_runs`
 
 --------------------------------------------------
 ## Configuration
@@ -585,6 +604,8 @@ pytest tests/test_ephemeris.py -q
 pytest tests/test_social_sentiment.py -q
 pytest tests/test_etl.py -q
 pytest tests/test_live_etl.py -q
+pytest tests/test_backfill_askgrok.py -q
+pytest tests/test_feature_summary.py -q
 ```
 
 --------------------------------------------------
@@ -605,6 +626,8 @@ Covered areas include:
 - moon phase percentage and angular features
 - LunarCrush hourly payload normalization
 - ASKGROK sentiment payload normalization and row shaping
+- controlled ASKGROK hourly backfill orchestration
+- ETL run-log writer shaping
 - ETL alignment, merge, row shaping, and scheduler wiring
 - live ETL provider orchestration with fake providers
 
@@ -627,6 +650,8 @@ Then apply:
 ```bash
 psql -h localhost -p 8812 -U admin -d qdb -f sql/schema_phase1.sql
 ```
+
+The schema file is idempotent and only creates tables; it does not seed sample facts.
 
 ### 2. Configure provider credentials
 Copy `.env.example` to `.env`, then fill whichever providers you plan to test first. The package loads `.env` automatically when configuration is read.
@@ -652,7 +677,17 @@ astro-abm-live
 ### 4. Add a config validation command
 The live command currently skips optional providers when credentials are missing. A dedicated validation command should make missing credentials and database availability explicit before a live run starts.
 
-### 5. Simulation layer
+### 5. Explore feature-store data
+
+Print a compact QuestDB summary:
+
+```bash
+astro-abm-feature-summary
+```
+
+Use that output to decide which time windows deserve deeper analysis before writing ABM simulation logic.
+
+### 6. Simulation layer
 After the live hourly pipeline is stable, the project can move into:
 
 - retail swarm agents

@@ -56,22 +56,19 @@ CREATE TABLE IF NOT EXISTS abm_entities (
 PARTITION BY MONTH
 WAL;
 
-INSERT INTO abm_hourly_facts
-    (ts, entity_type, entity_id, source, interval, asset_class, market, metric_name, metric_value, observed_ts, available_ts, quality_flag)
-VALUES
-    ('2026-04-15T12:00:00.000000Z', 'crypto_ohlcv', 'BTCUSDT', 'binance', '1h', 'crypto', 'spot', 'close', 84500.25, '2026-04-15T12:00:00.000000Z', '2026-04-15T12:00:05.000000Z', 'final');
-
-INSERT INTO abm_hourly_facts
-    (ts, entity_type, entity_id, source, interval, asset_class, metric_name, metric_value, observed_ts, available_ts, quality_flag)
-VALUES
-    ('2026-04-15T12:00:00.000000Z', 'space_weather', 'GLOBAL', 'noaa_swpc', '1h', 'macro', 'kp_index', 4.33, '2026-04-15T12:00:00.000000Z', '2026-04-15T12:05:00.000000Z', 'derived');
-
-INSERT INTO abm_hourly_facts
-    (ts, entity_type, entity_id, source, interval, asset_class, metric_name, metric_value, observed_ts, available_ts, quality_flag)
-VALUES
-    ('2026-04-15T12:00:00.000000Z', 'ephemeris', 'GLOBAL', 'pyswisseph', '1h', 'macro', 'moon_phase_pct', 0.72, '2026-04-15T12:00:00.000000Z', '2026-04-15T12:00:00.000000Z', 'derived');
-
-INSERT INTO abm_hourly_facts
-    (ts, entity_type, entity_id, source, interval, asset_class, metric_name, metric_value, observed_ts, available_ts, quality_flag)
-VALUES
-    ('2026-04-15T12:00:00.000000Z', 'social_sentiment', 'BTCUSDT', 'lunarcrush', '1h', 'crypto', 'sentiment_score', 61.2, '2026-04-15T12:00:00.000000Z', '2026-04-15T12:06:00.000000Z', 'final');
+CREATE TABLE IF NOT EXISTS etl_runs (
+    started_at TIMESTAMP,
+    run_id SYMBOL CAPACITY 128 CACHE INDEX,
+    job_type SYMBOL CAPACITY 64 CACHE INDEX,
+    provider SYMBOL CAPACITY 64 CACHE INDEX,
+    window_start TIMESTAMP,
+    window_end TIMESTAMP,
+    status SYMBOL CAPACITY 32 CACHE INDEX,
+    rows_written LONG,
+    skipped_existing LONG,
+    errors LONG,
+    finished_at TIMESTAMP,
+    notes VARCHAR
+) TIMESTAMP(started_at)
+PARTITION BY MONTH
+WAL;

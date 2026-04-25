@@ -11,12 +11,12 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 
 - Milestone: MVP hourly data foundation
 - Active phase: 6
-- Latest artifact: ASKGROK social sentiment adapter, live ETL skeleton, `.env.example`, and unified hourly fact writer
+- Latest artifact: controlled ASKGROK backfill runner, ETL run logs, ASKGROK social sentiment adapter, and unified hourly fact writer
 - Verification status: unit tests passing; QuestDB running; conservative live ephemeris/NOAA/Binance/Polygon run succeeded
 
 ## Open Blockers
 
-- ASKGROK is a local dependency and must be running for `SOCIAL_SENTIMENT_PROVIDER=askgrok`.
+- ASKGROK is a local dependency and must be running for `SOCIAL_SENTIMENT_PROVIDER=askgrok` or `astro-abm-backfill-askgrok`.
 - ASKGROK retrospective web-research sentiment is not equivalent to raw historical X firehose data.
 - LunarCrush remains optional but is no longer the recommended primary social provider.
 
@@ -35,8 +35,9 @@ Validate the live runtime path:
 1. start ASKGROK from `/Users/Apple/Documents/New project 2`
 2. set `SOCIAL_SENTIMENT_PROVIDER=askgrok`
 3. run `astro-abm-live` with crypto/tradfi/social symbols enabled
-4. confirm ASKGROK rows land in `abm_hourly_facts`
-5. decide whether to add controlled historical loopback/backfill windows
+4. run a small `astro-abm-backfill-askgrok --max-hours 1` smoke test
+5. inspect `etl_runs` and `astro-abm-feature-summary`
+6. decide whether to expand historical loopback windows
 
 ## Resume Anchor
 

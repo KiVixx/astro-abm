@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable, Iterable
 
 from astro_abm.etl.pipeline import FACT_ROW_COLUMNS
 from astro_abm.models import MarketBar
+
+
+@dataclass(frozen=True)
+class ETLRunRecord:
+    started_at: datetime
+    run_id: str
+    job_type: str
+    provider: str
+    window_start: datetime
+    window_end: datetime
+    status: str
+    rows_written: int
+    skipped_existing: int
+    errors: int
+    finished_at: datetime
+    notes: str = ""
 
 
 class QuestDBMarketBarWriter:
@@ -105,3 +123,62 @@ class QuestDBHourlyFactWriter:
         if isinstance(fact, dict):
             return tuple(fact.get(column) for column in FACT_ROW_COLUMNS)
         return tuple(fact)
+
+
+class QuestDBETLRunWriter:
+    def __init__(self, connection_factory: Callable | None = None):
+        self.connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
+
+    def write(self, record: ETLRunRecord) -> None:
+        sql = """
+        INSERT INTO etl_runs (
+            started_at,
+            run_id,
+            job_type,
+            provider,
+            window_start,
+            window_end,
+            status,
+            rows_written,
+            skipped_existing,
+            errors,
+            finished_at,
+            notes
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )
+        """.strip()
+        row = (
+            record.started_at,
+            record.run_id,
+            record.job_type,
+            record.provider,
+            record.window_start,
+            record.window_end,
+            record.status,
+            record.rows_written,
+            record.skipped_existing,
+            record.errors,
+            record.finished_at,
+            record.notes,
+        )
+
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(sql, row)
+            connection.commit()
+
+
+def askgrok_fact_exists(connection_factory: Callable, ts: datetime, entity_id: str) -> bool:
+    sql = """
+    SELECT count()
+    FROM abm_hourly_facts
+    WHERE ts = %s
+      AND entity_id = %s
+      AND source = 'ASKGROK_WEB'
+      AND metric_name = 'askgrok_sentiment_score'
+    """.strip()
+    with connection_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (ts, entity_id))
+            return cursor.fetchone()[0] > 0
