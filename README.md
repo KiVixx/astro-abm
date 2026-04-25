@@ -393,13 +393,20 @@ File:
 
 What it does:
 
-- defines `LunarCrushClient`
-- parses asset-level hourly social payloads
-- normalizes unix timestamps to UTC hour buckets
+- defines optional `AskGrokSentimentClient` and `LunarCrushClient` providers
+- calls a local ASKGROK service for retrospective web-research sentiment
+- parses optional LunarCrush hourly social payloads
+- normalizes timestamps to UTC hour buckets
 - shapes social feature rows for the unified hourly facts table
 
 Current supported metrics:
 
+- `askgrok_sentiment_score`
+- `askgrok_confidence`
+- `askgrok_bullish_intensity`
+- `askgrok_bearish_intensity`
+- `askgrok_fear_intensity`
+- `askgrok_uncertainty_intensity`
 - `social_volume`
 - `sentiment_score`
 - `social_contributors`
@@ -412,6 +419,8 @@ This is the first calibration / validation layer against the astro hypothesis.
 
 The idea is not that social sentiment replaces astro features.
 The idea is that social sentiment can later be used to test whether astro-derived perturbation variables appear to line up with observable crowd behavior.
+
+ASKGROK is treated as an AI sentiment oracle, not as a raw X firehose. Its rows preserve `source=ASKGROK_WEB`, `data_scope`, confidence, and limitations in `notes` so later analysis can separate retrospective web-research sentiment from direct social-volume feeds.
 
 --------------------------------------------------
 ## Phase 5 — ETL Alignment & Automation
@@ -478,7 +487,7 @@ Module:
 
 What it does:
 
-- wires crypto market bars, optional tradfi bars, NOAA space weather, ephemeris, and optional LunarCrush social rows
+- wires crypto market bars, optional tradfi bars, NOAA space weather, ephemeris, and optional social-sentiment rows
 - writes OHLCV rows through `QuestDBMarketBarWriter`
 - writes feature rows through `QuestDBHourlyFactWriter`
 - exposes a console command:
@@ -487,7 +496,7 @@ What it does:
 astro-abm-live
 ```
 
-The live entrypoint is unit-tested with fake providers. A conservative local smoke run has been validated for QuestDB, ephemeris, and NOAA fact rows. Full crypto/tradfi/social validation still requires live provider access and credentials.
+The live entrypoint is unit-tested with fake providers. A conservative local smoke run has been validated for QuestDB, ephemeris, NOAA facts, Binance, and Polygon. ASKGROK requires the separate local ASKGROK service to be running.
 
 --------------------------------------------------
 ## Configuration
@@ -502,7 +511,13 @@ Market data:
 
 - `POLYGON_API_KEY`
 - `ALPHA_VANTAGE_API_KEY`
-- `LUNARCRUSH_API_KEY`
+
+Social sentiment:
+
+- `SOCIAL_SENTIMENT_PROVIDER` — `askgrok`, `lunarcrush`, or `disabled`
+- `ASKGROK_BASE_URL`
+- `ASKGROK_TIMEOUT_MS`
+- `LUNARCRUSH_API_KEY` — optional fallback provider
 
 QuestDB:
 
@@ -515,11 +530,12 @@ QuestDB:
 Provider selection:
 
 - `TRADFI_PROVIDER`
+- `SOCIAL_SENTIMENT_PROVIDER`
 
 Notes:
 
 - The repo includes `.env.example`
-- live provider credentials are still an open blocker in `.planning/STATE.md`
+- ASKGROK sentiment requires the local ASKGROK API, usually at `http://localhost:3000`
 - QuestDB defaults in `config.py` are for disposable local development only and should be overridden outside a local test setup
 
 --------------------------------------------------
@@ -588,13 +604,14 @@ Covered areas include:
 - Kp hourly expansion
 - moon phase percentage and angular features
 - LunarCrush hourly payload normalization
+- ASKGROK sentiment payload normalization and row shaping
 - ETL alignment, merge, row shaping, and scheduler wiring
 - live ETL provider orchestration with fake providers
 
 --------------------------------------------------
 ## Known Gaps / Next Logical Work
 
-This repo is now a strong foundation, with a tested one-command live ETL skeleton. The next gap is validating the full market and social-provider path against QuestDB with real credentials.
+This repo is now a strong foundation, with a tested one-command live ETL skeleton. The next gap is deciding how aggressively to backfill ASKGROK sentiment windows.
 
 The most natural next steps are:
 
@@ -615,7 +632,15 @@ psql -h localhost -p 8812 -U admin -d qdb -f sql/schema_phase1.sql
 Copy `.env.example` to `.env`, then fill whichever providers you plan to test first. The package loads `.env` automatically when configuration is read.
 
 - `POLYGON_API_KEY` or `ALPHA_VANTAGE_API_KEY`
-- `LUNARCRUSH_API_KEY`
+- `SOCIAL_SENTIMENT_PROVIDER=askgrok`
+- `ASKGROK_BASE_URL=http://localhost:3000`
+
+Start ASKGROK separately:
+
+```bash
+cd "/Users/Apple/Documents/New project 2"
+npm start
+```
 
 ### 3. Run the live ETL command
 After installing the package in editable mode:

@@ -9,7 +9,11 @@ from typing import Any, Iterable, Sequence
 from astro_abm.config import load_market_data_settings
 from astro_abm.etl.pipeline import normalize_to_utc_hour
 from astro_abm.features.ephemeris import EphemerisCalculator, build_ephemeris_feature_rows
-from astro_abm.features.social_sentiment import LunarCrushClient, build_social_sentiment_feature_rows
+from astro_abm.features.social_sentiment import (
+    AskGrokSentimentClient,
+    LunarCrushClient,
+    build_social_sentiment_feature_rows,
+)
 from astro_abm.features.space_weather import SpaceWeatherClient, build_space_weather_feature_rows
 from astro_abm.market_data.binance_client import BinanceMarketDataClient
 from astro_abm.market_data.tradfi import AlphaVantageProvider, PolygonProvider
@@ -35,7 +39,7 @@ def run_live_etl(
     tradfi_provider: Any | None = None,
     space_weather_client: Any | None = None,
     ephemeris_calculator: Any | None = None,
-    lunarcrush_client: Any | None = None,
+    social_sentiment_client: Any | None = None,
     market_bar_writer: Any | None = None,
     fact_writer: Any | None = None,
 ) -> LiveETLResult:
@@ -75,11 +79,11 @@ def run_live_etl(
         skipped.append("space_weather:no_complete_snapshot")
 
     if social_symbols:
-        if lunarcrush_client is None:
+        if social_sentiment_client is None:
             skipped.append("social:no_provider")
         else:
             try:
-                fact_rows.extend(_collect_social_rows(social_symbols, lunarcrush_client, bucket_ts))
+                fact_rows.extend(_collect_social_rows(social_symbols, social_sentiment_client, bucket_ts))
             except Exception as exc:
                 skipped.append(f"social:error:{type(exc).__name__}")
 
@@ -102,11 +106,19 @@ def build_default_tradfi_provider() -> Any | None:
     return None
 
 
-def build_default_lunarcrush_client() -> LunarCrushClient | None:
-    api_key = load_market_data_settings().lunarcrush_api_key
-    if not api_key:
+def build_default_social_sentiment_client() -> Any | None:
+    settings = load_market_data_settings()
+    provider = settings.social_sentiment_provider.lower()
+    if provider == "askgrok":
+        return AskGrokSentimentClient(
+            base_url=settings.askgrok_base_url,
+            timeout_ms=settings.askgrok_timeout_ms,
+        )
+    if provider == "lunarcrush" and settings.lunarcrush_api_key:
+        return LunarCrushClient(api_key=settings.lunarcrush_api_key)
+    if provider in {"", "none", "disabled"}:
         return None
-    return LunarCrushClient(api_key=api_key)
+    return None
 
 
 def _fetch_tradfi_bars(provider: Any, symbol: str, start: str, end: str) -> list[MarketBar]:
@@ -142,9 +154,13 @@ def _collect_space_weather_rows(bucket_ts: datetime, client: Any) -> list[dict[s
 
 
 def _collect_social_rows(symbols: Iterable[str], client: Any, bucket_ts: datetime) -> list[dict[str, Any]]:
+    symbol_list = list(symbols)
+    if hasattr(client, "fetch_feature_rows"):
+        return client.fetch_feature_rows(start_utc=bucket_ts, end_utc=bucket_ts + timedelta(hours=1), assets=symbol_list)
+
     rows: list[dict[str, Any]] = []
     available_ts = datetime.now(UTC)
-    for symbol in symbols:
+    for symbol in symbol_list:
         points = client.fetch_normalized_rows(symbol=symbol, hours_back=24)
         for point in points:
             if point["ts"] != bucket_ts:
@@ -189,7 +205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         tradfi_symbols=_split_env_list("ASTRO_ABM_TRADFI_SYMBOLS", "SPY"),
         social_symbols=_split_env_list("ASTRO_ABM_SOCIAL_SYMBOLS", "BTC"),
         tradfi_provider=build_default_tradfi_provider(),
-        lunarcrush_client=build_default_lunarcrush_client(),
+        social_sentiment_client=build_default_social_sentiment_client(),
     )
     print(
         "Astro ABM ETL complete: "

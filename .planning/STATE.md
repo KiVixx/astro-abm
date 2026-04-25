@@ -11,14 +11,14 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 
 - Milestone: MVP hourly data foundation
 - Active phase: 6
-- Latest artifact: live ETL skeleton, `.env.example`, and unified hourly fact writer
-- Verification status: unit tests passing; QuestDB running; conservative live ephemeris/NOAA fact run succeeded
+- Latest artifact: ASKGROK social sentiment adapter, live ETL skeleton, `.env.example`, and unified hourly fact writer
+- Verification status: unit tests passing; QuestDB running; conservative live ephemeris/NOAA/Binance/Polygon run succeeded
 
 ## Open Blockers
 
-- No provider credentials configured yet for Polygon/Alpha Vantage/LunarCrush.
-- Live crypto market-bar write has not yet been smoke-tested against Binance from this environment.
-- Live tradfi and LunarCrush ingestion require provider credentials.
+- ASKGROK is a local dependency and must be running for `SOCIAL_SENTIMENT_PROVIDER=askgrok`.
+- ASKGROK retrospective web-research sentiment is not equivalent to raw historical X firehose data.
+- LunarCrush remains optional but is no longer the recommended primary social provider.
 
 ## Recent Decisions
 
@@ -27,14 +27,16 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 - Preserve `observed_ts` and `available_ts` for provenance and leakage control.
 - Maintain both a unified aligned facts table and a dedicated hourly OHLCV table.
 - Add a tested live ETL skeleton before attempting provider-specific production hardening.
+- Use ASKGROK as the primary social-sentiment adapter and keep LunarCrush as optional fallback.
 
 ## Next Step
 
 Validate the live runtime path:
-1. add provider keys to `.env`
-2. run `astro-abm-live` with crypto/tradfi/social symbols enabled
-3. confirm `market_ohlcv_1h` receives market bars
-4. add config validation and live integration tests around the real runtime assumptions
+1. start ASKGROK from `/Users/Apple/Documents/New project 2`
+2. set `SOCIAL_SENTIMENT_PROVIDER=askgrok`
+3. run `astro-abm-live` with crypto/tradfi/social symbols enabled
+4. confirm ASKGROK rows land in `abm_hourly_facts`
+5. decide whether to add controlled historical loopback/backfill windows
 
 ## Resume Anchor
 

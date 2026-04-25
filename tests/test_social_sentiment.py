@@ -184,3 +184,101 @@ def test_build_social_sentiment_feature_rows_shapes_hourly_fact_rows():
     assert all(row["entity_id"] == "BTC" for row in rows)
     assert all(row["source"] == "lunarcrush" for row in rows)
     assert all(row["asset_class"] == "crypto" for row in rows)
+
+
+def test_build_askgrok_feature_rows_shapes_hourly_fact_rows():
+    from astro_abm.features.social_sentiment import build_askgrok_feature_rows
+
+    sentiment = {
+        "timestamp_utc": "2022-05-20T00:00:00.000Z",
+        "window_end_utc": "2022-05-20T01:00:00.000Z",
+        "source": "ASKGROK_WEB",
+        "data_scope": "web_research",
+        "market": "crypto",
+        "assets": ["BTC", "ETH", "LUNA", "UST"],
+        "sentiment_score": -0.75,
+        "sentiment_label": "fear",
+        "confidence": 0.65,
+        "social_volume_proxy": None,
+        "bullish_intensity": 0.1,
+        "bearish_intensity": 0.8,
+        "fear_intensity": 0.85,
+        "fomo_intensity": 0.05,
+        "uncertainty_intensity": 0.6,
+        "dominant_emotions": ["fear", "panic"],
+        "dominant_topics": ["Terra collapse aftermath"],
+        "evidence_summary": "Broad fear after the UST depeg.",
+        "sample_size_estimate": 50,
+        "limitations": "Retrospective web research.",
+    }
+
+    rows = build_askgrok_feature_rows(
+        sentiment=sentiment,
+        available_ts=datetime(2026, 4, 25, 3, 5, tzinfo=UTC),
+    )
+
+    metric_names = [row["metric_name"] for row in rows]
+    assert metric_names == [
+        "askgrok_sentiment_score",
+        "askgrok_confidence",
+        "askgrok_bullish_intensity",
+        "askgrok_bearish_intensity",
+        "askgrok_fear_intensity",
+        "askgrok_fomo_intensity",
+        "askgrok_uncertainty_intensity",
+        "askgrok_sample_size_estimate",
+    ]
+    assert rows[0]["ts"] == datetime(2022, 5, 20, 0, 0, tzinfo=UTC)
+    assert rows[0]["observed_ts"] == datetime(2022, 5, 20, 1, 0, tzinfo=UTC)
+    assert rows[0]["entity_id"] == "BTC,ETH,LUNA,UST"
+    assert rows[0]["source"] == "ASKGROK_WEB"
+    assert rows[0]["metric_value"] == -0.75
+    assert "sentiment_label=fear" in rows[0]["notes"]
+
+
+def test_askgrok_client_posts_window_and_assets_to_local_service():
+    from astro_abm.features.social_sentiment import AskGrokSentimentClient
+
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "sentiment": {
+                    "timestamp_utc": "2022-05-20T00:00:00.000Z",
+                    "window_end_utc": "2022-05-20T01:00:00.000Z",
+                    "source": "ASKGROK_WEB",
+                    "assets": ["BTC"],
+                    "sentiment_score": -0.5,
+                    "confidence": 0.6,
+                }
+            }
+
+    class FakeSession:
+        def post(self, url, **kwargs):
+            calls.append({"url": url, **kwargs})
+            return FakeResponse()
+
+    client = AskGrokSentimentClient(base_url="http://askgrok.test/", timeout_ms=180000, session=FakeSession())
+    sentiment = client.fetch_sentiment(
+        start_utc=datetime(2022, 5, 20, 0, 0, tzinfo=UTC),
+        end_utc=datetime(2022, 5, 20, 1, 0, tzinfo=UTC),
+        assets=["BTC"],
+    )
+
+    assert calls == [
+        {
+            "url": "http://askgrok.test/sentiment/crypto",
+            "json": {
+                "startUtc": "2022-05-20T00:00:00Z",
+                "endUtc": "2022-05-20T01:00:00Z",
+                "assets": ["BTC"],
+                "timeoutMs": 180000,
+            },
+            "timeout": 190.0,
+        }
+    ]
+    assert sentiment["sentiment_score"] == -0.5

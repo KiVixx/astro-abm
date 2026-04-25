@@ -24,6 +24,9 @@ class MarketDataSettings:
     alpha_vantage_api_key: str | None = None
     lunarcrush_api_key: str | None = None
     default_tradfi_provider: str = "polygon"
+    social_sentiment_provider: str = "lunarcrush"
+    askgrok_base_url: str = "http://localhost:3000"
+    askgrok_timeout_ms: int = 180_000
 
 
 def load_questdb_settings() -> QuestDBSettings:
@@ -42,4 +45,7 @@ def load_market_data_settings() -> MarketDataSettings:
         alpha_vantage_api_key=os.getenv("ALPHA_VANTAGE_API_KEY"),
         lunarcrush_api_key=os.getenv("LUNARCRUSH_API_KEY"),
         default_tradfi_provider=os.getenv("TRADFI_PROVIDER", "polygon"),
+        social_sentiment_provider=os.getenv("SOCIAL_SENTIMENT_PROVIDER", "lunarcrush"),
+        askgrok_base_url=os.getenv("ASKGROK_BASE_URL", "http://localhost:3000"),
+        askgrok_timeout_ms=int(os.getenv("ASKGROK_TIMEOUT_MS", "180000")),
     )

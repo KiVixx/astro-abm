@@ -76,7 +76,7 @@ def test_run_live_etl_wires_live_sources_into_market_and_fact_writers():
             assert dt == bucket_ts
             return {"moon_phase_pct": 72.5, "moon_is_waxing": True}
 
-    class FakeLunarCrushClient:
+    class FakeSocialSentimentClient:
         def fetch_normalized_rows(self, symbol, hours_back):
             assert symbol == "BTC"
             assert hours_back == 24
@@ -98,7 +98,7 @@ def test_run_live_etl_wires_live_sources_into_market_and_fact_writers():
         tradfi_provider=FakeTradfiProvider(),
         space_weather_client=FakeSpaceWeatherClient(),
         ephemeris_calculator=FakeEphemerisCalculator(),
-        lunarcrush_client=FakeLunarCrushClient(),
+        social_sentiment_client=FakeSocialSentimentClient(),
         market_bar_writer=market_writer,
         fact_writer=fact_writer,
     )
@@ -184,7 +184,7 @@ def test_run_live_etl_records_optional_provider_errors_without_aborting():
         def compute_features(self, dt):
             return {"moon_phase_pct": 50.0}
 
-    class FakeLunarCrushClient:
+    class FakeSocialSentimentClient:
         def fetch_normalized_rows(self, **kwargs):
             raise RuntimeError("plan unavailable")
 
@@ -198,7 +198,7 @@ def test_run_live_etl_records_optional_provider_errors_without_aborting():
         tradfi_provider=FakeTradfiProvider(),
         space_weather_client=FakeSpaceWeatherClient(),
         ephemeris_calculator=FakeEphemerisCalculator(),
-        lunarcrush_client=FakeLunarCrushClient(),
+        social_sentiment_client=FakeSocialSentimentClient(),
         market_bar_writer=RecordingWriter(),
         fact_writer=fact_writer,
     )
@@ -210,3 +210,63 @@ def test_run_live_etl_records_optional_provider_errors_without_aborting():
         "social:error:RuntimeError",
     )
     assert fact_writer.rows[0]["metric_name"] == "moon_phase_pct"
+
+
+def test_run_live_etl_uses_askgrok_feature_rows_when_provider_supports_them():
+    from astro_abm.etl.live import run_live_etl
+
+    bucket_ts = datetime(2024, 4, 15, 15, 0, tzinfo=UTC)
+
+    class FakeSpaceWeatherClient:
+        def fetch_plasma(self):
+            return []
+
+        def fetch_magnetometer(self):
+            return []
+
+        def fetch_xray_flux(self):
+            return []
+
+        def fetch_hourly_kp(self):
+            return []
+
+    class FakeEphemerisCalculator:
+        def compute_features(self, dt):
+            return {"moon_phase_pct": 50.0}
+
+    class FakeAskGrokClient:
+        def fetch_feature_rows(self, start_utc, end_utc, assets):
+            assert start_utc == bucket_ts
+            assert end_utc == datetime(2024, 4, 15, 16, 0, tzinfo=UTC)
+            assert assets == ["BTC", "ETH"]
+            return [
+                {
+                    "ts": start_utc,
+                    "entity_type": "social_sentiment",
+                    "entity_id": "BTC,ETH",
+                    "source": "ASKGROK_WEB",
+                    "interval": "1h",
+                    "asset_class": "crypto",
+                    "metric_name": "askgrok_sentiment_score",
+                    "metric_value": -0.25,
+                    "observed_ts": end_utc,
+                    "available_ts": end_utc,
+                }
+            ]
+
+    fact_writer = RecordingWriter()
+    result = run_live_etl(
+        run_ts=bucket_ts,
+        crypto_symbols=(),
+        tradfi_symbols=(),
+        social_symbols=("BTC", "ETH"),
+        space_weather_client=FakeSpaceWeatherClient(),
+        ephemeris_calculator=FakeEphemerisCalculator(),
+        social_sentiment_client=FakeAskGrokClient(),
+        market_bar_writer=RecordingWriter(),
+        fact_writer=fact_writer,
+    )
+
+    assert result.fact_rows_written == 2
+    assert result.skipped == ("space_weather:no_complete_snapshot",)
+    assert fact_writer.rows[1]["metric_name"] == "askgrok_sentiment_score"
