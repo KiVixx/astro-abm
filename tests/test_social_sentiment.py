@@ -69,6 +69,93 @@ def test_parse_lunarcrush_payload_tolerates_missing_optional_metrics():
     assert rows[0]["sentiment_score"] == 0.61
 
 
+def test_parse_lunarcrush_v4_topic_timeseries_payload_normalizes_hourly_points():
+    from astro_abm.features.social_sentiment import parse_lunarcrush_topic_timeseries_payload
+
+    payload = {
+        "config": {"id": "bitcoin", "symbol": "BTC"},
+        "data": [
+            {
+                "time": 1713171600,
+                "posts_active": 40278,
+                "contributors_active": 20823,
+                "interactions": 5345455,
+                "sentiment": 72,
+                "social_dominance": 33.9255,
+            }
+        ],
+    }
+
+    rows = parse_lunarcrush_topic_timeseries_payload(payload)
+
+    assert rows == [
+        {
+            "asset_id": "bitcoin",
+            "symbol": "BTC",
+            "ts": datetime(2024, 4, 15, 9, 0, tzinfo=UTC),
+            "social_volume": 40278.0,
+            "social_contributors": 20823.0,
+            "social_score": 5345455.0,
+            "average_sentiment": None,
+            "sentiment_score": 72.0,
+            "social_dominance": 33.9255,
+        }
+    ]
+
+
+def test_lunarcrush_client_uses_v4_topic_endpoint_and_bearer_token():
+    from astro_abm.features.social_sentiment import LunarCrushClient
+
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "config": {"id": "bitcoin", "symbol": "BTC"},
+                "data": [
+                    {
+                        "time": 1713171600,
+                        "posts_active": 1,
+                        "contributors_active": 2,
+                        "interactions": 3,
+                        "sentiment": 72,
+                    },
+                    {
+                        "time": 1713175200,
+                        "posts_active": 4,
+                        "contributors_active": 5,
+                        "interactions": 6,
+                        "sentiment": 73,
+                    },
+                ],
+            }
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            calls.append({"url": url, **kwargs})
+            return FakeResponse()
+
+    rows = LunarCrushClient(api_key="secret-token", session=FakeSession()).fetch_normalized_rows(
+        symbol="BTC",
+        hours_back=1,
+    )
+
+    assert calls == [
+        {
+            "url": "https://lunarcrush.com/api4/public/topic/bitcoin/time-series/v2",
+            "params": {"bucket": "hour"},
+            "headers": {"Authorization": "Bearer secret-token"},
+            "timeout": 30,
+        }
+    ]
+    assert len(rows) == 1
+    assert rows[0]["ts"] == datetime(2024, 4, 15, 10, 0, tzinfo=UTC)
+    assert rows[0]["sentiment_score"] == 73.0
+
+
 def test_build_social_sentiment_feature_rows_shapes_hourly_fact_rows():
     from astro_abm.features.social_sentiment import build_social_sentiment_feature_rows
 

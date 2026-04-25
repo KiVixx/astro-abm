@@ -158,3 +158,55 @@ def test_run_live_etl_skips_missing_optional_live_providers():
         "space_weather:no_complete_snapshot",
         "social:no_provider",
     )
+
+
+def test_run_live_etl_records_optional_provider_errors_without_aborting():
+    from astro_abm.etl.live import run_live_etl
+
+    class FakeTradfiProvider:
+        def fetch_hourly_bars(self, **kwargs):
+            raise RuntimeError("tradfi unavailable")
+
+    class FakeSpaceWeatherClient:
+        def fetch_plasma(self):
+            return []
+
+        def fetch_magnetometer(self):
+            return []
+
+        def fetch_xray_flux(self):
+            return []
+
+        def fetch_hourly_kp(self):
+            return []
+
+    class FakeEphemerisCalculator:
+        def compute_features(self, dt):
+            return {"moon_phase_pct": 50.0}
+
+    class FakeLunarCrushClient:
+        def fetch_normalized_rows(self, **kwargs):
+            raise RuntimeError("plan unavailable")
+
+    fact_writer = RecordingWriter()
+
+    result = run_live_etl(
+        run_ts=datetime(2024, 4, 15, 15, 0, tzinfo=UTC),
+        crypto_symbols=(),
+        tradfi_symbols=("SPY",),
+        social_symbols=("BTC",),
+        tradfi_provider=FakeTradfiProvider(),
+        space_weather_client=FakeSpaceWeatherClient(),
+        ephemeris_calculator=FakeEphemerisCalculator(),
+        lunarcrush_client=FakeLunarCrushClient(),
+        market_bar_writer=RecordingWriter(),
+        fact_writer=fact_writer,
+    )
+
+    assert result.fact_rows_written == 1
+    assert result.skipped == (
+        "tradfi:error:RuntimeError",
+        "space_weather:no_complete_snapshot",
+        "social:error:RuntimeError",
+    )
+    assert fact_writer.rows[0]["metric_name"] == "moon_phase_pct"

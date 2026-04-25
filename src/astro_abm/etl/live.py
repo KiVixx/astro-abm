@@ -54,10 +54,13 @@ def run_live_etl(
         if tradfi_provider is None:
             skipped.append("tradfi:no_provider")
         else:
-            start = (bucket_ts - timedelta(days=7)).date().isoformat()
-            end = bucket_ts.date().isoformat()
-            for symbol in tradfi_symbols:
-                market_bars.extend(_fetch_tradfi_bars(tradfi_provider, symbol, start, end))
+            try:
+                start = (bucket_ts - timedelta(days=7)).date().isoformat()
+                end = bucket_ts.date().isoformat()
+                for symbol in tradfi_symbols:
+                    market_bars.extend(_fetch_tradfi_bars(tradfi_provider, symbol, start, end))
+            except Exception as exc:
+                skipped.append(f"tradfi:error:{type(exc).__name__}")
 
     market_bar_writer.write(market_bars)
 
@@ -75,7 +78,10 @@ def run_live_etl(
         if lunarcrush_client is None:
             skipped.append("social:no_provider")
         else:
-            fact_rows.extend(_collect_social_rows(social_symbols, lunarcrush_client, bucket_ts))
+            try:
+                fact_rows.extend(_collect_social_rows(social_symbols, lunarcrush_client, bucket_ts))
+            except Exception as exc:
+                skipped.append(f"social:error:{type(exc).__name__}")
 
     fact_writer.write(fact_rows)
     return LiveETLResult(

@@ -5,7 +5,14 @@ from typing import Any
 
 import requests
 
-LUNARCRUSH_BASE_URL = "https://api.lunarcrush.com/v2"
+LUNARCRUSH_BASE_URL = "https://lunarcrush.com/api4/public"
+DEFAULT_SYMBOL_TOPICS = {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "SOL": "solana",
+    "XRP": "xrp",
+    "DOGE": "dogecoin",
+}
 
 
 def _to_utc_hour(timestamp: int | float) -> datetime:
@@ -31,6 +38,35 @@ def parse_lunarcrush_assets_payload(payload: dict[str, Any]) -> list[dict[str, A
                     "social_dominance": float(point["social_dominance"]) if point.get("social_dominance") is not None else None,
                 }
             )
+    return rows
+
+
+def parse_lunarcrush_topic_timeseries_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    config = payload.get("config", {})
+    symbol = str(config.get("symbol", "")).upper()
+    asset_id = config.get("id")
+    rows: list[dict[str, Any]] = []
+    for point in payload.get("data", []) or []:
+        posts_active = point.get("posts_active")
+        posts_created = point.get("posts_created")
+        social_volume = posts_active if posts_active is not None else posts_created
+        rows.append(
+            {
+                "asset_id": asset_id,
+                "symbol": symbol,
+                "ts": _to_utc_hour(point["time"]),
+                "social_volume": float(social_volume) if social_volume is not None else None,
+                "social_contributors": float(point["contributors_active"])
+                if point.get("contributors_active") is not None
+                else None,
+                "social_score": float(point["interactions"]) if point.get("interactions") is not None else None,
+                "average_sentiment": None,
+                "sentiment_score": float(point["sentiment"]) if point.get("sentiment") is not None else None,
+                "social_dominance": float(point["social_dominance"])
+                if point.get("social_dominance") is not None
+                else None,
+            }
+        )
     return rows
 
 
@@ -83,17 +119,20 @@ class LunarCrushClient:
         self.session = session or requests.Session()
 
     def fetch_asset_timeseries(self, symbol: str, hours_back: int = 168) -> dict[str, Any]:
-        params = {
-            "data": "assets",
-            "key": self.api_key,
-            "symbol": symbol.upper(),
-            "interval": "1h",
-            "time_series": str(hours_back),
-        }
-        response = self.session.get(LUNARCRUSH_BASE_URL, params=params, timeout=30)
+        topic = DEFAULT_SYMBOL_TOPICS.get(symbol.upper(), symbol.lower())
+        url = f"{LUNARCRUSH_BASE_URL}/topic/{topic}/time-series/v2"
+        response = self.session.get(
+            url,
+            params={"bucket": "hour"},
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=30,
+        )
         response.raise_for_status()
         return response.json()
 
     def fetch_normalized_rows(self, symbol: str, hours_back: int = 168) -> list[dict[str, Any]]:
         payload = self.fetch_asset_timeseries(symbol=symbol, hours_back=hours_back)
-        return parse_lunarcrush_assets_payload(payload)
+        rows = parse_lunarcrush_topic_timeseries_payload(payload)
+        if hours_back <= 0:
+            return rows
+        return rows[-hours_back:]
