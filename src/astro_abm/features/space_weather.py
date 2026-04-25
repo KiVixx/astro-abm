@@ -6,8 +6,8 @@ from typing import Any
 import requests
 
 NOAA_SPACE_WEATHER_ENDPOINTS = {
-    "plasma": "https://services.swpc.noaa.gov/json/products/solar-wind/plasma-1-day.json",
-    "mag": "https://services.swpc.noaa.gov/json/products/solar-wind/mag-1-day.json",
+    "plasma": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+    "mag": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
     "xray": "https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json",
     "kp": "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json",
 }

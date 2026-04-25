@@ -15,12 +15,16 @@ dependencies = [
   "pyswisseph>=2.10.3.2",
   "pandas>=2.2.0",
   "apscheduler>=3.10.4",
+  "python-dotenv>=1.0.1",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",
 ]
+
+[project.scripts]
+astro-abm-live = "astro_abm.etl.live:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

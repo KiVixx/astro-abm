@@ -181,3 +181,68 @@ def test_questdb_writer_executes_batch_insert_for_market_bars():
     assert row[6] == 84500.1
     assert row[13] is True
     assert fake_connection.committed is True
+
+
+def test_questdb_fact_writer_executes_batch_insert_for_hourly_facts():
+    from astro_abm.storage.questdb import QuestDBHourlyFactWriter
+
+    executed = {}
+
+    class FakeCursor:
+        def executemany(self, sql, rows):
+            executed["sql"] = sql
+            executed["rows"] = rows
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeConnection:
+        def __init__(self):
+            self.committed = False
+
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            self.committed = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    fake_connection = FakeConnection()
+    writer = QuestDBHourlyFactWriter(connection_factory=lambda: fake_connection)
+
+    writer.write(
+        [
+            {
+                "ts": datetime(2024, 4, 15, 15, 0, tzinfo=UTC),
+                "entity_type": "ephemeris",
+                "entity_id": "GLOBAL",
+                "source": "pyswisseph",
+                "interval": "1h",
+                "asset_class": "macro",
+                "region": "GLOBAL",
+                "metric_name": "moon_phase_pct",
+                "metric_value": 72.5,
+                "observed_ts": datetime(2024, 4, 15, 15, 0, tzinfo=UTC),
+                "available_ts": datetime(2024, 4, 15, 15, 0, tzinfo=UTC),
+                "quality_flag": "derived",
+            }
+        ]
+    )
+
+    assert "INSERT INTO abm_hourly_facts" in executed["sql"]
+    assert len(executed["rows"]) == 1
+    row = executed["rows"][0]
+    assert row[0] == datetime(2024, 4, 15, 15, 0, tzinfo=UTC)
+    assert row[1] == "ephemeris"
+    assert row[8] == "moon_phase_pct"
+    assert row[9] == 72.5
+    assert row[17] is None
+    assert fake_connection.committed is True

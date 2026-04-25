@@ -71,31 +71,31 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INF-01 | Phase 1 | Pending |
-| INF-02 | Phase 1 | Pending |
-| INF-03 | Phase 1 | Pending |
-| CRYP-01 | Phase 2 | Pending |
-| CRYP-02 | Phase 2 | Pending |
-| CRYP-03 | Phase 2 | Pending |
-| TRAD-01 | Phase 2 | Pending |
-| TRAD-02 | Phase 2 | Pending |
-| TRAD-03 | Phase 5 | Pending |
-| SWTH-01 | Phase 3 | Pending |
-| SWTH-02 | Phase 3 | Pending |
-| SWTH-03 | Phase 3 | Pending |
-| SWTH-04 | Phase 3 | Pending |
-| SWTH-05 | Phase 3 | Pending |
-| EPH-01 | Phase 3 | Pending |
-| EPH-02 | Phase 3 | Pending |
-| EPH-03 | Phase 3 | Pending |
-| SENT-01 | Phase 4 | Pending |
-| SENT-02 | Phase 4 | Pending |
-| SENT-03 | Phase 4 | Pending |
-| ETL-01 | Phase 5 | Pending |
-| ETL-02 | Phase 5 | Pending |
-| ETL-03 | Phase 5 | Pending |
-| ETL-04 | Phase 5 | Pending |
-| ETL-05 | Phase 5 | Pending |
+| INF-01 | Phase 1 | Implemented; local QuestDB runtime validated |
+| INF-02 | Phase 1 | Implemented; unit-reviewed via schema file |
+| INF-03 | Phase 1 | Implemented; unit-reviewed via schema file |
+| CRYP-01 | Phase 2 | Scaffolded and unit-tested; live Binance run pending |
+| CRYP-02 | Phase 2 | Scaffolded and unit-tested |
+| CRYP-03 | Phase 2 | Writer implemented and unit-tested; live market-bar write pending |
+| TRAD-01 | Phase 2 | Scaffolded and unit-tested; credentials pending |
+| TRAD-02 | Phase 2 | Scaffolded and unit-tested |
+| TRAD-03 | Phase 5 | Implemented and unit-tested |
+| SWTH-01 | Phase 3 | Parser/client scaffold implemented and unit-tested |
+| SWTH-02 | Phase 3 | Parser/client scaffold implemented and unit-tested |
+| SWTH-03 | Phase 3 | Parser/client scaffold implemented and unit-tested |
+| SWTH-04 | Phase 3 | Parser/client scaffold implemented and unit-tested |
+| SWTH-05 | Phase 3 | Implemented and unit-tested |
+| EPH-01 | Phase 3 | Implemented and unit-tested |
+| EPH-02 | Phase 3 | Implemented and unit-tested |
+| EPH-03 | Phase 3 | Implemented and unit-tested |
+| SENT-01 | Phase 4 | Scaffolded and unit-tested; credentials pending |
+| SENT-02 | Phase 4 | Scaffolded and unit-tested; credentials pending |
+| SENT-03 | Phase 4 | Implemented and unit-tested |
+| ETL-01 | Phase 5 | Implemented and unit-tested |
+| ETL-02 | Phase 5 | Implemented and unit-tested |
+| ETL-03 | Phase 5 | Implemented and unit-tested |
+| ETL-04 | Phase 5 | Implemented and unit-tested |
+| ETL-05 | Phase 5 | Implemented and unit-tested |
 
 **Coverage:**
 - v1 requirements: 25 total
@@ -104,4 +104,4 @@
 
 ---
 *Requirements defined: 2026-04-15*
-*Last updated: 2026-04-15 after GSD initialization*
+*Last updated: 2026-04-25 after live ETL skeleton, QuestDB fact writer, and local QuestDB smoke test*

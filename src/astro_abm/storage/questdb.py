@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Iterable
 
+from astro_abm.etl.pipeline import FACT_ROW_COLUMNS
 from astro_abm.models import MarketBar
 
 
@@ -79,3 +80,28 @@ class QuestDBMarketBarWriter:
             with connection.cursor() as cursor:
                 cursor.executemany(sql, rows)
             connection.commit()
+
+
+class QuestDBHourlyFactWriter:
+    def __init__(self, connection_factory: Callable | None = None):
+        self.connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
+
+    def write(self, facts: Iterable[dict | tuple]) -> None:
+        rows = [self._shape_row(fact) for fact in facts]
+        if not rows:
+            return
+
+        placeholders = ", ".join(["%s"] * len(FACT_ROW_COLUMNS))
+        columns = ", ".join(FACT_ROW_COLUMNS)
+        sql = f"INSERT INTO abm_hourly_facts ({columns}) VALUES ({placeholders})"
+
+        with self.connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(sql, rows)
+            connection.commit()
+
+    @staticmethod
+    def _shape_row(fact: dict | tuple) -> tuple:
+        if isinstance(fact, dict):
+            return tuple(fact.get(column) for column in FACT_ROW_COLUMNS)
+        return tuple(fact)

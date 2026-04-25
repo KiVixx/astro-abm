@@ -35,18 +35,19 @@ Implemented and unit-tested:
 - Phase 3 — NOAA SWPC parsing helpers + local ephemeris feature layer
 - Phase 4 — LunarCrush social-sentiment parsing layer
 - Phase 5 — ETL alignment helpers, tradfi forward-fill placeholder, scheduler wiring
+- Live ETL entrypoint skeleton and unified QuestDB fact writer
 
 Current test status:
 
 ```bash
 pytest -q
-# 19 passed
+# 22 passed
 ```
 
 Not yet implemented:
 
-- one end-to-end live ETL entrypoint that wires all providers together
-- credential/bootstrap automation like `.env.example`
+- full live market/social ETL run against QuestDB with provider credentials
+- provider credential validation / bootstrap command
 - ABM simulation runtime and agent logic
 - model training / validation workflows
 
@@ -114,6 +115,7 @@ The repo intentionally prioritizes reliable hourly features over premature agent
 
 ```text
 astro-abm/
+├── .env.example
 ├── docker-compose.questdb.yml
 ├── pyproject.toml
 ├── README.md
@@ -137,6 +139,7 @@ astro-abm/
 │   │   └── questdb.py
 │   └── etl/
 │       ├── __init__.py
+│       ├── live.py
 │       ├── pipeline.py
 │       └── scheduler.py
 ├── tests/
@@ -144,7 +147,8 @@ astro-abm/
 │   ├── test_space_weather.py
 │   ├── test_ephemeris.py
 │   ├── test_social_sentiment.py
-│   └── test_etl.py
+│   ├── test_etl.py
+│   └── test_live_etl.py
 └── .planning/
     ├── PROJECT.md
     ├── REQUIREMENTS.md
@@ -304,6 +308,17 @@ What it does:
 - converts `MarketBar` objects into batched inserts for `market_ohlcv_1h`
 - uses PG-wire via `psycopg`
 
+### QuestDB hourly fact writer
+Module:
+
+- `src/astro_abm/storage/questdb.py`
+
+What it does:
+
+- `QuestDBHourlyFactWriter`
+- accepts shaped fact dictionaries or row tuples
+- writes unified feature rows into `abm_hourly_facts`
+
 --------------------------------------------------
 ## Phase 3 — Space Weather & Ephemeris Feature Layer
 
@@ -456,6 +471,24 @@ Why these matter:
 - avoids replaying many missed jobs after downtime
 - keeps job registration deterministic
 
+### Live ETL entrypoint
+Module:
+
+- `live.py`
+
+What it does:
+
+- wires crypto market bars, optional tradfi bars, NOAA space weather, ephemeris, and optional LunarCrush social rows
+- writes OHLCV rows through `QuestDBMarketBarWriter`
+- writes feature rows through `QuestDBHourlyFactWriter`
+- exposes a console command:
+
+```bash
+astro-abm-live
+```
+
+The live entrypoint is unit-tested with fake providers. A conservative local smoke run has been validated for QuestDB, ephemeris, and NOAA fact rows. Full crypto/tradfi/social validation still requires live provider access and credentials.
+
 --------------------------------------------------
 ## Configuration
 
@@ -485,7 +518,7 @@ Provider selection:
 
 Notes:
 
-- The repo does not yet include `.env.example`
+- The repo includes `.env.example`
 - live provider credentials are still an open blocker in `.planning/STATE.md`
 - QuestDB defaults in `config.py` are for disposable local development only and should be overridden outside a local test setup
 
@@ -504,6 +537,7 @@ Main dependencies:
 - `pyswisseph`
 - `pandas`
 - `apscheduler`
+- `python-dotenv`
 
 Install in editable mode:
 
@@ -534,6 +568,7 @@ pytest tests/test_space_weather.py -q
 pytest tests/test_ephemeris.py -q
 pytest tests/test_social_sentiment.py -q
 pytest tests/test_etl.py -q
+pytest tests/test_live_etl.py -q
 ```
 
 --------------------------------------------------
@@ -547,45 +582,52 @@ Covered areas include:
 - Polygon bar normalization
 - Alpha Vantage timezone normalization
 - QuestDB batch writer shaping
+- unified QuestDB fact writer shaping
 - NOAA table-feed parsing
 - X-ray channel filtering
 - Kp hourly expansion
 - moon phase percentage and angular features
 - LunarCrush hourly payload normalization
 - ETL alignment, merge, row shaping, and scheduler wiring
+- live ETL provider orchestration with fake providers
 
 --------------------------------------------------
 ## Known Gaps / Next Logical Work
 
-This repo is now a strong foundation, but it is not yet a one-command live pipeline.
+This repo is now a strong foundation, with a tested one-command live ETL skeleton. The next gap is validating the full market and social-provider path against QuestDB with real credentials.
 
 The most natural next steps are:
 
-### 1. End-to-end ETL entrypoint
-Add something like:
+### 1. Validate QuestDB locally
+Start QuestDB:
 
-- `scripts/run_hourly_etl.py`
+```bash
+docker compose -f docker-compose.questdb.yml up -d
+```
 
-This should:
+Then apply:
 
-- fetch market data
-- fetch NOAA data
-- compute ephemeris features
-- fetch social sentiment
-- align everything with pandas
-- write bars + facts into QuestDB
+```bash
+psql -h localhost -p 8812 -U admin -d qdb -f sql/schema_phase1.sql
+```
 
-### 2. Credential/bootstrap ergonomics
-Add:
+### 2. Configure provider credentials
+Copy `.env.example` to `.env`, then fill whichever providers you plan to test first. The package loads `.env` automatically when configuration is read.
 
-- `.env.example`
-- startup docs for provider credentials
-- optional config validation command
+- `POLYGON_API_KEY` or `ALPHA_VANTAGE_API_KEY`
+- `LUNARCRUSH_API_KEY`
 
-### 3. Unified writer for `abm_hourly_facts`
-The repo currently shapes rows for the facts table, but it does not yet include a finished dedicated writer class equivalent to `QuestDBMarketBarWriter` for all fact-row inserts.
+### 3. Run the live ETL command
+After installing the package in editable mode:
 
-### 4. Simulation layer
+```bash
+astro-abm-live
+```
+
+### 4. Add a config validation command
+The live command currently skips optional providers when credentials are missing. A dedicated validation command should make missing credentials and database availability explicit before a live run starts.
+
+### 5. Simulation layer
 After the live hourly pipeline is stable, the project can move into:
 
 - retail swarm agents
