@@ -27,6 +27,9 @@ dev = [
 astro-abm-live = "astro_abm.etl.live:main"
 astro-abm-backfill-askgrok = "astro_abm.etl.backfill_askgrok:main"
 astro-abm-feature-summary = "astro_abm.analysis.feature_summary:main"
+astro-abm-backfill-binance-spot = "astro_abm.etl.backfill_binance_spot:main"
+astro-abm-build-price-features = "astro_abm.etl.build_price_features:main"
+astro-abm-backfill-binance-derivatives = "astro_abm.etl.backfill_binance_derivatives:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

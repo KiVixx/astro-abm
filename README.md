@@ -247,7 +247,10 @@ Files:
 
 - `src/astro_abm/models.py`
 - `src/astro_abm/market_data/binance_client.py`
+- `src/astro_abm/market_data/binance_historical.py`
+- `src/astro_abm/market_data/binance_derivatives.py`
 - `src/astro_abm/market_data/tradfi.py`
+- `src/astro_abm/features/price_action.py`
 - `src/astro_abm/storage/questdb.py`
 
 ### Normalized model: `MarketBar`
@@ -277,6 +280,63 @@ Current scope:
 
 - tested for hourly normalization behavior
 - suitable as the crypto provider skeleton for BTCUSDT and similar symbols
+
+### Historical spot OHLCV backfill
+
+Command:
+
+```bash
+astro-abm-backfill-binance-spot \
+  --symbols BTCUSDT,ETHUSDT \
+  --start 2017-01-01T00:00:00Z
+```
+
+What it does:
+
+- pages Binance spot 1-hour klines from the official `/api/v3/klines` endpoint
+- writes rows to `market_ohlcv_1h`
+- skips timestamps already present for the same symbol/source
+
+### Price-action feature layer
+
+Command:
+
+```bash
+astro-abm-build-price-features \
+  --symbols BTCUSDT,ETHUSDT \
+  --start 2017-01-01T00:00:00Z
+```
+
+Current metrics:
+
+- `price_return_1h`
+- `price_log_return_1h`
+- `price_range_pct`
+- `price_drawdown_24h`
+- `price_realized_vol_24h`
+- `price_downside_vol_24h`
+- `price_volume_zscore_24h`
+- `price_shock_score`
+
+### Binance futures positioning layer
+
+Command:
+
+```bash
+astro-abm-backfill-binance-derivatives \
+  --symbols BTCUSDT,ETHUSDT \
+  --start 2019-09-01T00:00:00Z
+```
+
+Current metrics:
+
+- `funding_rate`
+- `funding_rate_annualized`
+- `funding_mark_price`
+- `open_interest`
+- `open_interest_value`
+
+Funding-rate history can go much further back than open-interest history. Binance's official open-interest statistics endpoint only exposes the latest 1 month, so the derivatives backfill treats funding as the long-history positioning baseline and OI as a recent-context feature.
 
 ### TradFi ingestion: Polygon + Alpha Vantage
 Module:
@@ -606,6 +666,9 @@ pytest tests/test_etl.py -q
 pytest tests/test_live_etl.py -q
 pytest tests/test_backfill_askgrok.py -q
 pytest tests/test_feature_summary.py -q
+pytest tests/test_price_action.py -q
+pytest tests/test_binance_historical.py -q
+pytest tests/test_binance_derivatives.py -q
 ```
 
 --------------------------------------------------
@@ -616,6 +679,9 @@ The tests are designed around behavior, not just imports. They are currently uni
 Covered areas include:
 
 - Binance kline normalization
+- Binance historical spot kline backfill normalization
+- Binance futures funding/open-interest feature shaping
+- price-action feature generation
 - Polygon bar normalization
 - Alpha Vantage timezone normalization
 - QuestDB batch writer shaping
@@ -634,7 +700,7 @@ Covered areas include:
 --------------------------------------------------
 ## Known Gaps / Next Logical Work
 
-This repo is now a strong foundation, with a tested one-command live ETL skeleton. The next gap is deciding how aggressively to backfill ASKGROK sentiment windows.
+This repo is now a strong foundation, with a tested one-command live ETL skeleton. The next gap is building enough historical price and derivatives coverage to compare price-only features against positioning features.
 
 The most natural next steps are:
 
@@ -653,7 +719,17 @@ psql -h localhost -p 8812 -U admin -d qdb -f sql/schema_phase1.sql
 
 The schema file is idempotent and only creates tables; it does not seed sample facts.
 
-### 2. Configure provider credentials
+### 2. Backfill hard market data
+
+Start with price and futures positioning before expanding narrative sentiment:
+
+```bash
+astro-abm-backfill-binance-spot --symbols BTCUSDT,ETHUSDT --start 2017-01-01T00:00:00Z
+astro-abm-build-price-features --symbols BTCUSDT,ETHUSDT --start 2017-01-01T00:00:00Z
+astro-abm-backfill-binance-derivatives --symbols BTCUSDT,ETHUSDT --start 2019-09-01T00:00:00Z
+```
+
+### 3. Configure provider credentials
 Copy `.env.example` to `.env`, then fill whichever providers you plan to test first. The package loads `.env` automatically when configuration is read.
 
 - `POLYGON_API_KEY` or `ALPHA_VANTAGE_API_KEY`
@@ -667,17 +743,17 @@ cd "/Users/Apple/Documents/New project 2"
 npm start
 ```
 
-### 3. Run the live ETL command
+### 4. Run the live ETL command
 After installing the package in editable mode:
 
 ```bash
 astro-abm-live
 ```
 
-### 4. Add a config validation command
+### 5. Add a config validation command
 The live command currently skips optional providers when credentials are missing. A dedicated validation command should make missing credentials and database availability explicit before a live run starts.
 
-### 5. Explore feature-store data
+### 6. Explore feature-store data
 
 Print a compact QuestDB summary:
 
@@ -687,7 +763,7 @@ astro-abm-feature-summary
 
 Use that output to decide which time windows deserve deeper analysis before writing ABM simulation logic.
 
-### 6. Simulation layer
+### 7. Simulation layer
 After the live hourly pipeline is stable, the project can move into:
 
 - retail swarm agents

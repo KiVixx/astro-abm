@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Create a reproducible hourly feature pipeline that lets the system test whether exogenous astro/space-weather signals can explain or perturb simulated market sentiment and agent behavior.
-**Current focus:** Phase 6 — Live ETL Validation & Bootstrap
+**Current focus:** Phase 7 — Price and Positioning Baselines
 
 ## Current Status
 
 - Milestone: MVP hourly data foundation
-- Active phase: 6
-- Latest artifact: controlled ASKGROK backfill runner, ETL run logs, ASKGROK social sentiment adapter, and unified hourly fact writer
+- Active phase: 7
+- Latest artifact: Binance historical spot backfill, price-action feature layer, Binance futures funding/OI layer, ASKGROK backfill runner, and ETL run logs
 - Verification status: unit tests passing; QuestDB running; conservative live ephemeris/NOAA/Binance/Polygon run succeeded
 
 ## Open Blockers
@@ -19,6 +19,7 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 - ASKGROK is a local dependency and must be running for `SOCIAL_SENTIMENT_PROVIDER=askgrok` or `astro-abm-backfill-askgrok`.
 - ASKGROK retrospective web-research sentiment is not equivalent to raw historical X firehose data.
 - LunarCrush remains optional but is no longer the recommended primary social provider.
+- Binance open-interest statistics only expose the latest 1 month; funding-rate history is the longer-horizon derivatives baseline.
 
 ## Recent Decisions
 
@@ -28,16 +29,16 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 - Maintain both a unified aligned facts table and a dedicated hourly OHLCV table.
 - Add a tested live ETL skeleton before attempting provider-specific production hardening.
 - Use ASKGROK as the primary social-sentiment adapter and keep LunarCrush as optional fallback.
+- Treat price as the consensus baseline and derivatives positioning as a regime/fragility layer before expanding narrative features.
 
 ## Next Step
 
-Validate the live runtime path:
-1. start ASKGROK from `/Users/Apple/Documents/New project 2`
-2. set `SOCIAL_SENTIMENT_PROVIDER=askgrok`
-3. run `astro-abm-live` with crypto/tradfi/social symbols enabled
-4. run a small `astro-abm-backfill-askgrok --max-hours 1` smoke test
-5. inspect `etl_runs` and `astro-abm-feature-summary`
-6. decide whether to expand historical loopback windows
+Build historical hard-data baselines:
+1. backfill Binance spot OHLCV as far back as available for priority symbols
+2. build price-action feature rows from OHLCV
+3. backfill Binance futures funding rates as far back as available
+4. backfill open interest for the latest 1 month where Binance exposes it
+5. compare price-only features against derivatives positioning and ASKGROK narrative rows
 
 ## Resume Anchor
 

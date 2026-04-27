@@ -101,8 +101,9 @@ class QuestDBMarketBarWriter:
 
 
 class QuestDBHourlyFactWriter:
-    def __init__(self, connection_factory: Callable | None = None):
+    def __init__(self, connection_factory: Callable | None = None, batch_size: int = 100):
         self.connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
+        self.batch_size = batch_size
 
     def write(self, facts: Iterable[dict | tuple]) -> None:
         rows = [self._shape_row(fact) for fact in facts]
@@ -115,7 +116,8 @@ class QuestDBHourlyFactWriter:
 
         with self.connection_factory() as connection:
             with connection.cursor() as cursor:
-                cursor.executemany(sql, rows)
+                for index in range(0, len(rows), self.batch_size):
+                    cursor.executemany(sql, rows[index : index + self.batch_size])
             connection.commit()
 
     @staticmethod
@@ -182,3 +184,49 @@ def askgrok_fact_exists(connection_factory: Callable, ts: datetime, entity_id: s
         with connection.cursor() as cursor:
             cursor.execute(sql, (ts, entity_id))
             return cursor.fetchone()[0] > 0
+
+
+def load_existing_market_timestamps(
+    connection_factory: Callable,
+    *,
+    symbol: str,
+    source: str,
+    start_ts: datetime,
+    end_ts: datetime,
+) -> set[datetime]:
+    sql = """
+    SELECT ts
+    FROM market_ohlcv_1h
+    WHERE symbol = %s
+      AND source = %s
+      AND ts >= %s
+      AND ts < %s
+    """.strip()
+    with connection_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (symbol, source, start_ts, end_ts))
+            return {row[0].replace(tzinfo=start_ts.tzinfo) if row[0].tzinfo is None else row[0] for row in cursor.fetchall()}
+
+
+def load_existing_fact_timestamps(
+    connection_factory: Callable,
+    *,
+    entity_id: str,
+    source: str,
+    metric_name: str,
+    start_ts: datetime,
+    end_ts: datetime,
+) -> set[datetime]:
+    sql = """
+    SELECT ts
+    FROM abm_hourly_facts
+    WHERE entity_id = %s
+      AND source = %s
+      AND metric_name = %s
+      AND ts >= %s
+      AND ts < %s
+    """.strip()
+    with connection_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (entity_id, source, metric_name, start_ts, end_ts))
+            return {row[0].replace(tzinfo=start_ts.tzinfo) if row[0].tzinfo is None else row[0] for row in cursor.fetchall()}
