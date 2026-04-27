@@ -63,9 +63,9 @@ def build_omni_space_weather_feature_rows(
             _metric_rows(
                 ts=ts,
                 metrics=[
-                    ("solar_wind_speed", record.get("solar_wind_speed"), "final"),
-                    ("imf_bz", record.get("imf_bz"), "final"),
-                    ("kp_index", record.get("kp_index"), "derived"),
+                    ("solar_wind_speed", record.get("solar_wind_speed")),
+                    ("imf_bz", record.get("imf_bz")),
+                    ("kp_index", record.get("kp_index")),
                 ],
                 source=source,
             )
@@ -73,9 +73,9 @@ def build_omni_space_weather_feature_rows(
     return rows
 
 
-def _metric_rows(*, ts: datetime, metrics: list[tuple[str, float | None, str]], source: str) -> list[dict[str, Any]]:
+def _metric_rows(*, ts: datetime, metrics: list[tuple[str, float | None]], source: str) -> list[dict[str, Any]]:
     rows = []
-    for metric_name, metric_value, quality_flag in metrics:
+    for metric_name, metric_value in metrics:
         if metric_value is None:
             continue
         rows.append(
@@ -92,7 +92,8 @@ def _metric_rows(*, ts: datetime, metrics: list[tuple[str, float | None, str]], 
                 "metric_value": metric_value,
                 "observed_ts": ts,
                 "available_ts": ts,
-                "quality_flag": quality_flag,
+                "quality_flag": "authoritative",
+                "notes": "cadence=3h; expanded_to=1h" if metric_name == "kp_index" else None,
             }
         )
     return rows

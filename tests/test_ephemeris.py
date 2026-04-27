@@ -79,6 +79,7 @@ def test_build_ephemeris_feature_rows_produces_global_hourly_fact_rows():
     assert all(row["entity_type"] == "ephemeris" for row in rows)
     assert all(row["entity_id"] == "GLOBAL" for row in rows)
     assert rows[0]["source"] == "pyswisseph"
+    assert rows[0]["quality_flag"] == "deterministic"
     assert rows[0]["metric_name"] == "moon_phase_pct"
     assert rows[1]["metric_name"] == "moon_is_waxing"
     assert rows[1]["metric_value"] == 1.0

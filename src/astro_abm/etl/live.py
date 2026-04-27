@@ -150,6 +150,8 @@ def _collect_space_weather_rows(bucket_ts: datetime, client: Any) -> list[dict[s
         kp_index=float(kp["kp_index"]),
         observed_ts=observed_ts,
         available_ts=datetime.now(UTC),
+        source="noaa_swpc_recent",
+        quality_flag="provisional",
     )
 
 

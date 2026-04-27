@@ -81,6 +81,8 @@ def build_space_weather_feature_rows(
     kp_index: float,
     observed_ts: datetime,
     available_ts: datetime,
+    source: str = "noaa_swpc_recent",
+    quality_flag: str = "provisional",
 ) -> list[dict[str, Any]]:
     metric_pairs = [
         ("solar_wind_speed", solar_wind_speed),
@@ -93,7 +95,7 @@ def build_space_weather_feature_rows(
             "ts": ts,
             "entity_type": "space_weather",
             "entity_id": "GLOBAL",
-            "source": "noaa_swpc",
+            "source": source,
             "interval": "1h",
             "asset_class": "macro",
             "market": None,
@@ -102,7 +104,7 @@ def build_space_weather_feature_rows(
             "metric_value": metric_value,
             "observed_ts": observed_ts,
             "available_ts": available_ts,
-            "quality_flag": "final",
+            "quality_flag": quality_flag,
         }
         for metric_name, metric_value in metric_pairs
     ]

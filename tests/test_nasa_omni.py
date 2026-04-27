@@ -55,5 +55,6 @@ def test_build_omni_space_weather_feature_rows_shapes_available_metrics_only():
 
     assert set(by_metric) == {"solar_wind_speed", "imf_bz"}
     assert by_metric["solar_wind_speed"]["source"] == "nasa_omni"
+    assert by_metric["solar_wind_speed"]["quality_flag"] == "authoritative"
     assert by_metric["solar_wind_speed"]["entity_type"] == "space_weather"
     assert by_metric["imf_bz"]["metric_value"] == -3.2

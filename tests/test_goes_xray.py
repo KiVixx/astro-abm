@@ -48,6 +48,7 @@ def test_build_goes_xray_feature_rows_shapes_hourly_flux():
 
     assert rows[0]["entity_type"] == "space_weather"
     assert rows[0]["source"] == "noaa_goes_xrs"
+    assert rows[0]["quality_flag"] == "authoritative"
     assert rows[0]["metric_name"] == "xray_flux"
     assert rows[0]["metric_value"] == 2.0e-7
     assert rows[0]["metric_value_2"] == 60.0

@@ -85,7 +85,8 @@ def test_build_space_weather_feature_rows_shapes_aligned_hourly_facts():
     assert len(rows) == 4
     assert rows[0]["entity_type"] == "space_weather"
     assert rows[0]["entity_id"] == "GLOBAL"
-    assert rows[0]["source"] == "noaa_swpc"
+    assert rows[0]["source"] == "noaa_swpc_recent"
+    assert rows[0]["quality_flag"] == "provisional"
     assert rows[0]["metric_name"] == "solar_wind_speed"
     assert rows[1]["metric_name"] == "imf_bz"
     assert rows[2]["metric_name"] == "xray_flux"

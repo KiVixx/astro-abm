@@ -94,7 +94,7 @@ def build_goes_xray_feature_rows(records: Iterable[dict[str, Any]], *, source: s
                 "metric_value_2": float(record["sample_count"]),
                 "observed_ts": ts,
                 "available_ts": ts,
-                "quality_flag": "derived",
+                "quality_flag": "authoritative",
                 "notes": f"satellite={record['satellite']}; aggregation=hourly_mean_1m_xrsb_flux",
             }
         )

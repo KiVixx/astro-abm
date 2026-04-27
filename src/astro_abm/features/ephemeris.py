@@ -84,7 +84,7 @@ def build_ephemeris_feature_rows(*, ts: datetime, features: dict[str, float | bo
                 "metric_value": metric_value,
                 "observed_ts": ts,
                 "available_ts": ts,
-                "quality_flag": "derived",
+                "quality_flag": "deterministic",
             }
         )
     return rows

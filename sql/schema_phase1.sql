@@ -72,3 +72,66 @@ CREATE TABLE IF NOT EXISTS etl_runs (
 ) TIMESTAMP(started_at)
 PARTITION BY MONTH
 WAL;
+
+DROP VIEW IF EXISTS v_space_weather_unified;
+
+CREATE VIEW v_space_weather_unified AS (
+WITH candidates AS (
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'authoritative' AS quality_flag, ingest_run_id, notes,
+        1 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'space_weather'
+      AND source = 'nasa_omni'
+      AND metric_name IN ('solar_wind_speed', 'imf_bz', 'kp_index')
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'authoritative' AS quality_flag, ingest_run_id, notes,
+        1 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'space_weather'
+      AND source = 'noaa_goes_xrs'
+      AND metric_name = 'xray_flux'
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'provisional' AS quality_flag, ingest_run_id, notes,
+        2 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'space_weather'
+      AND source = 'noaa_swpc_recent'
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'provisional' AS quality_flag, ingest_run_id, notes,
+        3 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'space_weather'
+      AND source = 'noaa_swpc'
+), selected AS (
+    SELECT ts, metric_name, min(source_priority) AS source_priority
+    FROM candidates
+    GROUP BY ts, metric_name
+)
+SELECT
+    c.ts, c.entity_type, c.entity_id, c.source, c.interval, c.asset_class, c.market, c.region,
+    c.metric_name, c.metric_value, c.metric_value_2, c.metric_value_3, c.metric_value_4,
+    c.observed_ts, c.available_ts, c.quality_flag, c.ingest_run_id, c.notes, c.source_priority
+FROM candidates c
+JOIN selected s
+    ON c.ts = s.ts
+   AND c.metric_name = s.metric_name
+   AND c.source_priority = s.source_priority
+);
