@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 astro-abm-live = "astro_abm.etl.live:main"
+astro-abm-data-completeness = "astro_abm.analysis.data_completeness:main"
 astro-abm-backfill-askgrok = "astro_abm.etl.backfill_askgrok:main"
 astro-abm-feature-summary = "astro_abm.analysis.feature_summary:main"
 astro-abm-backfill-binance-spot = "astro_abm.etl.backfill_binance_spot:main"
