@@ -15,6 +15,7 @@ dependencies = [
   "pyswisseph>=2.10.3.2",
   "pandas>=2.2.0",
   "apscheduler>=3.10.4",
+  "h5py>=3.11.0",
   "python-dotenv>=1.0.1",
 ]
 
@@ -30,6 +31,9 @@ astro-abm-feature-summary = "astro_abm.analysis.feature_summary:main"
 astro-abm-backfill-binance-spot = "astro_abm.etl.backfill_binance_spot:main"
 astro-abm-build-price-features = "astro_abm.etl.build_price_features:main"
 astro-abm-backfill-binance-derivatives = "astro_abm.etl.backfill_binance_derivatives:main"
+astro-abm-backfill-ephemeris = "astro_abm.etl.backfill_ephemeris:main"
+astro-abm-backfill-space-weather = "astro_abm.etl.backfill_space_weather:main"
+astro-abm-backfill-goes-xray = "astro_abm.etl.backfill_goes_xray:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
