@@ -44,6 +44,16 @@ def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=N
 
             cursor.execute(
                 """
+                SELECT source, entity_id, metric_name, quality_flag, count(), min(ts), max(ts)
+                FROM v_open_interest_unified
+                GROUP BY source, entity_id, metric_name, quality_flag
+                ORDER BY entity_id, metric_name, source, quality_flag
+                """.strip()
+            )
+            open_interest_rows = cursor.fetchall()
+
+            cursor.execute(
+                """
                 SELECT job_type, provider, status, rows_written, skipped_existing, errors, window_start, window_end, finished_at
                 FROM etl_runs
                 ORDER BY started_at DESC
@@ -57,6 +67,7 @@ def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=N
         "market_rows": market_rows,
         "fact_rows": fact_rows,
         "space_weather_rows": space_weather_rows,
+        "open_interest_rows": open_interest_rows,
         "etl_runs": etl_runs,
     }
 
@@ -72,6 +83,8 @@ def format_data_completeness_report(report: dict, *, as_of: datetime | None = No
     lines.extend(_format_market_rows(report.get("market_rows", ()), as_of=as_of))
     lines.extend(["", "Unified Space Weather"])
     lines.extend(_format_space_weather_rows(report.get("space_weather_rows", ()), as_of=as_of))
+    lines.extend(["", "Unified Open Interest"])
+    lines.extend(_format_open_interest_rows(report.get("open_interest_rows", ()), as_of=as_of))
     lines.extend(["", "Hourly Facts"])
     lines.extend(_format_fact_rows(report.get("fact_rows", ()), as_of=as_of))
     lines.extend(["", "Recent ETL Runs"])
@@ -94,6 +107,15 @@ def _format_space_weather_rows(rows, *, as_of: datetime) -> list[str]:
     return [
         f"  - {metric_name} [{source}/{quality_flag}]: rows={count} range={_range_text(min_ts, max_ts)} lag={_lag_text(max_ts, as_of)}"
         for source, metric_name, quality_flag, count, min_ts, max_ts in rows
+    ]
+
+
+def _format_open_interest_rows(rows, *, as_of: datetime) -> list[str]:
+    if not rows:
+        return ["  - none"]
+    return [
+        f"  - {entity_id}/{metric_name} [{source}/{quality_flag}]: rows={count} range={_range_text(min_ts, max_ts)} lag={_lag_text(max_ts, as_of)}"
+        for source, entity_id, metric_name, quality_flag, count, min_ts, max_ts in rows
     ]
 
 

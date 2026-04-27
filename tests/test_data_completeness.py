@@ -12,6 +12,9 @@ def test_format_data_completeness_report_renders_coverage_sections():
             ("nasa_omni", "imf_bz", "authoritative", 24, datetime(2024, 4, 15, 0), datetime(2024, 4, 15, 23)),
             ("noaa_swpc_recent", "imf_bz", "provisional", 2, datetime(2024, 4, 16, 0), datetime(2024, 4, 16, 1)),
         ],
+        "open_interest_rows": [
+            ("tardis_binance_futures", "BTCUSDT", "open_interest", "vendor", 24, datetime(2024, 4, 15, 0), datetime(2024, 4, 15, 23)),
+        ],
         "fact_rows": [
             ("price_action", "price_action", "BTCUSDT", "price_return_1h", "derived", 99, datetime(2024, 4, 15, 1), datetime(2024, 4, 16, 0)),
         ],
@@ -38,6 +41,8 @@ def test_format_data_completeness_report_renders_coverage_sections():
     assert "Unified Space Weather" in text
     assert "imf_bz [nasa_omni/authoritative]: rows=24" in text
     assert "imf_bz [noaa_swpc_recent/provisional]: rows=2" in text
+    assert "Unified Open Interest" in text
+    assert "BTCUSDT/open_interest [tardis_binance_futures/vendor]: rows=24" in text
     assert "Hourly Facts" in text
     assert "price_action/price_action/BTCUSDT/price_return_1h [derived]" in text
     assert "Recent ETL Runs" in text
@@ -78,9 +83,11 @@ def test_load_data_completeness_report_queries_expected_tables():
         "market_rows": [],
         "fact_rows": [],
         "space_weather_rows": [],
+        "open_interest_rows": [],
         "etl_runs": [],
     }
     assert any("market_ohlcv_1h" in sql for sql, _params in executed)
     assert any("abm_hourly_facts" in sql for sql, _params in executed)
     assert any("v_space_weather_unified" in sql for sql, _params in executed)
+    assert any("v_open_interest_unified" in sql for sql, _params in executed)
     assert executed[-1][1] == (5,)

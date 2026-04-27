@@ -135,3 +135,57 @@ JOIN selected s
    AND c.metric_name = s.metric_name
    AND c.source_priority = s.source_priority
 );
+
+DROP VIEW IF EXISTS v_open_interest_unified;
+
+CREATE VIEW v_open_interest_unified AS (
+WITH candidates AS (
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'official' AS quality_flag, ingest_run_id, notes,
+        1 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'derivatives'
+      AND source = 'binance_futures'
+      AND metric_name IN ('open_interest', 'open_interest_value')
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'official' AS quality_flag, ingest_run_id, notes,
+        1 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'derivatives'
+      AND source = 'binance_futures_current'
+      AND metric_name = 'open_interest'
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'vendor' AS quality_flag, ingest_run_id, notes,
+        2 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'derivatives'
+      AND source = 'tardis_binance_futures'
+      AND metric_name IN ('open_interest', 'open_interest_value')
+), selected AS (
+    SELECT ts, entity_id, metric_name, min(source_priority) AS source_priority
+    FROM candidates
+    GROUP BY ts, entity_id, metric_name
+)
+SELECT
+    c.ts, c.entity_type, c.entity_id, c.source, c.interval, c.asset_class, c.market, c.region,
+    c.metric_name, c.metric_value, c.metric_value_2, c.metric_value_3, c.metric_value_4,
+    c.observed_ts, c.available_ts, c.quality_flag, c.ingest_run_id, c.notes, c.source_priority
+FROM candidates c
+JOIN selected s
+    ON c.ts = s.ts
+   AND c.entity_id = s.entity_id
+   AND c.metric_name = s.metric_name
+   AND c.source_priority = s.source_priority
+);

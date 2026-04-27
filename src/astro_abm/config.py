@@ -27,6 +27,7 @@ class MarketDataSettings:
     social_sentiment_provider: str = "lunarcrush"
     askgrok_base_url: str = "http://localhost:3000"
     askgrok_timeout_ms: int = 180_000
+    tardis_api_key: str | None = None
 
 
 def load_questdb_settings() -> QuestDBSettings:
@@ -48,4 +49,5 @@ def load_market_data_settings() -> MarketDataSettings:
         social_sentiment_provider=os.getenv("SOCIAL_SENTIMENT_PROVIDER", "lunarcrush"),
         askgrok_base_url=os.getenv("ASKGROK_BASE_URL", "http://localhost:3000"),
         askgrok_timeout_ms=int(os.getenv("ASKGROK_TIMEOUT_MS", "180000")),
+        tardis_api_key=os.getenv("TARDIS_API_KEY"),
     )

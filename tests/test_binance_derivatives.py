@@ -51,6 +51,27 @@ def test_build_open_interest_feature_rows_shapes_futures_metrics():
     assert by_metric["open_interest"]["ts"] == datetime(2024, 4, 15, 9, tzinfo=UTC)
 
 
+def test_build_current_open_interest_feature_rows_shapes_forward_snapshot():
+    from astro_abm.market_data.binance_derivatives import build_current_open_interest_feature_rows
+
+    rows = build_current_open_interest_feature_rows(
+        [
+            {
+                "symbol": "BTCUSDT",
+                "openInterest": "20403.637",
+                "time": 1713171900000,
+            }
+        ],
+        bucket_ts=datetime(2024, 4, 15, 9, tzinfo=UTC),
+    )
+
+    assert rows[0]["source"] == "binance_futures_current"
+    assert rows[0]["quality_flag"] == "official"
+    assert rows[0]["metric_name"] == "open_interest"
+    assert rows[0]["metric_value"] == 20403.637
+    assert rows[0]["ts"] == datetime(2024, 4, 15, 9, tzinfo=UTC)
+
+
 def test_binance_futures_client_uses_official_funding_endpoint():
     from astro_abm.market_data.binance_derivatives import BinanceFuturesDataClient
 
@@ -75,4 +96,30 @@ def test_binance_futures_client_uses_official_funding_endpoint():
     )
 
     assert calls[0]["url"] == "https://example.test/fapi/v1/fundingRate"
+    assert calls[0]["params"]["symbol"] == "BTCUSDT"
+
+
+def test_binance_futures_client_uses_current_open_interest_endpoint():
+    from astro_abm.market_data.binance_derivatives import BinanceFuturesDataClient
+
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"symbol": "BTCUSDT", "openInterest": "1.0", "time": 1713171900000}
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            calls.append({"url": url, **kwargs})
+            return FakeResponse()
+
+    payload = BinanceFuturesDataClient(base_url="https://example.test", session=FakeSession()).fetch_current_open_interest(
+        symbol="BTCUSDT"
+    )
+
+    assert payload["openInterest"] == "1.0"
+    assert calls[0]["url"] == "https://example.test/fapi/v1/openInterest"
     assert calls[0]["params"]["symbol"] == "BTCUSDT"

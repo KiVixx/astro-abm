@@ -98,6 +98,12 @@ class BinanceFuturesDataClient:
                 time.sleep(pause_seconds)
         return rows
 
+    def fetch_current_open_interest(self, *, symbol: str) -> dict[str, Any]:
+        return self._get(
+            "/fapi/v1/openInterest",
+            params={"symbol": symbol.upper()},
+        )
+
     def _get(self, path: str, *, params: dict[str, Any]) -> Any:
         response = self.session.get(f"{self.base_url}{path}", params=params, timeout=30)
         response.raise_for_status()
@@ -157,6 +163,30 @@ def build_open_interest_feature_rows(payload: Sequence[dict[str, Any]]) -> list[
     return rows
 
 
+def build_current_open_interest_feature_rows(
+    payload: Sequence[dict[str, Any]],
+    *,
+    bucket_ts: datetime,
+    source: str = "binance_futures_current",
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in payload:
+        symbol = str(item["symbol"]).upper()
+        observed_ts = datetime.fromtimestamp(int(item["time"]) / 1000, tz=UTC)
+        rows.extend(
+            _derivative_metric_rows(
+                ts=bucket_ts.astimezone(UTC),
+                symbol=symbol,
+                metrics=[("open_interest", _nullable_float(item.get("openInterest")))],
+                observed_ts=observed_ts,
+                quality_flag="official",
+                source=source,
+                notes="Binance current open interest snapshot; forward-collected hourly.",
+            )
+        )
+    return rows
+
+
 def _derivative_metric_rows(
     *,
     ts: datetime,
@@ -164,6 +194,8 @@ def _derivative_metric_rows(
     metrics: Sequence[tuple[str, float | None]],
     observed_ts: datetime,
     quality_flag: str,
+    source: str = "binance_futures",
+    notes: str | None = None,
 ) -> list[dict[str, Any]]:
     rows = []
     for metric_name, metric_value in metrics:
@@ -174,7 +206,7 @@ def _derivative_metric_rows(
                 "ts": ts,
                 "entity_type": "derivatives",
                 "entity_id": symbol,
-                "source": "binance_futures",
+                "source": source,
                 "interval": "1h",
                 "asset_class": "crypto",
                 "market": "perp",
@@ -184,6 +216,7 @@ def _derivative_metric_rows(
                 "observed_ts": observed_ts,
                 "available_ts": observed_ts,
                 "quality_flag": quality_flag,
+                "notes": notes,
             }
         )
     return rows
