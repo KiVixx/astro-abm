@@ -167,23 +167,11 @@ WITH candidates AS (
     SELECT
         ts, entity_type, entity_id, source, interval, asset_class, market, region,
         metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
-        observed_ts, available_ts, 'vendor' AS quality_flag, ingest_run_id, notes,
+        observed_ts, available_ts, 'official' AS quality_flag, ingest_run_id, notes,
         2 AS source_priority
     FROM abm_hourly_facts
     WHERE entity_type = 'derivatives'
-      AND source = 'tardis_binance_futures'
-      AND metric_name IN ('open_interest', 'open_interest_value')
-
-    UNION ALL
-
-    SELECT
-        ts, entity_type, entity_id, source, interval, asset_class, market, region,
-        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
-        observed_ts, available_ts, 'vendor' AS quality_flag, ingest_run_id, notes,
-        5 AS source_priority
-    FROM abm_hourly_facts
-    WHERE entity_type = 'derivatives'
-      AND source = 'coinalyze'
+      AND source = 'binance_vision_metrics'
       AND metric_name IN ('open_interest', 'open_interest_value')
 
     UNION ALL
@@ -195,7 +183,19 @@ WITH candidates AS (
         3 AS source_priority
     FROM abm_hourly_facts
     WHERE entity_type = 'derivatives'
-      AND source = 'coinalyze_1h'
+      AND source = 'tardis_binance_futures'
+      AND metric_name IN ('open_interest', 'open_interest_value')
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'vendor' AS quality_flag, ingest_run_id, notes,
+        6 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'derivatives'
+      AND source = 'coinalyze'
       AND metric_name IN ('open_interest', 'open_interest_value')
 
     UNION ALL
@@ -205,6 +205,18 @@ WITH candidates AS (
         metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
         observed_ts, available_ts, 'vendor' AS quality_flag, ingest_run_id, notes,
         4 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'derivatives'
+      AND source = 'coinalyze_1h'
+      AND metric_name IN ('open_interest', 'open_interest_value')
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'vendor' AS quality_flag, ingest_run_id, notes,
+        5 AS source_priority
     FROM abm_hourly_facts
     WHERE entity_type = 'derivatives'
       AND source = 'coinalyze_daily'
