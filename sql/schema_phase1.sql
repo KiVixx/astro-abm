@@ -173,6 +173,18 @@ WITH candidates AS (
     WHERE entity_type = 'derivatives'
       AND source = 'tardis_binance_futures'
       AND metric_name IN ('open_interest', 'open_interest_value')
+
+    UNION ALL
+
+    SELECT
+        ts, entity_type, entity_id, source, interval, asset_class, market, region,
+        metric_name, metric_value, metric_value_2, metric_value_3, metric_value_4,
+        observed_ts, available_ts, 'vendor' AS quality_flag, ingest_run_id, notes,
+        3 AS source_priority
+    FROM abm_hourly_facts
+    WHERE entity_type = 'derivatives'
+      AND source = 'coinalyze'
+      AND metric_name IN ('open_interest', 'open_interest_value')
 ), selected AS (
     SELECT ts, entity_id, metric_name, min(source_priority) AS source_priority
     FROM candidates
