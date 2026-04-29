@@ -55,6 +55,7 @@ def run_coinalyze_open_interest_backfill(
     run_writer = run_writer or QuestDBETLRunWriter(connection_factory=writer.connection_factory)
     run_id = run_id or f"coinalyze-oi-{uuid4().hex}"
     started_at = datetime.now(UTC)
+    source = _source_for_interval(interval)
 
     fetched_points = 0
     written = 0
@@ -70,10 +71,11 @@ def run_coinalyze_open_interest_backfill(
         )
         points = parse_coinalyze_open_interest_history(payload, convert_to_usd=convert_to_usd)
         fetched_points = len(points)
-        rows = build_coinalyze_open_interest_feature_rows(points)
+        rows = build_coinalyze_open_interest_feature_rows(points, source=source)
         rows, skipped = _filter_existing(
             rows,
             symbols=symbol_list,
+            source=source,
             connection_factory=writer.connection_factory,
             start_utc=start_utc,
             end_utc=end_utc,
@@ -92,7 +94,7 @@ def run_coinalyze_open_interest_backfill(
                 started_at=started_at,
                 run_id=run_id,
                 job_type="coinalyze_open_interest_backfill",
-                provider="coinalyze",
+                provider=source,
                 window_start=start_utc,
                 window_end=end_utc,
                 status=status,
@@ -113,14 +115,14 @@ def run_coinalyze_open_interest_backfill(
     )
 
 
-def _filter_existing(rows, *, symbols: Sequence[str], connection_factory, start_utc: datetime, end_utc: datetime, metric_name: str):
+def _filter_existing(rows, *, symbols: Sequence[str], source: str, connection_factory, start_utc: datetime, end_utc: datetime, metric_name: str):
     existing = set()
     for symbol in symbols:
         existing.update(
             load_existing_fact_timestamps(
                 connection_factory,
                 entity_id=normalize_coinalyze_entity_id(symbol),
-                source="coinalyze",
+                source=source,
                 metric_name=metric_name,
                 start_ts=start_utc,
                 end_ts=end_utc + timedelta(hours=1),
@@ -128,6 +130,14 @@ def _filter_existing(rows, *, symbols: Sequence[str], connection_factory, start_
         )
     new_rows = [row for row in rows if row["ts"] not in existing]
     return new_rows, len(rows) - len(new_rows)
+
+
+def _source_for_interval(interval: str) -> str:
+    if interval == "1hour":
+        return "coinalyze_1h"
+    if interval == "daily":
+        return "coinalyze_daily"
+    return "coinalyze"
 
 
 def _interval_label(interval: str) -> str:

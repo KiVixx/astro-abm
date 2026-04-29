@@ -70,8 +70,38 @@ def test_run_coinalyze_open_interest_backfill_writes_vendor_rows():
 
     assert result.fetched_points == 1
     assert result.written == 1
-    assert fact_writer.rows[0]["source"] == "coinalyze"
+    assert fact_writer.rows[0]["source"] == "coinalyze_1h"
     assert fact_writer.rows[0]["quality_flag"] == "vendor"
     assert fact_writer.rows[0]["interval"] == "1h"
     assert fact_writer.rows[0]["ingest_run_id"] == "coinalyze-test"
-    assert run_writer.records[0].provider == "coinalyze"
+    assert run_writer.records[0].provider == "coinalyze_1h"
+
+
+def test_run_coinalyze_open_interest_backfill_uses_daily_source_for_daily_interval():
+    from astro_abm.etl.backfill_coinalyze_open_interest import run_coinalyze_open_interest_backfill
+
+    class FakeClient:
+        def fetch_open_interest_history(self, **kwargs):
+            return [
+                {
+                    "symbol": "BTCUSDT_PERP.A",
+                    "history": [{"t": 1713139200, "o": 100.0, "h": 120.0, "l": 90.0, "c": 110.0}],
+                }
+            ]
+
+    fact_writer = RecordingFactWriter()
+    run_writer = RecordingRunWriter()
+    result = run_coinalyze_open_interest_backfill(
+        symbols=("BTCUSDT_PERP.A",),
+        start_utc=datetime(2024, 4, 15, 0, tzinfo=UTC),
+        end_utc=datetime(2024, 4, 16, 0, tzinfo=UTC),
+        interval="daily",
+        client=FakeClient(),
+        writer=fact_writer,
+        run_writer=run_writer,
+    )
+
+    assert result.written == 1
+    assert fact_writer.rows[0]["source"] == "coinalyze_daily"
+    assert fact_writer.rows[0]["interval"] == "1d"
+    assert run_writer.records[0].provider == "coinalyze_daily"
