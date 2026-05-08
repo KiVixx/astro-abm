@@ -115,7 +115,7 @@ def _summary_int(summary: object, *names: str) -> int:
 
 def _summary_details(summary: object) -> str:
     parts = []
-    for name in ("fetched", "fetched_files", "missing_files", "records_seen", "hours_seen", "years_seen"):
+    for name in ("fetched", "fetched_files", "missing_files", "records_seen", "hours_seen", "years_seen", "read_bars"):
         if hasattr(summary, name):
             parts.append(f"{name}={getattr(summary, name)}")
     run_id = getattr(summary, "run_id", None)

@@ -4,12 +4,15 @@ import argparse
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Callable, Sequence
+from uuid import uuid4
 
 import pandas as pd
 
 from astro_abm.features.price_action import build_price_action_feature_rows
 from astro_abm.market_data.binance_historical import normalize_symbols
 from astro_abm.storage.questdb import (
+    ETLRunRecord,
+    QuestDBETLRunWriter,
     QuestDBHourlyFactWriter,
     QuestDBMarketBarWriter,
     load_existing_fact_timestamps,
@@ -21,6 +24,8 @@ class PriceFeatureBuildResult:
     read_bars: int
     written: int
     skipped_existing: int
+    errors: tuple[str, ...] = ()
+    run_id: str = ""
 
 
 def run_price_feature_build(
@@ -32,6 +37,9 @@ def run_price_feature_build(
     chunk_days: int = 90,
     connection_factory: Callable | None = None,
     writer: QuestDBHourlyFactWriter | None = None,
+    run_writer: QuestDBETLRunWriter | None = None,
+    run_id: str | None = None,
+    record_run: bool = True,
 ) -> PriceFeatureBuildResult:
     if end_utc <= start_utc:
         raise ValueError("end_utc must be after start_utc.")
@@ -41,43 +49,75 @@ def run_price_feature_build(
 
     connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
     writer = writer or QuestDBHourlyFactWriter(connection_factory=connection_factory)
+    run_writer = run_writer or QuestDBETLRunWriter(connection_factory=connection_factory)
+    run_id = run_id or f"price-action-{uuid4().hex}"
+    started_at = datetime.now(UTC)
     read_bars = 0
     written = 0
     skipped = 0
+    errors: list[str] = []
 
     for symbol in symbol_list:
         for chunk_start, chunk_end in _time_chunks(start_utc, end_utc, chunk_days=chunk_days):
-            query_start = max(start_utc, chunk_start - timedelta(hours=24))
-            frame = _load_market_frame(
-                connection_factory,
-                symbol=symbol,
-                source=source,
-                start_utc=query_start,
-                end_utc=chunk_end,
-            )
-            read_bars += len(frame)
-            if frame.empty:
-                continue
+            try:
+                query_start = max(start_utc, chunk_start - timedelta(hours=24))
+                frame = _load_market_frame(
+                    connection_factory,
+                    symbol=symbol,
+                    source=source,
+                    start_utc=query_start,
+                    end_utc=chunk_end,
+                )
+                read_bars += len(frame)
+                if frame.empty:
+                    continue
 
-            rows = [
-                row
-                for row in build_price_action_feature_rows(frame)
-                if chunk_start <= row["ts"] < chunk_end
-            ]
-            existing = load_existing_fact_timestamps(
-                connection_factory,
-                entity_id=symbol,
-                source="price_action",
-                metric_name="price_return_1h",
-                start_ts=chunk_start,
-                end_ts=chunk_end,
-            )
-            new_rows = [row for row in rows if row["ts"] not in existing]
-            skipped += len(rows) - len(new_rows)
-            writer.write(new_rows)
-            written += len(new_rows)
+                rows = [
+                    {**row, "ingest_run_id": run_id}
+                    for row in build_price_action_feature_rows(frame)
+                    if chunk_start <= row["ts"] < chunk_end
+                ]
+                existing = load_existing_fact_timestamps(
+                    connection_factory,
+                    entity_id=symbol,
+                    source="price_action",
+                    metric_name="price_return_1h",
+                    start_ts=chunk_start,
+                    end_ts=chunk_end,
+                )
+                new_rows = [row for row in rows if row["ts"] not in existing]
+                skipped += len(rows) - len(new_rows)
+                writer.write(new_rows)
+                written += len(new_rows)
+            except Exception as exc:
+                errors.append(f"{symbol}:{chunk_start.isoformat()}:{type(exc).__name__}:{exc}")
 
-    return PriceFeatureBuildResult(read_bars=read_bars, written=written, skipped_existing=skipped)
+    if record_run:
+        status = "success" if not errors else "partial" if written else "failed"
+        run_writer.write(
+            ETLRunRecord(
+                started_at=started_at,
+                run_id=run_id,
+                job_type="price_feature_build",
+                provider="price_action",
+                window_start=start_utc,
+                window_end=end_utc,
+                status=status,
+                rows_written=written,
+                skipped_existing=skipped,
+                errors=len(errors),
+                finished_at=datetime.now(UTC),
+                notes=f"Built price-action features from market_ohlcv_1h source={source}.",
+            )
+        )
+
+    return PriceFeatureBuildResult(
+        read_bars=read_bars,
+        written=written,
+        skipped_existing=skipped,
+        errors=tuple(errors),
+        run_id=run_id,
+    )
 
 
 def _load_market_frame(connection_factory: Callable, *, symbol: str, source: str, start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
