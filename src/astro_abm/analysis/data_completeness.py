@@ -96,7 +96,10 @@ def _format_market_rows(rows, *, as_of: datetime) -> list[str]:
     if not rows:
         return ["  - none"]
     return [
-        f"  - {symbol}/{source}: rows={count} range={_range_text(min_ts, max_ts)} lag={_lag_text(max_ts, as_of)}"
+        (
+            f"  - {symbol}/{source}: rows={count} range={_range_text(min_ts, max_ts)} "
+            f"lag={_lag_text(max_ts, as_of)} health={_health_text(max_ts, as_of, _stale_after_hours('market', source, None))}"
+        )
         for symbol, source, count, min_ts, max_ts in rows
     ]
 
@@ -105,7 +108,11 @@ def _format_space_weather_rows(rows, *, as_of: datetime) -> list[str]:
     if not rows:
         return ["  - none"]
     return [
-        f"  - {metric_name} [{source}/{quality_flag}]: rows={count} range={_range_text(min_ts, max_ts)} lag={_lag_text(max_ts, as_of)}"
+        (
+            f"  - {metric_name} [{source}/{quality_flag}]: rows={count} range={_range_text(min_ts, max_ts)} "
+            f"lag={_lag_text(max_ts, as_of)} "
+            f"health={_health_text(max_ts, as_of, _stale_after_hours('space_weather', source, metric_name))}"
+        )
         for source, metric_name, quality_flag, count, min_ts, max_ts in rows
     ]
 
@@ -114,7 +121,11 @@ def _format_open_interest_rows(rows, *, as_of: datetime) -> list[str]:
     if not rows:
         return ["  - none"]
     return [
-        f"  - {entity_id}/{metric_name} [{source}/{quality_flag}]: rows={count} range={_range_text(min_ts, max_ts)} lag={_lag_text(max_ts, as_of)}"
+        (
+            f"  - {entity_id}/{metric_name} [{source}/{quality_flag}]: rows={count} range={_range_text(min_ts, max_ts)} "
+            f"lag={_lag_text(max_ts, as_of)} "
+            f"health={_health_text(max_ts, as_of, _stale_after_hours('open_interest', source, metric_name))}"
+        )
         for source, entity_id, metric_name, quality_flag, count, min_ts, max_ts in rows
     ]
 
@@ -125,7 +136,9 @@ def _format_fact_rows(rows, *, as_of: datetime) -> list[str]:
     return [
         (
             f"  - {source}/{entity_type}/{entity_id}/{metric_name}"
-            f" [{quality_flag or 'unknown'}]: rows={count} range={_range_text(min_ts, max_ts)} lag={_lag_text(max_ts, as_of)}"
+            f" [{quality_flag or 'unknown'}]: rows={count} range={_range_text(min_ts, max_ts)} "
+            f"lag={_lag_text(max_ts, as_of)} "
+            f"health={_health_text(max_ts, as_of, _stale_after_hours('fact', source, metric_name))}"
         )
         for source, entity_type, entity_id, metric_name, quality_flag, count, min_ts, max_ts in rows
     ]
@@ -163,6 +176,30 @@ def _lag_text(max_ts, as_of: datetime) -> str:
     if lag_hours < 48:
         return f"{lag_hours:.1f}h"
     return f"{lag_hours / 24:.1f}d"
+
+
+def _health_text(max_ts, as_of: datetime, stale_after_hours: float) -> str:
+    if max_ts is None:
+        return "MISSING"
+    max_utc = _ensure_utc(max_ts)
+    lag_hours = max(0.0, (as_of - max_utc).total_seconds() / 3600)
+    return "OK" if lag_hours <= stale_after_hours else "STALE"
+
+
+def _stale_after_hours(section: str, source: str, metric_name: str | None) -> float:
+    if source == "nasa_omni":
+        return 75 * 24
+    if source in {"binance_vision_metrics", "noaa_goes_xrs"}:
+        return 7 * 24
+    if source == "coinalyze_daily":
+        return 3 * 24
+    if source == "pyswisseph":
+        return 24
+    if section == "space_weather" and source == "noaa_swpc_recent":
+        return 48
+    if metric_name == "funding_rate":
+        return 12
+    return 48
 
 
 def _ensure_utc(value: datetime) -> datetime:

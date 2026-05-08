@@ -12,5 +12,32 @@ services:
     volumes:
       - questdb-data:/var/lib/questdb
 
+  maintenance:
+    build:
+      context: .
+    container_name: abm-maintenance
+    restart: unless-stopped
+    depends_on:
+      - questdb
+    profiles:
+      - maintenance
+    environment:
+      TZ: UTC
+      QUESTDB_HOST: questdb
+      QUESTDB_PG_PORT: 8812
+      QUESTDB_USER: ${QUESTDB_USER:-admin}
+      QUESTDB_PASSWORD: ${QUESTDB_PASSWORD:-quest}
+      QUESTDB_DATABASE: ${QUESTDB_DATABASE:-qdb}
+      ASTRO_ABM_CRYPTO_SYMBOLS: ${ASTRO_ABM_CRYPTO_SYMBOLS:-BTCUSDT,ETHUSDT}
+      COINALYZE_SYMBOLS: ${COINALYZE_SYMBOLS:-BTCUSDT_PERP.A,ETHUSDT_PERP.A}
+      ASTRO_ABM_RUN_ON_START: ${ASTRO_ABM_RUN_ON_START:-hourly}
+      ASTRO_ABM_DAILY_HOUR: ${ASTRO_ABM_DAILY_HOUR:-0}
+      ASTRO_ABM_DAILY_MINUTE: ${ASTRO_ABM_DAILY_MINUTE:-20}
+    command:
+      - astro-abm-maintenance-daemon
+    volumes:
+      - astro-cache:/root/.cache/astro-abm
+
 volumes:
   questdb-data:
+  astro-cache:

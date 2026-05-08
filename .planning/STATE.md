@@ -5,21 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Create a reproducible hourly feature pipeline that lets the system test whether exogenous astro/space-weather signals can explain or perturb simulated market sentiment and agent behavior.
-**Current focus:** Phase 7 — Price and Positioning Baselines
+**Current focus:** DataOps — 1H continuous acquisition and maintenance
 
 ## Current Status
 
 - Milestone: MVP hourly data foundation
-- Active phase: 7
-- Latest artifact: Binance historical spot backfill, price-action feature layer, Binance futures funding/OI layer, ASKGROK backfill runner, and ETL run logs
-- Verification status: unit tests passing; QuestDB running; conservative live ephemeris/NOAA/Binance/Polygon run succeeded
+- Active phase: 1H feature-store maintenance
+- Latest artifact: hourly/daily maintenance entrypoints, Docker maintenance daemon, Binance Vision metrics backfill, Coinalyze interval split, data completeness freshness flags, and handoff note
+- Verification status: unit tests passing; QuestDB running; current focus is keeping data fresh before expanding models or intervals
 
 ## Open Blockers
 
 - ASKGROK is a local dependency and must be running for `SOCIAL_SENTIMENT_PROVIDER=askgrok` or `astro-abm-backfill-askgrok`.
 - ASKGROK retrospective web-research sentiment is not equivalent to raw historical X firehose data.
+- ASKGROK sentiment is intentionally ignored in the current maintenance push.
 - LunarCrush remains optional but is no longer the recommended primary social provider.
-- Binance open-interest statistics only expose the latest 1 month; funding-rate history is the longer-horizon derivatives baseline.
+- Binance API open-interest statistics only expose the latest 1 month, but Binance Vision metrics now provide official longer historical OI coverage for priority symbols.
+- Local-only assets such as `.env`, QuestDB volume, and Binance Vision ZIP cache are not stored in Git.
 
 ## Recent Decisions
 
@@ -30,20 +32,25 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 - Add a tested live ETL skeleton before attempting provider-specific production hardening.
 - Use ASKGROK as the primary social-sentiment adapter and keep LunarCrush as optional fallback.
 - Treat price as the consensus baseline and derivatives positioning as a regime/fragility layer before expanding narrative features.
+- Keep the project canonical at 1H for now; do not expand to 30m/15m until 1H data maintenance is reliable.
+- Temporarily ignore ASKGROK sentiment in scheduled maintenance to reduce moving parts.
+- Prefer Docker Compose for long-running maintenance so the open-source workflow is reproducible outside this Mac.
 
 ## Next Step
 
-Build historical hard-data baselines:
-1. backfill Binance spot OHLCV as far back as available for priority symbols
-2. build price-action feature rows from OHLCV
-3. backfill Binance futures funding rates as far back as available
-4. backfill open interest for the latest 1 month where Binance exposes it
-5. compare price-only features against derivatives positioning and ASKGROK narrative rows
+Stabilize the 1H data maintenance loop:
+1. run `astro-abm-maintain-hourly` for recent market/OI/space-weather/ephemeris refreshes
+2. run `astro-abm-maintain-daily` for archive overlays such as Binance Vision, GOES X-ray, SWPC recent, and NASA OMNI
+3. run `docker compose -f docker-compose.questdb.yml --profile maintenance up -d --build` for the long-running Docker scheduler
+4. run `astro-abm-data-completeness` after maintenance and check `health=OK/STALE/MISSING`
+5. only after freshness is reliable, build derivatives regime features and feature-quality reports for BTC/ETH
 
 ## Resume Anchor
 
 If resuming later, start with:
 - .planning/ROADMAP.md
+- .planning/HANDOFF.md
 - .env.example
-- src/astro_abm/etl/live.py
+- src/astro_abm/etl/maintain_hourly.py
+- src/astro_abm/etl/maintain_daily.py
 - src/astro_abm/storage/questdb.py

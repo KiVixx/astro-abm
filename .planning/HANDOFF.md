@@ -138,6 +138,12 @@ Start QuestDB:
 docker compose -f docker-compose.questdb.yml up -d
 ```
 
+Start QuestDB plus the Docker maintenance daemon:
+
+```bash
+docker compose -f docker-compose.questdb.yml --profile maintenance up -d --build
+```
+
 Stop QuestDB:
 
 ```bash
@@ -154,6 +160,24 @@ Check data completeness:
 
 ```bash
 uv run astro-abm-data-completeness
+```
+
+Run 1H maintenance without social sentiment:
+
+```bash
+uv run astro-abm-maintain-hourly
+```
+
+Run the scheduler daemon directly:
+
+```bash
+uv run astro-abm-maintenance-daemon --run-on-start hourly
+```
+
+Run daily archive/data-health maintenance:
+
+```bash
+uv run astro-abm-maintain-daily
 ```
 
 Feature summary:
@@ -212,10 +236,11 @@ Most promising next feature families:
 
 ## Recommended Next Steps
 
-1. Add interval-aware Binance Vision rebuild support.
-   - Current Binance Vision raw cache is 5m.
-   - Add explicit support for writing `interval='30m'`, `interval='15m'`, and maybe `interval='5m'`.
-   - Keep 1h as the canonical model layer until the smaller intervals are proven useful.
+1. Stabilize 1H continuous data maintenance.
+   - Keep 1H as the canonical model layer.
+   - Use `astro-abm-maintain-hourly` for recent market/OI/space-weather/ephemeris refreshes.
+   - Use `astro-abm-maintain-daily` for archive overlays and slow authoritative sources.
+   - Run `astro-abm-data-completeness` after maintenance and check `health=OK/STALE/MISSING`.
 
 2. Build derivatives regime features.
    - OI change rate

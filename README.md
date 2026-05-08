@@ -167,6 +167,20 @@ Start QuestDB locally:
 docker compose -f docker-compose.questdb.yml up -d
 ```
 
+Start QuestDB plus the Docker maintenance daemon:
+
+```bash
+docker compose -f docker-compose.questdb.yml --profile maintenance up -d --build
+```
+
+The maintenance service runs:
+
+- hourly maintenance at minute `05` each hour
+- daily archive maintenance at `00:20` UTC
+- one hourly refresh on container start by default
+
+It intentionally excludes ASKGROK sentiment from scheduled maintenance.
+
 Stop it:
 
 ```bash
