@@ -21,7 +21,6 @@ RunOnStart = Literal["none", "hourly", "daily", "both"]
 def build_maintenance_scheduler(
     *,
     symbols: Sequence[str],
-    coinalyze_symbols: Sequence[str],
     timezone: str = "UTC",
     enable_hourly: bool = True,
     enable_daily: bool = True,
@@ -47,7 +46,7 @@ def build_maintenance_scheduler(
         scheduler.add_job(
             _job_runner(
                 "daily",
-                lambda: run_daily_maintenance(symbols=symbols, coinalyze_symbols=coinalyze_symbols),
+                lambda: run_daily_maintenance(symbols=symbols),
                 title="Daily Maintenance Summary",
             ),
             trigger=CronTrigger(hour=daily_hour, minute=daily_minute, timezone=timezone),
@@ -63,7 +62,6 @@ def build_maintenance_scheduler(
 def run_daemon(
     *,
     symbols: Sequence[str],
-    coinalyze_symbols: Sequence[str],
     timezone: str = "UTC",
     enable_hourly: bool = True,
     enable_daily: bool = True,
@@ -73,7 +71,6 @@ def run_daemon(
 ) -> int:
     scheduler = build_maintenance_scheduler(
         symbols=symbols,
-        coinalyze_symbols=coinalyze_symbols,
         timezone=timezone,
         enable_hourly=enable_hourly,
         enable_daily=enable_daily,
@@ -101,7 +98,7 @@ def run_daemon(
     if run_on_start in {"daily", "both"} and enable_daily:
         _job_runner(
             "daily",
-            lambda: run_daily_maintenance(symbols=symbols, coinalyze_symbols=coinalyze_symbols),
+            lambda: run_daily_maintenance(symbols=symbols),
             title="Daily Maintenance Summary",
         )()
 
@@ -132,7 +129,6 @@ def _env_symbols(name: str, default: str) -> tuple[str, ...]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run Astro ABM hourly/daily maintenance on a scheduler.")
     parser.add_argument("--symbols", default=",".join(_env_symbols("ASTRO_ABM_CRYPTO_SYMBOLS", "BTCUSDT,ETHUSDT")))
-    parser.add_argument("--coinalyze-symbols", default=",".join(_env_symbols("COINALYZE_SYMBOLS", "BTCUSDT_PERP.A,ETHUSDT_PERP.A")))
     parser.add_argument("--timezone", default=os.getenv("ASTRO_ABM_SCHEDULER_TZ", "UTC"))
     parser.add_argument("--no-hourly", action="store_true", help="Disable hourly maintenance.")
     parser.add_argument("--no-daily", action="store_true", help="Disable daily maintenance.")
@@ -142,7 +138,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     return run_daemon(
         symbols=split_symbols(args.symbols),
-        coinalyze_symbols=split_symbols(args.coinalyze_symbols),
         timezone=args.timezone,
         enable_hourly=not args.no_hourly,
         enable_daily=not args.no_daily,

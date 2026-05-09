@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -111,14 +113,33 @@ def build_space_weather_feature_rows(
 
 
 class SpaceWeatherClient:
-    def __init__(self, session: requests.Session | None = None):
+    def __init__(
+        self,
+        session: requests.Session | None = None,
+        *,
+        timeout_seconds: float = 30,
+        max_attempts: int = 3,
+        retry_sleep_seconds: float = 1.0,
+    ):
         self.session = session or requests.Session()
+        self.timeout_seconds = timeout_seconds
+        self.max_attempts = max(1, max_attempts)
+        self.retry_sleep_seconds = max(0.0, retry_sleep_seconds)
 
     def fetch_json(self, endpoint_key: str) -> Any:
         url = NOAA_SPACE_WEATHER_ENDPOINTS[endpoint_key]
-        response = self.session.get(url, timeout=30)
-        response.raise_for_status()
-        return response.json()
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                response = self.session.get(url, timeout=self.timeout_seconds)
+                response.raise_for_status()
+                return _load_noaa_json(response.text)
+            except (requests.RequestException, json.JSONDecodeError) as exc:
+                last_error = exc
+                if attempt < self.max_attempts:
+                    time.sleep(self.retry_sleep_seconds * attempt)
+        assert last_error is not None
+        raise last_error
 
     def fetch_plasma(self) -> list[dict[str, Any]]:
         return parse_noaa_table_feed(self.fetch_json("plasma"))
@@ -131,3 +152,14 @@ class SpaceWeatherClient:
 
     def fetch_hourly_kp(self) -> list[dict[str, Any]]:
         return expand_kp_index_to_hourly(self.fetch_json("kp"))
+
+
+def _load_noaa_json(text: str) -> Any:
+    decoder = json.JSONDecoder()
+    value, end = decoder.raw_decode(text.lstrip())
+    trailing = text.lstrip()[end:].strip()
+    if trailing:
+        # NOAA live endpoints occasionally append a second payload or diagnostic
+        # text. Keep the first complete JSON document instead of dropping the hour.
+        return value
+    return value

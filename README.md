@@ -18,7 +18,6 @@ What it does contain is the MVP data-layer scaffold required before any meaningf
 - hourly market-data provider modules
 - hourly space-weather parsing helpers
 - local ephemeris feature computation helpers
-- hourly crypto social-sentiment parsing helpers
 - ETL alignment and scheduling helpers
 
 The entire MVP is standardized around a single rule:
@@ -33,22 +32,20 @@ Implemented and unit-tested:
 - Phase 1 — QuestDB setup and schema
 - Phase 2 — crypto + tradfi market-data provider and normalization skeleton
 - Phase 3 — NOAA SWPC parsing helpers + local ephemeris feature layer
-- Phase 4 — LunarCrush social-sentiment parsing layer
-- Phase 5 — ETL alignment helpers, tradfi forward-fill placeholder, scheduler wiring
-- Live ETL entrypoint skeleton and unified QuestDB fact writer
+- Phase 4 — price-action and derivatives feature ingestion
+- Phase 5 — ETL alignment helpers, hourly/daily maintenance, Docker runtime
+- Active-only data completeness reporting
 
 Current test status:
 
 ```bash
-pytest -q
-# 22 passed
+uv run pytest -q
 ```
 
 Not yet implemented:
 
-- full live market/social ETL run against QuestDB with provider credentials
-- provider credential validation / bootstrap command
 - ABM simulation runtime and agent logic
+- provider credential validation / bootstrap command
 - model training / validation workflows
 
 --------------------------------------------------
@@ -68,7 +65,7 @@ It defines the building blocks for a reproducible hourly pipeline where the foll
 - tradfi OHLCV
 - solar-wind / IMF / X-ray / Kp activity
 - moon phase and planetary angular features
-- crypto social volume and sentiment
+- crypto positioning, funding, and price-action features
 
 --------------------------------------------------
 ## Design Principles
@@ -179,7 +176,7 @@ The maintenance service runs:
 - daily archive maintenance at `00:20` UTC
 - one hourly refresh on container start by default
 
-It intentionally excludes ASKGROK sentiment from scheduled maintenance.
+It intentionally excludes disabled sentiment/vendor providers from scheduled maintenance.
 
 Stop it:
 
@@ -459,42 +456,16 @@ Current feature examples:
 - `mars_jupiter_angle_signed`
 
 --------------------------------------------------
-## Phase 4 — Social Sentiment Validation Layer
+## Phase 4 — Price Action and Positioning Layer
 
-File:
+The active research path currently favors hard market data over narrative sentiment:
 
-- `src/astro_abm/features/social_sentiment.py`
+- Binance spot OHLCV
+- price-action features derived from closed 1H candles
+- Binance futures funding and open interest
+- Binance Vision historical metrics
 
-What it does:
-
-- defines optional `AskGrokSentimentClient` and `LunarCrushClient` providers
-- calls a local ASKGROK service for retrospective web-research sentiment
-- parses optional LunarCrush hourly social payloads
-- normalizes timestamps to UTC hour buckets
-- shapes social feature rows for the unified hourly facts table
-
-Current supported metrics:
-
-- `askgrok_sentiment_score`
-- `askgrok_confidence`
-- `askgrok_bullish_intensity`
-- `askgrok_bearish_intensity`
-- `askgrok_fear_intensity`
-- `askgrok_uncertainty_intensity`
-- `social_volume`
-- `sentiment_score`
-- `social_contributors`
-- `average_sentiment`
-- `social_dominance`
-
-Why this layer exists:
-
-This is the first calibration / validation layer against the astro hypothesis.
-
-The idea is not that social sentiment replaces astro features.
-The idea is that social sentiment can later be used to test whether astro-derived perturbation variables appear to line up with observable crowd behavior.
-
-ASKGROK is treated as an AI sentiment oracle, not as a raw X firehose. Its rows preserve `source=ASKGROK_WEB`, `data_scope`, confidence, and limitations in `notes` so later analysis can separate retrospective web-research sentiment from direct social-volume feeds.
+ASKGROK, LunarCrush, Coinalyze, and Tardis integrations are disabled from the main CLI, Docker maintenance flow, and default completeness report. Their old provider modules are left in the tree only as recoverable experimental code.
 
 --------------------------------------------------
 ## Phase 5 — ETL Alignment & Automation
@@ -558,11 +529,10 @@ Why these matter:
 Module:
 
 - `live.py`
-- `backfill_askgrok.py`
 
 What it does:
 
-- wires crypto market bars, optional tradfi bars, NOAA space weather, ephemeris, and optional social-sentiment rows
+- wires crypto market bars, optional tradfi bars, NOAA space weather, and ephemeris rows
 - writes OHLCV rows through `QuestDBMarketBarWriter`
 - writes feature rows through `QuestDBHourlyFactWriter`
 - exposes a console command:
@@ -571,23 +541,11 @@ What it does:
 astro-abm-live
 ```
 
-Controlled ASKGROK backfill:
-
-```bash
-astro-abm-backfill-askgrok \
-  --start 2022-05-20T00:00:00Z \
-  --end 2022-05-21T00:00:00Z \
-  --assets BTC,ETH,LUNA,UST \
-  --max-hours 24
-```
-
-The live entrypoint is unit-tested with fake providers. A conservative local smoke run has been validated for QuestDB, ephemeris, NOAA facts, Binance, and Polygon. ASKGROK requires the separate local ASKGROK service to be running.
+The live entrypoint is unit-tested with fake providers. A conservative local smoke run has been validated for QuestDB, ephemeris, NOAA facts, Binance, and Polygon.
 
 Backfill safety defaults:
 
 - hourly windows only
-- `--max-hours` default 24 and hard cap 168
-- existing ASKGROK sentiment rows are skipped by default
 - provider errors are recorded without stopping the entire batch
 - one summary row is written to `etl_runs`
 
@@ -605,13 +563,6 @@ Market data:
 - `POLYGON_API_KEY`
 - `ALPHA_VANTAGE_API_KEY`
 
-Social sentiment:
-
-- `SOCIAL_SENTIMENT_PROVIDER` — `askgrok`, `lunarcrush`, or `disabled`
-- `ASKGROK_BASE_URL`
-- `ASKGROK_TIMEOUT_MS`
-- `LUNARCRUSH_API_KEY` — optional fallback provider
-
 QuestDB:
 
 - `QUESTDB_HOST`
@@ -623,12 +574,10 @@ QuestDB:
 Provider selection:
 
 - `TRADFI_PROVIDER`
-- `SOCIAL_SENTIMENT_PROVIDER`
 
 Notes:
 
 - The repo includes `.env.example`
-- ASKGROK sentiment requires the local ASKGROK API, usually at `http://localhost:3000`
 - QuestDB defaults in `config.py` are for disposable local development only and should be overridden outside a local test setup
 
 --------------------------------------------------
@@ -704,9 +653,6 @@ Covered areas include:
 - X-ray channel filtering
 - Kp hourly expansion
 - moon phase percentage and angular features
-- LunarCrush hourly payload normalization
-- ASKGROK sentiment payload normalization and row shaping
-- controlled ASKGROK hourly backfill orchestration
 - ETL run-log writer shaping
 - ETL alignment, merge, row shaping, and scheduler wiring
 - live ETL provider orchestration with fake providers
@@ -747,15 +693,6 @@ astro-abm-backfill-binance-derivatives --symbols BTCUSDT,ETHUSDT --start 2019-09
 Copy `.env.example` to `.env`, then fill whichever providers you plan to test first. The package loads `.env` automatically when configuration is read.
 
 - `POLYGON_API_KEY` or `ALPHA_VANTAGE_API_KEY`
-- `SOCIAL_SENTIMENT_PROVIDER=askgrok`
-- `ASKGROK_BASE_URL=http://localhost:3000`
-
-Start ASKGROK separately:
-
-```bash
-cd "/Users/Apple/Documents/New project 2"
-npm start
-```
 
 ### 4. Run the live ETL command
 After installing the package in editable mode:

@@ -14,6 +14,7 @@ def test_format_data_completeness_report_renders_coverage_sections():
         ],
         "open_interest_rows": [
             ("tardis_binance_futures", "BTCUSDT", "open_interest", "vendor", 24, datetime(2024, 4, 15, 0), datetime(2024, 4, 15, 23)),
+            ("binance_vision_metrics", "BTCUSDT", "open_interest", "official", 24, datetime(2024, 4, 15, 0), datetime(2024, 4, 15, 23)),
         ],
         "fact_rows": [
             ("price_action", "price_action", "BTCUSDT", "price_return_1h", "derived", 99, datetime(2024, 4, 15, 1), datetime(2024, 4, 16, 0)),
@@ -36,6 +37,7 @@ def test_format_data_completeness_report_renders_coverage_sections():
     text = format_data_completeness_report(report, as_of=datetime(2024, 4, 16, 2, tzinfo=UTC))
 
     assert "Data Completeness Report" in text
+    assert "Scope: active sources only" in text
     assert "Market OHLCV" in text
     assert "BTCUSDT/binance: rows=100" in text
     assert "BTCUSDT/binance: rows=100 range=2024-04-15 00:00 -> 2024-04-16 00:00 lag=2.0h health=OK" in text
@@ -43,7 +45,7 @@ def test_format_data_completeness_report_renders_coverage_sections():
     assert "imf_bz [nasa_omni/authoritative]: rows=24" in text
     assert "imf_bz [noaa_swpc_recent/provisional]: rows=2" in text
     assert "Unified Open Interest" in text
-    assert "BTCUSDT/open_interest [tardis_binance_futures/vendor]: rows=24" in text
+    assert "BTCUSDT/open_interest [binance_vision_metrics/official]: rows=24" in text
     assert "Hourly Facts" in text
     assert "price_action/price_action/BTCUSDT/price_return_1h [derived]" in text
     assert "Recent ETL Runs" in text
@@ -111,9 +113,34 @@ def test_load_data_completeness_report_queries_expected_tables():
         "space_weather_rows": [],
         "open_interest_rows": [],
         "etl_runs": [],
+        "active_only": True,
     }
     assert any("market_ohlcv_1h" in sql for sql, _params in executed)
     assert any("abm_hourly_facts" in sql for sql, _params in executed)
     assert any("v_space_weather_unified" in sql for sql, _params in executed)
     assert any("v_open_interest_unified" in sql for sql, _params in executed)
+    assert any("ASKGROK_WEB" in sql for sql, _params in executed)
     assert executed[-1][1] == (5,)
+
+
+def test_format_data_completeness_report_can_include_inactive_scope():
+    from astro_abm.analysis.data_completeness import format_data_completeness_report
+
+    report = {
+        "active_only": False,
+        "market_rows": [],
+        "space_weather_rows": [],
+        "open_interest_rows": [
+            ("tardis_binance_futures", "BTCUSDT", "open_interest", "vendor", 24, datetime(2024, 4, 15, 0), datetime(2024, 4, 15, 23)),
+        ],
+        "fact_rows": [
+            ("ASKGROK_WEB", "social_sentiment", "BTC", "askgrok_sentiment_score", "derived", 1, datetime(2024, 4, 15, 0), datetime(2024, 4, 15, 0)),
+        ],
+        "etl_runs": [],
+    }
+
+    text = format_data_completeness_report(report, as_of=datetime(2024, 4, 16, 2, tzinfo=UTC))
+
+    assert "Scope: all sources" in text
+    assert "tardis_binance_futures" in text
+    assert "ASKGROK_WEB" in text

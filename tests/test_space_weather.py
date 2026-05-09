@@ -91,3 +91,37 @@ def test_build_space_weather_feature_rows_shapes_aligned_hourly_facts():
     assert rows[1]["metric_name"] == "imf_bz"
     assert rows[2]["metric_name"] == "xray_flux"
     assert rows[3]["metric_name"] == "kp_index"
+
+
+def test_space_weather_client_retries_and_tolerates_trailing_payload_text():
+    from astro_abm.features.space_weather import SpaceWeatherClient
+
+    class FakeResponse:
+        text = '["header"] extra diagnostic text'
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url, timeout):
+            self.calls += 1
+            if self.calls == 1:
+                return type(
+                    "BadResponse",
+                    (),
+                    {
+                        "text": "not json",
+                        "raise_for_status": lambda self: None,
+                    },
+                )()
+            return FakeResponse()
+
+    session = FakeSession()
+
+    payload = SpaceWeatherClient(session=session, max_attempts=2, retry_sleep_seconds=0).fetch_json("plasma")
+
+    assert payload == ["header"]
+    assert session.calls == 2

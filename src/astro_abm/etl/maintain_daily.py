@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Sequence
 
 from astro_abm.etl.backfill_binance_vision_metrics import run_binance_vision_metrics_backfill
-from astro_abm.etl.backfill_coinalyze_open_interest import run_coinalyze_open_interest_backfill
 from astro_abm.etl.backfill_ephemeris import run_ephemeris_backfill
 from astro_abm.etl.backfill_goes_xray import run_goes_xray_backfill
 from astro_abm.etl.backfill_noaa_swpc_recent import run_noaa_swpc_recent_backfill
@@ -25,7 +24,6 @@ def run_daily_maintenance(
     *,
     run_ts: datetime | None = None,
     symbols: Sequence[str] = ("BTCUSDT", "ETHUSDT"),
-    coinalyze_symbols: Sequence[str] = ("BTCUSDT_PERP.A", "ETHUSDT_PERP.A"),
     archive_lookback_days: int = 7,
     swpc_lookback_days: int = 3,
     omni_lookback_days: int = 75,
@@ -36,7 +34,6 @@ def run_daily_maintenance(
     refresh_swpc_recent: bool = True,
     refresh_omni: bool = True,
     refresh_ephemeris: bool = True,
-    refresh_coinalyze: bool = False,
 ) -> MaintenanceSummary:
     if archive_lookback_days <= 0:
         raise ValueError("archive_lookback_days must be greater than 0.")
@@ -47,7 +44,6 @@ def run_daily_maintenance(
     symbol_list = split_symbols(symbols)
     if not symbol_list:
         raise ValueError("symbols must contain at least one symbol.")
-    coinalyze_symbol_list = split_symbols(coinalyze_symbols)
 
     bucket_ts = normalize_to_utc_hour(ensure_utc(run_ts or datetime.now(UTC)))
     archive_start = bucket_ts - timedelta(days=archive_lookback_days)
@@ -121,22 +117,6 @@ def run_daily_maintenance(
                 ),
             )
         )
-    if refresh_coinalyze and coinalyze_symbol_list:
-        summary_starts.append(archive_start)
-        summary_ends.append(bucket_ts)
-        tasks.append(
-            (
-                "coinalyze_open_interest_1h_fallback",
-                lambda: run_coinalyze_open_interest_backfill(
-                    symbols=coinalyze_symbol_list,
-                    start_utc=archive_start,
-                    end_utc=bucket_ts,
-                    interval="1hour",
-                    convert_to_usd=False,
-                ),
-            )
-        )
-
     return MaintenanceSummary(
         run_ts=bucket_ts,
         window_start=min(summary_starts) if summary_starts else bucket_ts,
@@ -157,7 +137,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run daily Astro ABM archive/data-health maintenance.")
     parser.add_argument("--run-ts", default=None, help="UTC timestamp to align to, defaults to now.")
     parser.add_argument("--symbols", default=",".join(_env_symbols("ASTRO_ABM_CRYPTO_SYMBOLS", "BTCUSDT,ETHUSDT")))
-    parser.add_argument("--coinalyze-symbols", default=",".join(_env_symbols("COINALYZE_SYMBOLS", "BTCUSDT_PERP.A,ETHUSDT_PERP.A")))
     parser.add_argument("--archive-lookback-days", type=int, default=7)
     parser.add_argument("--swpc-lookback-days", type=int, default=3)
     parser.add_argument("--omni-lookback-days", type=int, default=75)
@@ -168,13 +147,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--skip-swpc", action="store_true")
     parser.add_argument("--skip-omni", action="store_true")
     parser.add_argument("--skip-ephemeris", action="store_true")
-    parser.add_argument("--include-coinalyze", action="store_true", help="Refresh Coinalyze 1h fallback OI.")
     args = parser.parse_args(argv)
 
     summary = run_daily_maintenance(
         run_ts=_parse_utc(args.run_ts) if args.run_ts else None,
         symbols=split_symbols(args.symbols),
-        coinalyze_symbols=split_symbols(args.coinalyze_symbols),
         archive_lookback_days=args.archive_lookback_days,
         swpc_lookback_days=args.swpc_lookback_days,
         omni_lookback_days=args.omni_lookback_days,
@@ -185,7 +162,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         refresh_swpc_recent=not args.skip_swpc,
         refresh_omni=not args.skip_omni,
         refresh_ephemeris=not args.skip_ephemeris,
-        refresh_coinalyze=args.include_coinalyze,
     )
     print(format_maintenance_summary(summary, title="Daily Maintenance Summary"))
     return 1 if summary.failed else 0

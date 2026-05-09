@@ -76,7 +76,7 @@ def test_run_hourly_maintenance_wires_1h_tasks_without_social_sentiment(monkeypa
     assert all("social" not in name for name, _kwargs in calls)
 
 
-def test_run_daily_maintenance_uses_archive_windows_and_optional_coinalyze(monkeypatch):
+def test_run_daily_maintenance_uses_archive_windows(monkeypatch):
     from astro_abm.etl import maintain_daily
 
     calls = []
@@ -98,7 +98,6 @@ def test_run_daily_maintenance_uses_archive_windows_and_optional_coinalyze(monke
     monkeypatch.setattr(maintain_daily, "run_noaa_swpc_recent_backfill", record("swpc"))
     monkeypatch.setattr(maintain_daily, "run_space_weather_backfill", record("omni"))
     monkeypatch.setattr(maintain_daily, "run_ephemeris_backfill", record("ephemeris"))
-    monkeypatch.setattr(maintain_daily, "run_coinalyze_open_interest_backfill", record("coinalyze"))
 
     summary = maintain_daily.run_daily_maintenance(
         run_ts=datetime(2024, 4, 15, 10, 37, tzinfo=UTC),
@@ -106,7 +105,6 @@ def test_run_daily_maintenance_uses_archive_windows_and_optional_coinalyze(monke
         archive_lookback_days=7,
         swpc_lookback_days=3,
         omni_lookback_days=75,
-        refresh_coinalyze=True,
     )
 
     assert summary.run_ts == datetime(2024, 4, 15, 10, tzinfo=UTC)
@@ -116,12 +114,10 @@ def test_run_daily_maintenance_uses_archive_windows_and_optional_coinalyze(monke
         "noaa_swpc_recent_overlay",
         "nasa_omni_recent_authoritative",
         "ephemeris_recent_and_forward",
-        "coinalyze_open_interest_1h_fallback",
     ]
     assert calls[0][1]["start_utc"] == datetime(2024, 4, 8, 10, tzinfo=UTC)
     assert calls[2][1]["start_utc"] == datetime(2024, 4, 12, 10, tzinfo=UTC)
     assert calls[3][1]["start_utc"] == datetime(2024, 1, 31, 10, tzinfo=UTC)
-    assert calls[-1][1]["interval"] == "1hour"
 
 
 def test_build_maintenance_scheduler_registers_hourly_and_daily_jobs():
@@ -129,7 +125,6 @@ def test_build_maintenance_scheduler_registers_hourly_and_daily_jobs():
 
     scheduler = build_maintenance_scheduler(
         symbols=("BTCUSDT",),
-        coinalyze_symbols=("BTCUSDT_PERP.A",),
         daily_hour=3,
         daily_minute=25,
     )
@@ -146,7 +141,6 @@ def test_build_maintenance_scheduler_can_disable_daily_job():
 
     scheduler = build_maintenance_scheduler(
         symbols=("BTCUSDT",),
-        coinalyze_symbols=("BTCUSDT_PERP.A",),
         enable_daily=False,
     )
 

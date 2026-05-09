@@ -7,14 +7,28 @@ from typing import Sequence
 from astro_abm.storage.questdb import QuestDBMarketBarWriter
 
 
-def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=None) -> dict:
+INACTIVE_SOURCES = (
+    "ASKGROK_WEB",
+    "lunarcrush",
+    "coinalyze",
+    "coinalyze_1h",
+    "coinalyze_daily",
+    "noaa_swpc",
+    "polygon",
+    "tardis_binance_futures",
+)
+
+
+def load_data_completeness_report(*, recent_runs: int = 10, active_only: bool = True, connection_factory=None) -> dict:
     connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
+    inactive_filter = _inactive_source_filter(active_only)
     with connection_factory() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                """
+                f"""
                 SELECT symbol, source, count(), min(ts), max(ts)
                 FROM market_ohlcv_1h
+                {inactive_filter}
                 GROUP BY symbol, source
                 ORDER BY symbol, source
                 """.strip()
@@ -22,10 +36,12 @@ def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=N
             market_rows = cursor.fetchall()
 
             cursor.execute(
-                """
+                f"""
                 SELECT source, entity_type, entity_id, metric_name, quality_flag, count(), min(ts), max(ts)
                 FROM abm_hourly_facts
                 WHERE entity_id != 'TEST'
+                {_inactive_source_filter(active_only, prefix="AND")}
+                {_active_fact_quality_filter(active_only)}
                 GROUP BY source, entity_type, entity_id, metric_name, quality_flag
                 ORDER BY source, entity_type, entity_id, metric_name, quality_flag
                 """.strip()
@@ -33,9 +49,10 @@ def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=N
             fact_rows = cursor.fetchall()
 
             cursor.execute(
-                """
+                f"""
                 SELECT source, metric_name, quality_flag, count(), min(ts), max(ts)
                 FROM v_space_weather_unified
+                {inactive_filter}
                 GROUP BY source, metric_name, quality_flag
                 ORDER BY metric_name, source, quality_flag
                 """.strip()
@@ -43,9 +60,10 @@ def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=N
             space_weather_rows = cursor.fetchall()
 
             cursor.execute(
-                """
+                f"""
                 SELECT source, entity_id, metric_name, quality_flag, count(), min(ts), max(ts)
                 FROM v_open_interest_unified
+                {inactive_filter}
                 GROUP BY source, entity_id, metric_name, quality_flag
                 ORDER BY entity_id, metric_name, source, quality_flag
                 """.strip()
@@ -53,9 +71,10 @@ def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=N
             open_interest_rows = cursor.fetchall()
 
             cursor.execute(
-                """
+                f"""
                 SELECT job_type, provider, status, rows_written, skipped_existing, errors, window_start, window_end, finished_at
                 FROM etl_runs
+                {_inactive_source_filter(active_only, column="provider")}
                 ORDER BY started_at DESC
                 LIMIT %s
                 """.strip(),
@@ -69,6 +88,7 @@ def load_data_completeness_report(*, recent_runs: int = 10, connection_factory=N
         "space_weather_rows": space_weather_rows,
         "open_interest_rows": open_interest_rows,
         "etl_runs": etl_runs,
+        "active_only": active_only,
     }
 
 
@@ -77,6 +97,7 @@ def format_data_completeness_report(report: dict, *, as_of: datetime | None = No
     lines = [
         "Data Completeness Report",
         f"As of: {as_of.isoformat()}",
+        f"Scope: {'active sources only' if report.get('active_only', True) else 'all sources'}",
         "",
         "Market OHLCV",
     ]
@@ -202,6 +223,22 @@ def _stale_after_hours(section: str, source: str, metric_name: str | None) -> fl
     return 48
 
 
+def _inactive_source_filter(active_only: bool, *, column: str = "source", prefix: str = "WHERE") -> str:
+    if not active_only:
+        return ""
+    sources = ", ".join(f"'{source}'" for source in INACTIVE_SOURCES)
+    return f"{prefix} {column} NOT IN ({sources})"
+
+
+def _active_fact_quality_filter(active_only: bool) -> str:
+    if not active_only:
+        return ""
+    return """
+                AND NOT (source = 'binance' AND entity_type = 'crypto_ohlcv')
+                AND NOT (source IN ('nasa_omni', 'noaa_goes_xrs', 'pyswisseph') AND quality_flag IN ('derived', 'final'))
+    """.rstrip()
+
+
 def _ensure_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
@@ -211,8 +248,13 @@ def _ensure_utc(value: datetime) -> datetime:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Print QuestDB data completeness coverage by source, metric, and quality flag.")
     parser.add_argument("--recent-runs", type=int, default=10, help="Number of recent ETL runs to include.")
+    parser.add_argument("--include-inactive", action="store_true", help="Include disabled/archive providers such as ASKGROK, LunarCrush, Coinalyze, and Tardis.")
     args = parser.parse_args(argv)
-    print(format_data_completeness_report(load_data_completeness_report(recent_runs=args.recent_runs)))
+    print(
+        format_data_completeness_report(
+            load_data_completeness_report(recent_runs=args.recent_runs, active_only=not args.include_inactive)
+        )
+    )
     return 0
 
 
