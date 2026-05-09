@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS abm_hourly_facts (
     notes VARCHAR
 ) TIMESTAMP(ts)
 PARTITION BY MONTH
-WAL;
+WAL
+DEDUP UPSERT KEYS(ts, entity_id, source, metric_name);
 
 CREATE TABLE IF NOT EXISTS market_ohlcv_1h (
     ts TIMESTAMP,
@@ -40,7 +41,8 @@ CREATE TABLE IF NOT EXISTS market_ohlcv_1h (
     available_ts TIMESTAMP
 ) TIMESTAMP(ts)
 PARTITION BY MONTH
-WAL;
+WAL
+DEDUP UPSERT KEYS(ts, symbol, source);
 
 CREATE TABLE IF NOT EXISTS abm_entities (
     entity_id SYMBOL CAPACITY 256 CACHE INDEX,

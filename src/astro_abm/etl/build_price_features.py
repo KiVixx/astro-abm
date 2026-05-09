@@ -15,7 +15,6 @@ from astro_abm.storage.questdb import (
     QuestDBETLRunWriter,
     QuestDBHourlyFactWriter,
     QuestDBMarketBarWriter,
-    load_existing_fact_timestamps,
 )
 
 
@@ -60,7 +59,7 @@ def run_price_feature_build(
     for symbol in symbol_list:
         for chunk_start, chunk_end in _time_chunks(start_utc, end_utc, chunk_days=chunk_days):
             try:
-                query_start = max(start_utc, chunk_start - timedelta(hours=24))
+                query_start = chunk_start - timedelta(hours=24)
                 frame = _load_market_frame(
                     connection_factory,
                     symbol=symbol,
@@ -77,15 +76,13 @@ def run_price_feature_build(
                     for row in build_price_action_feature_rows(frame)
                     if chunk_start <= row["ts"] < chunk_end
                 ]
-                existing = load_existing_fact_timestamps(
+                existing = _load_existing_price_action_keys(
                     connection_factory,
                     entity_id=symbol,
-                    source="price_action",
-                    metric_name="price_return_1h",
                     start_ts=chunk_start,
                     end_ts=chunk_end,
                 )
-                new_rows = [row for row in rows if row["ts"] not in existing]
+                new_rows = [row for row in rows if (row["ts"], row["metric_name"]) not in existing]
                 skipped += len(rows) - len(new_rows)
                 writer.write(new_rows)
                 written += len(new_rows)
@@ -135,6 +132,30 @@ def _load_market_frame(connection_factory: Callable, *, symbol: str, source: str
             cursor.execute(sql, (symbol, source, start_utc, end_utc))
             rows = cursor.fetchall()
     return pd.DataFrame(rows, columns=["ts", "symbol", "open", "high", "low", "close", "volume", "market_type"])
+
+
+def _load_existing_price_action_keys(
+    connection_factory: Callable,
+    *,
+    entity_id: str,
+    start_ts: datetime,
+    end_ts: datetime,
+) -> set[tuple[datetime, str]]:
+    sql = """
+    SELECT ts, metric_name
+    FROM abm_hourly_facts
+    WHERE entity_id = %s
+      AND source = 'price_action'
+      AND ts >= %s
+      AND ts < %s
+    """.strip()
+    with connection_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (entity_id, start_ts, end_ts))
+            return {
+                (row[0].replace(tzinfo=start_ts.tzinfo) if row[0].tzinfo is None else row[0], row[1])
+                for row in cursor.fetchall()
+            }
 
 
 def _time_chunks(start_utc: datetime, end_utc: datetime, *, chunk_days: int):

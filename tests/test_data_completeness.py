@@ -8,6 +8,18 @@ def test_format_data_completeness_report_renders_coverage_sections():
         "market_rows": [
             ("BTCUSDT", "binance", 100, datetime(2024, 4, 15, 0), datetime(2024, 4, 16, 0)),
         ],
+        "market_gap_rows": [
+            (
+                "BTCUSDT",
+                "binance",
+                1,
+                2,
+                datetime(2024, 4, 15, 5),
+                datetime(2024, 4, 15, 7),
+                datetime(2024, 4, 15, 5),
+                datetime(2024, 4, 15, 7),
+            ),
+        ],
         "space_weather_rows": [
             ("nasa_omni", "imf_bz", "authoritative", 24, datetime(2024, 4, 15, 0), datetime(2024, 4, 15, 23)),
             ("noaa_swpc_recent", "imf_bz", "provisional", 2, datetime(2024, 4, 16, 0), datetime(2024, 4, 16, 1)),
@@ -41,6 +53,8 @@ def test_format_data_completeness_report_renders_coverage_sections():
     assert "Market OHLCV" in text
     assert "BTCUSDT/binance: rows=100" in text
     assert "BTCUSDT/binance: rows=100 range=2024-04-15 00:00 -> 2024-04-16 00:00 lag=2.0h health=OK" in text
+    assert "Market OHLCV Gaps" in text
+    assert "BTCUSDT/binance: missing_hours=2 gap_segments=1" in text
     assert "Unified Space Weather" in text
     assert "imf_bz [nasa_omni/authoritative]: rows=24" in text
     assert "imf_bz [noaa_swpc_recent/provisional]: rows=2" in text
@@ -109,6 +123,7 @@ def test_load_data_completeness_report_queries_expected_tables():
 
     assert report == {
         "market_rows": [],
+        "market_gap_rows": [],
         "fact_rows": [],
         "space_weather_rows": [],
         "open_interest_rows": [],
@@ -144,3 +159,27 @@ def test_format_data_completeness_report_can_include_inactive_scope():
     assert "Scope: all sources" in text
     assert "tardis_binance_futures" in text
     assert "ASKGROK_WEB" in text
+
+
+def test_market_gap_summary_detects_missing_hours():
+    from astro_abm.analysis.data_completeness import _summarize_market_gaps
+
+    rows = [
+        ("BTCUSDT", "binance", datetime(2024, 4, 15, 0, tzinfo=UTC)),
+        ("BTCUSDT", "binance", datetime(2024, 4, 15, 1, tzinfo=UTC)),
+        ("BTCUSDT", "binance", datetime(2024, 4, 15, 4, tzinfo=UTC)),
+        ("BTCUSDT", "binance", datetime(2024, 4, 15, 6, tzinfo=UTC)),
+    ]
+
+    assert _summarize_market_gaps(rows) == [
+        (
+            "BTCUSDT",
+            "binance",
+            2,
+            3,
+            datetime(2024, 4, 15, 2, tzinfo=UTC),
+            datetime(2024, 4, 15, 4, tzinfo=UTC),
+            datetime(2024, 4, 15, 5, tzinfo=UTC),
+            datetime(2024, 4, 15, 6, tzinfo=UTC),
+        )
+    ]

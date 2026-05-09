@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Sequence
 
 from astro_abm.storage.questdb import QuestDBMarketBarWriter
@@ -34,6 +34,16 @@ def load_data_completeness_report(*, recent_runs: int = 10, active_only: bool = 
                 """.strip()
             )
             market_rows = cursor.fetchall()
+
+            cursor.execute(
+                f"""
+                SELECT symbol, source, ts
+                FROM market_ohlcv_1h
+                {inactive_filter}
+                ORDER BY symbol, source, ts
+                """.strip()
+            )
+            market_timestamp_rows = cursor.fetchall()
 
             cursor.execute(
                 f"""
@@ -84,6 +94,7 @@ def load_data_completeness_report(*, recent_runs: int = 10, active_only: bool = 
 
     return {
         "market_rows": market_rows,
+        "market_gap_rows": _summarize_market_gaps(market_timestamp_rows),
         "fact_rows": fact_rows,
         "space_weather_rows": space_weather_rows,
         "open_interest_rows": open_interest_rows,
@@ -102,6 +113,8 @@ def format_data_completeness_report(report: dict, *, as_of: datetime | None = No
         "Market OHLCV",
     ]
     lines.extend(_format_market_rows(report.get("market_rows", ()), as_of=as_of))
+    lines.extend(["", "Market OHLCV Gaps"])
+    lines.extend(_format_market_gap_rows(report.get("market_gap_rows", ())))
     lines.extend(["", "Unified Space Weather"])
     lines.extend(_format_space_weather_rows(report.get("space_weather_rows", ()), as_of=as_of))
     lines.extend(["", "Unified Open Interest"])
@@ -122,6 +135,19 @@ def _format_market_rows(rows, *, as_of: datetime) -> list[str]:
             f"lag={_lag_text(max_ts, as_of)} health={_health_text(max_ts, as_of, _stale_after_hours('market', source, None))}"
         )
         for symbol, source, count, min_ts, max_ts in rows
+    ]
+
+
+def _format_market_gap_rows(rows) -> list[str]:
+    if not rows:
+        return ["  - none"]
+    return [
+        (
+            f"  - {symbol}/{source}: missing_hours={missing_hours} gap_segments={gap_segments} "
+            f"first_gap={_range_text(first_gap_start, first_gap_end)} "
+            f"last_gap={_range_text(last_gap_start, last_gap_end)}"
+        )
+        for symbol, source, gap_segments, missing_hours, first_gap_start, first_gap_end, last_gap_start, last_gap_end in rows
     ]
 
 
@@ -228,6 +254,38 @@ def _inactive_source_filter(active_only: bool, *, column: str = "source", prefix
         return ""
     sources = ", ".join(f"'{source}'" for source in INACTIVE_SOURCES)
     return f"{prefix} {column} NOT IN ({sources})"
+
+
+def _summarize_market_gaps(rows) -> list[tuple]:
+    by_key: dict[tuple[str, str], list[datetime]] = {}
+    for symbol, source, ts in rows:
+        by_key.setdefault((symbol, source), []).append(_ensure_utc(ts))
+
+    summaries = []
+    for (symbol, source), timestamps in by_key.items():
+        if len(timestamps) < 2:
+            continue
+        gaps = []
+        previous = timestamps[0]
+        for current in timestamps[1:]:
+            if current - previous > timedelta(hours=1):
+                gaps.append((previous + timedelta(hours=1), current, int((current - previous).total_seconds() // 3600) - 1))
+            previous = current
+        if not gaps:
+            continue
+        summaries.append(
+            (
+                symbol,
+                source,
+                len(gaps),
+                sum(gap[2] for gap in gaps),
+                gaps[0][0],
+                gaps[0][1],
+                gaps[-1][0],
+                gaps[-1][1],
+            )
+        )
+    return summaries
 
 
 def _active_fact_quality_filter(active_only: bool) -> str:
