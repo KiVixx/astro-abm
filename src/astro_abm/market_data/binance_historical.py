@@ -52,7 +52,11 @@ class BinanceSpotHistoricalClient:
             if not payload:
                 break
 
-            bars = [self._normalize_kline(symbol, row) for row in payload]
+            bars = [
+                bar
+                for bar in (self._normalize_kline(symbol, row) for row in payload)
+                if start_ts <= bar.ts < end_ts
+            ]
             rows.extend(bars)
             next_start = int(payload[-1][0]) + int(timedelta(hours=1).total_seconds() * 1000)
             if next_start <= start_ms:

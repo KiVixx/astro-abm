@@ -50,6 +50,7 @@ def run_binance_spot_backfill(
             max_requests=max_requests,
         )
         fetched += len(bars)
+        bars = [bar for bar in bars if start_utc <= bar.ts < end_utc]
         if not bars:
             continue
 
