@@ -65,6 +65,13 @@ class QuestDBMarketBarWriter:
                 bar.complete,
                 bar.observed_ts,
                 bar.available_ts,
+                bar.quality_flag,
+                bar.is_proxy_data,
+                bar.is_imputed,
+                bar.volume_scale_ratio,
+                bar.raw_volume,
+                bar.raw_quote_volume,
+                bar.conversion_type,
             )
             for bar in bars
         ]
@@ -88,9 +95,16 @@ class QuestDBMarketBarWriter:
             trade_count,
             complete,
             observed_ts,
-            available_ts
+            available_ts,
+            quality_flag,
+            is_proxy_data,
+            is_imputed,
+            volume_scale_ratio,
+            raw_volume,
+            raw_quote_volume,
+            conversion_type
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         """.strip()
 

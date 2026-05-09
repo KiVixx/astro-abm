@@ -183,3 +183,14 @@ def test_market_gap_summary_detects_missing_hours():
             datetime(2024, 4, 15, 6, tzinfo=UTC),
         )
     ]
+
+
+def test_market_gap_summary_skips_sparse_proxy_sources():
+    from astro_abm.analysis.data_completeness import _summarize_market_gaps
+
+    rows = [
+        ("BTCUSDT", "ccdata_aggregate", datetime(2024, 4, 15, 0, tzinfo=UTC)),
+        ("BTCUSDT", "ccdata_aggregate", datetime(2024, 4, 16, 0, tzinfo=UTC)),
+    ]
+
+    assert _summarize_market_gaps(rows) == []

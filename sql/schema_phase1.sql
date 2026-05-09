@@ -38,7 +38,14 @@ CREATE TABLE IF NOT EXISTS market_ohlcv_1h (
     trade_count LONG,
     complete BOOLEAN,
     observed_ts TIMESTAMP,
-    available_ts TIMESTAMP
+    available_ts TIMESTAMP,
+    quality_flag SYMBOL CAPACITY 16 CACHE,
+    is_proxy_data BOOLEAN,
+    is_imputed BOOLEAN,
+    volume_scale_ratio DOUBLE,
+    raw_volume DOUBLE,
+    raw_quote_volume DOUBLE,
+    conversion_type SYMBOL CAPACITY 32 CACHE
 ) TIMESTAMP(ts)
 PARTITION BY MONTH
 WAL
@@ -180,5 +187,58 @@ JOIN selected s
     ON c.ts = s.ts
    AND c.entity_id = s.entity_id
    AND c.metric_name = s.metric_name
+   AND c.source_priority = s.source_priority
+);
+
+DROP VIEW IF EXISTS v_market_ohlcv_ml_1h;
+
+CREATE VIEW v_market_ohlcv_ml_1h AS (
+WITH candidates AS (
+    SELECT
+        ts, symbol, source, venue, market_type, asset_class,
+        open, high, low, close, volume, quote_volume, trade_count,
+        complete, observed_ts, available_ts,
+        'official' AS data_quality,
+        false AS is_proxy_data,
+        false AS is_imputed,
+        1.0 AS volume_scale_ratio,
+        volume AS raw_volume,
+        quote_volume AS raw_quote_volume,
+        null AS conversion_type,
+        1 AS source_priority
+    FROM market_ohlcv_1h
+    WHERE source = 'binance'
+
+    UNION ALL
+
+    SELECT
+        ts, symbol, source, venue, market_type, asset_class,
+        open, high, low, close, volume, quote_volume, trade_count,
+        complete, observed_ts, available_ts,
+        quality_flag AS data_quality,
+        is_proxy_data,
+        is_imputed,
+        volume_scale_ratio,
+        raw_volume,
+        raw_quote_volume,
+        conversion_type,
+        2 AS source_priority
+    FROM market_ohlcv_1h
+    WHERE source = 'ccdata_aggregate'
+), selected AS (
+    SELECT ts, symbol, min(source_priority) AS source_priority
+    FROM candidates
+    GROUP BY ts, symbol
+)
+SELECT
+    c.ts, c.symbol, c.source, c.venue, c.market_type, c.asset_class,
+    c.open, c.high, c.low, c.close, c.volume, c.quote_volume, c.trade_count,
+    c.complete, c.observed_ts, c.available_ts, c.data_quality,
+    c.is_proxy_data, c.is_imputed, c.volume_scale_ratio,
+    c.raw_volume, c.raw_quote_volume, c.conversion_type, c.source_priority
+FROM candidates c
+JOIN selected s
+    ON c.ts = s.ts
+   AND c.symbol = s.symbol
    AND c.source_priority = s.source_priority
 );

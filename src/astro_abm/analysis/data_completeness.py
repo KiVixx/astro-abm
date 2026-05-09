@@ -234,6 +234,8 @@ def _health_text(max_ts, as_of: datetime, stale_after_hours: float) -> str:
 
 
 def _stale_after_hours(section: str, source: str, metric_name: str | None) -> float:
+    if source == "ccdata_aggregate":
+        return 20 * 365 * 24
     if source == "nasa_omni":
         return 75 * 24
     if source in {"binance_vision_metrics", "noaa_goes_xrs"}:
@@ -259,6 +261,8 @@ def _inactive_source_filter(active_only: bool, *, column: str = "source", prefix
 def _summarize_market_gaps(rows) -> list[tuple]:
     by_key: dict[tuple[str, str], list[datetime]] = {}
     for symbol, source, ts in rows:
+        if source == "ccdata_aggregate":
+            continue
         by_key.setdefault((symbol, source), []).append(_ensure_utc(ts))
 
     summaries = []
