@@ -154,3 +154,42 @@ def test_build_maintenance_scheduler_can_disable_daily_job():
     )
 
     assert [job.id for job in scheduler.get_jobs()] == ["hourly_maintenance"]
+
+
+def test_run_daemon_wires_ephemeris_forward_days_to_daily_run_on_start(monkeypatch):
+    from astro_abm.etl import maintenance_daemon
+
+    calls = []
+
+    class Summary:
+        run_ts = datetime(2024, 4, 15, 10, tzinfo=UTC)
+        window_start = datetime(2024, 4, 15, 10, tzinfo=UTC)
+        window_end = datetime(2024, 4, 15, 10, tzinfo=UTC)
+        tasks = ()
+        failed = False
+
+    class FakeScheduler:
+        def shutdown(self, wait=False):
+            return None
+
+        def start(self):
+            raise KeyboardInterrupt
+
+    def fake_daily(**kwargs):
+        calls.append(kwargs)
+        return Summary()
+
+    monkeypatch.setattr(maintenance_daemon, "build_maintenance_scheduler", lambda **_kwargs: FakeScheduler())
+    monkeypatch.setattr(maintenance_daemon, "run_daily_maintenance", fake_daily)
+
+    try:
+        maintenance_daemon.run_daemon(
+            symbols=("BTCUSDT",),
+            enable_hourly=False,
+            run_on_start="daily",
+            ephemeris_forward_days=370,
+        )
+    except KeyboardInterrupt:
+        pass
+
+    assert calls[0]["ephemeris_forward_days"] == 370

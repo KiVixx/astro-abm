@@ -26,6 +26,7 @@ def build_maintenance_scheduler(
     enable_daily: bool = True,
     daily_hour: int = 0,
     daily_minute: int = 20,
+    ephemeris_forward_days: int = 370,
 ) -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=timezone)
     if enable_hourly:
@@ -46,7 +47,7 @@ def build_maintenance_scheduler(
         scheduler.add_job(
             _job_runner(
                 "daily",
-                lambda: run_daily_maintenance(symbols=symbols),
+                lambda: run_daily_maintenance(symbols=symbols, ephemeris_forward_days=ephemeris_forward_days),
                 title="Daily Maintenance Summary",
             ),
             trigger=CronTrigger(hour=daily_hour, minute=daily_minute, timezone=timezone),
@@ -67,6 +68,7 @@ def run_daemon(
     enable_daily: bool = True,
     daily_hour: int = 0,
     daily_minute: int = 20,
+    ephemeris_forward_days: int = 370,
     run_on_start: RunOnStart = "none",
 ) -> int:
     scheduler = build_maintenance_scheduler(
@@ -76,6 +78,7 @@ def run_daemon(
         enable_daily=enable_daily,
         daily_hour=daily_hour,
         daily_minute=daily_minute,
+        ephemeris_forward_days=ephemeris_forward_days,
     )
     stopped = False
 
@@ -90,7 +93,8 @@ def run_daemon(
     print(
         "Astro ABM maintenance daemon starting: "
         f"hourly={enable_hourly} daily={enable_daily} timezone={timezone} "
-        f"daily={daily_hour:02d}:{daily_minute:02d} run_on_start={run_on_start}",
+        f"daily={daily_hour:02d}:{daily_minute:02d} "
+        f"ephemeris_forward_days={ephemeris_forward_days} run_on_start={run_on_start}",
         flush=True,
     )
     if run_on_start in {"hourly", "both"} and enable_hourly:
@@ -98,7 +102,7 @@ def run_daemon(
     if run_on_start in {"daily", "both"} and enable_daily:
         _job_runner(
             "daily",
-            lambda: run_daily_maintenance(symbols=symbols),
+            lambda: run_daily_maintenance(symbols=symbols, ephemeris_forward_days=ephemeris_forward_days),
             title="Daily Maintenance Summary",
         )()
 
@@ -134,6 +138,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--no-daily", action="store_true", help="Disable daily maintenance.")
     parser.add_argument("--daily-hour", type=int, default=int(os.getenv("ASTRO_ABM_DAILY_HOUR", "0")))
     parser.add_argument("--daily-minute", type=int, default=int(os.getenv("ASTRO_ABM_DAILY_MINUTE", "20")))
+    parser.add_argument(
+        "--ephemeris-forward-days",
+        type=int,
+        default=int(os.getenv("ASTRO_ABM_EPHEMERIS_FORWARD_DAYS", "370")),
+    )
     parser.add_argument("--run-on-start", choices=("none", "hourly", "daily", "both"), default=os.getenv("ASTRO_ABM_RUN_ON_START", "none"))
     args = parser.parse_args(argv)
     return run_daemon(
@@ -143,6 +152,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         enable_daily=not args.no_daily,
         daily_hour=args.daily_hour,
         daily_minute=args.daily_minute,
+        ephemeris_forward_days=args.ephemeris_forward_days,
         run_on_start=args.run_on_start,
     )
 

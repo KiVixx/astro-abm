@@ -7,7 +7,7 @@ from typing import Any, Callable, Sequence
 from uuid import uuid4
 
 from astro_abm.etl.pipeline import normalize_to_utc_hour
-from astro_abm.features.ephemeris import EphemerisCalculator, build_ephemeris_feature_rows
+from astro_abm.features.ephemeris import EPHEMERIS_FEATURE_METRICS, EphemerisCalculator, build_ephemeris_feature_rows
 from astro_abm.storage.questdb import (
     ETLRunRecord,
     QuestDBETLRunWriter,
@@ -63,8 +63,13 @@ def run_ephemeris_backfill(
             end_ts=chunk_end,
         )
         rows = []
+        expected_metrics = set(EPHEMERIS_FEATURE_METRICS)
         for ts in _hourly_range(chunk_start, chunk_end):
             hours_seen += 1
+            existing_metrics = {metric_name for existing_ts, metric_name in existing if existing_ts == ts}
+            if expected_metrics.issubset(existing_metrics):
+                skipped += len(expected_metrics)
+                continue
             try:
                 features = calculator.compute_features(ts)
             except Exception as exc:

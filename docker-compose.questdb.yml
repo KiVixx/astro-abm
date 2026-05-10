@@ -32,6 +32,7 @@ services:
       ASTRO_ABM_RUN_ON_START: ${ASTRO_ABM_RUN_ON_START:-hourly}
       ASTRO_ABM_DAILY_HOUR: ${ASTRO_ABM_DAILY_HOUR:-0}
       ASTRO_ABM_DAILY_MINUTE: ${ASTRO_ABM_DAILY_MINUTE:-20}
+      ASTRO_ABM_EPHEMERIS_FORWARD_DAYS: ${ASTRO_ABM_EPHEMERIS_FORWARD_DAYS:-370}
     command:
       - astro-abm-maintenance-daemon
     volumes:

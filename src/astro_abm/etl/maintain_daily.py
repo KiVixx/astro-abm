@@ -28,7 +28,7 @@ def run_daily_maintenance(
     swpc_lookback_days: int = 3,
     omni_lookback_days: int = 75,
     ephemeris_lookback_days: int = 1,
-    ephemeris_forward_days: int = 2,
+    ephemeris_forward_days: int = 370,
     refresh_binance_vision: bool = True,
     refresh_goes_xray: bool = True,
     refresh_swpc_recent: bool = True,
@@ -141,7 +141,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--swpc-lookback-days", type=int, default=3)
     parser.add_argument("--omni-lookback-days", type=int, default=75)
     parser.add_argument("--ephemeris-lookback-days", type=int, default=1)
-    parser.add_argument("--ephemeris-forward-days", type=int, default=2)
+    parser.add_argument("--ephemeris-forward-days", type=int, default=int(os.getenv("ASTRO_ABM_EPHEMERIS_FORWARD_DAYS", "370")))
     parser.add_argument("--skip-binance-vision", action="store_true")
     parser.add_argument("--skip-goes-xray", action="store_true")
     parser.add_argument("--skip-swpc", action="store_true")
