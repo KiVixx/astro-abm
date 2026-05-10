@@ -5,6 +5,7 @@ class FakeSwe:
     GREG_CAL = 1
     FLG_SWIEPH = 2
     FLG_SPEED = 4
+    FLG_EQUATORIAL = 8
     SUN = 0
     MOON = 1
     MERCURY = 2
@@ -19,10 +20,11 @@ class FakeSwe:
 
     @staticmethod
     def calc_ut(jd_ut, body, flags):
+        mercury_speed = (jd_ut - 2459997.0) / 10.0
         lookup = {
             FakeSwe.SUN: [100.0, 0.0, 1.0, 0.98, 0.0, 0.0],
             FakeSwe.MOON: [190.0, 0.0, 0.25, 12.5, 0.0, 0.0],
-            FakeSwe.MERCURY: [130.0, 0.0, 0.4, 1.2, 0.0, 0.0],
+            FakeSwe.MERCURY: [130.0, 12.0, 0.4, mercury_speed, 0.0, 0.0],
             FakeSwe.VENUS: [160.0, 0.0, 0.7, 1.1, 0.0, 0.0],
             FakeSwe.MARS: [250.0, 0.0, 1.5, 0.7, 0.0, 0.0],
             FakeSwe.JUPITER: [10.0, 0.0, 5.0, 0.2, 0.0, 0.0],
@@ -57,8 +59,28 @@ def test_ephemeris_calculator_returns_relative_angular_features():
 
     assert features["sun_moon_angle_abs"] == 90.0
     assert features["sun_moon_angle_signed"] == 90.0
-    assert features["mars_jupiter_angle_abs"] == 120.0
-    assert features["mars_jupiter_angle_signed"] == -120.0
+    assert round(features["sun_moon_angle_sin"], 6) == 1.0
+    assert round(features["sun_moon_angle_cos"], 6) == 0.0
+    assert features["sun_mercury_angle_abs"] == 30.0
+    assert features["sun_venus_angle_abs"] == 60.0
+    assert features["mars_saturn_angle_abs"] == 60.0
+    assert features["jupiter_saturn_angle_abs"] == 60.0
+    assert features["sun_venus_aspect_strength_60"] == 1.0
+
+
+def test_ephemeris_calculator_returns_retrograde_speed_and_declination_features():
+    from astro_abm.features.ephemeris import EphemerisCalculator
+
+    calculator = EphemerisCalculator(swe=FakeSwe)
+    features = calculator.compute_features(datetime(2026, 4, 15, 12, 0, tzinfo=UTC))
+
+    assert features["mercury_lon_speed"] > 0
+    assert features["mercury_is_retrograde"] is False
+    assert features["mercury_speed_abs"] == features["mercury_lon_speed"]
+    assert features["mercury_days_since_station"] == 3.0
+    assert features["mercury_days_to_station_nearest"] == 3.0
+    assert features["mercury_declination"] == 12.0
+    assert features["mercury_is_oob"] is False
 
 
 def test_build_ephemeris_feature_rows_produces_global_hourly_fact_rows():

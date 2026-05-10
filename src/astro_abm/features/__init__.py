@@ -1,4 +1,4 @@
-from .ephemeris import EphemerisCalculator, build_ephemeris_feature_rows
+from .ephemeris import EPHEMERIS_FEATURE_METRICS, EphemerisCalculator, build_ephemeris_feature_rows
 from .social_sentiment import (
     LUNARCRUSH_BASE_URL,
     LunarCrushClient,
@@ -16,6 +16,7 @@ from .space_weather import (
 
 __all__ = [
     "EphemerisCalculator",
+    "EPHEMERIS_FEATURE_METRICS",
     "LUNARCRUSH_BASE_URL",
     "LunarCrushClient",
     "NOAA_SPACE_WEATHER_ENDPOINTS",

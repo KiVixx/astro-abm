@@ -7,13 +7,14 @@ from typing import Callable, Sequence
 
 import pandas as pd
 
+from astro_abm.features.ephemeris import EPHEMERIS_FEATURE_METRICS
 from astro_abm.features.price_action import PRICE_ACTION_METRICS
 from astro_abm.features.regime import REGIME_FEATURE_METRICS, REGIME_LABEL_METRICS
 from astro_abm.market_data.binance_historical import normalize_symbols
 from astro_abm.storage.questdb import QuestDBMarketBarWriter
 
 
-DEFAULT_FEATURE_METRICS = tuple(PRICE_ACTION_METRICS) + tuple(REGIME_FEATURE_METRICS)
+DEFAULT_FEATURE_METRICS = tuple(PRICE_ACTION_METRICS) + tuple(REGIME_FEATURE_METRICS) + tuple(EPHEMERIS_FEATURE_METRICS)
 DEFAULT_LABEL_METRICS = tuple(REGIME_LABEL_METRICS)
 DEFAULT_TARGET = "future_return_24h"
 
@@ -68,6 +69,7 @@ def build_training_dataset(
 
     price = _normalize_price_frame(price_frame)
     facts = _normalize_fact_frame(fact_frame)
+    facts = _expand_global_facts(facts, symbols=tuple(sorted(price["symbol"].dropna().unique())))
     if facts.empty:
         wide_facts = pd.DataFrame(columns=["ts", "symbol"])
     else:
@@ -231,10 +233,10 @@ def _load_price_frame(connection_factory: Callable, *, symbol: str, start_utc: d
 def _load_fact_frame(connection_factory: Callable, *, symbol: str, start_utc: datetime, end_utc: datetime) -> pd.DataFrame:
     metric_names = _sql_string_list(tuple(DEFAULT_FEATURE_METRICS) + tuple(DEFAULT_LABEL_METRICS))
     sql = f"""
-    SELECT ts, entity_id AS symbol, metric_name, metric_value
+    SELECT ts, %s AS symbol, metric_name, metric_value
     FROM abm_hourly_facts
-    WHERE entity_id = %s
-      AND source IN ('price_action', 'regime_features', 'regime_labels')
+    WHERE (entity_id = %s OR entity_id = 'GLOBAL')
+      AND source IN ('price_action', 'regime_features', 'regime_labels', 'pyswisseph')
       AND metric_name IN ({metric_names})
       AND ts >= %s
       AND ts < %s
@@ -242,7 +244,7 @@ def _load_fact_frame(connection_factory: Callable, *, symbol: str, start_utc: da
     """.strip()
     with connection_factory() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(sql, (symbol, start_utc, end_utc))
+            cursor.execute(sql, (symbol, symbol, start_utc, end_utc))
             return pd.DataFrame(cursor.fetchall(), columns=_empty_fact_frame().columns)
 
 
@@ -262,6 +264,21 @@ def _normalize_fact_frame(frame: pd.DataFrame) -> pd.DataFrame:
     facts["symbol"] = facts["symbol"].astype(str).str.upper()
     facts["metric_value"] = pd.to_numeric(facts["metric_value"], errors="coerce")
     return facts.drop_duplicates(subset=["ts", "symbol", "metric_name"], keep="last")
+
+
+def _expand_global_facts(frame: pd.DataFrame, *, symbols: Sequence[str]) -> pd.DataFrame:
+    if frame.empty or "GLOBAL" not in set(frame["symbol"]):
+        return frame
+    specific = frame[frame["symbol"] != "GLOBAL"]
+    global_rows = frame[frame["symbol"] == "GLOBAL"].drop(columns=["symbol"])
+    expanded = []
+    for symbol in symbols:
+        copy = global_rows.copy()
+        copy["symbol"] = symbol
+        expanded.append(copy)
+    if not expanded:
+        return specific
+    return pd.concat([specific, *expanded], ignore_index=True)
 
 
 def _empty_price_frame() -> pd.DataFrame:

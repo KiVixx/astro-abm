@@ -13,7 +13,6 @@ from astro_abm.storage.questdb import (
     QuestDBETLRunWriter,
     QuestDBHourlyFactWriter,
     QuestDBMarketBarWriter,
-    load_existing_fact_timestamps,
 )
 
 
@@ -58,26 +57,26 @@ def run_ephemeris_backfill(
     errors: list[str] = []
 
     for chunk_start, chunk_end in _time_chunks(start_utc, end_utc, chunk_days=chunk_days):
-        existing = load_existing_fact_timestamps(
+        existing = _load_existing_ephemeris_keys(
             connection_factory,
-            entity_id="GLOBAL",
-            source="pyswisseph",
-            metric_name="moon_phase_pct",
             start_ts=chunk_start,
             end_ts=chunk_end,
         )
         rows = []
         for ts in _hourly_range(chunk_start, chunk_end):
             hours_seen += 1
-            if ts in existing:
-                skipped += 1
-                continue
             try:
                 features = calculator.compute_features(ts)
             except Exception as exc:
                 errors.append(f"{ts.isoformat()}:{type(exc).__name__}:{exc}")
                 continue
-            rows.extend({**row, "ingest_run_id": run_id} for row in build_ephemeris_feature_rows(ts=ts, features=features))
+            feature_rows = [
+                {**row, "ingest_run_id": run_id}
+                for row in build_ephemeris_feature_rows(ts=ts, features=features)
+            ]
+            new_rows = [row for row in feature_rows if (row["ts"], row["metric_name"]) not in existing]
+            skipped += len(feature_rows) - len(new_rows)
+            rows.extend(new_rows)
 
         writer.write(rows)
         written += len(rows)
@@ -124,6 +123,24 @@ def _hourly_range(start_utc: datetime, end_utc: datetime):
     while current < end_utc:
         yield current
         current += timedelta(hours=1)
+
+
+def _load_existing_ephemeris_keys(connection_factory: Callable, *, start_ts: datetime, end_ts: datetime) -> set[tuple[datetime, str]]:
+    sql = """
+    SELECT ts, metric_name
+    FROM abm_hourly_facts
+    WHERE entity_id = 'GLOBAL'
+      AND source = 'pyswisseph'
+      AND ts >= %s
+      AND ts < %s
+    """.strip()
+    with connection_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (start_ts, end_ts))
+            return {
+                (row[0].replace(tzinfo=start_ts.tzinfo) if row[0].tzinfo is None else row[0], row[1])
+                for row in cursor.fetchall()
+            }
 
 
 def _parse_utc(value: str) -> datetime:

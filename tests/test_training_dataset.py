@@ -55,6 +55,12 @@ def test_build_training_dataset_pivots_features_labels_and_splits():
                 "metric_value": -0.02,
             },
             {
+                "ts": datetime(2024, 1, 1, 0, tzinfo=UTC),
+                "symbol": "GLOBAL",
+                "metric_name": "sun_mercury_angle_sin",
+                "metric_value": 0.5,
+            },
+            {
                 "ts": datetime(2024, 1, 2, 0, tzinfo=UTC),
                 "symbol": "BTCUSDT",
                 "metric_name": "regime_return_24h",
@@ -73,6 +79,7 @@ def test_build_training_dataset_pivots_features_labels_and_splits():
     assert len(dataset) == 1
     assert dataset.iloc[0]["future_return_24h"] == -0.02
     assert dataset.iloc[0]["regime_return_24h"] == 0.04
+    assert dataset.iloc[0]["sun_mercury_angle_sin"] == 0.5
     assert dataset.iloc[0]["split"] == "train"
 
 

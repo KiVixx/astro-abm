@@ -85,10 +85,10 @@ def test_run_ephemeris_backfill_writes_global_hourly_rows_and_run_log():
     assert run_writer.records[0].rows_written == 6
 
 
-def test_run_ephemeris_backfill_skips_existing_hours():
+def test_run_ephemeris_backfill_skips_existing_metric_rows():
     from astro_abm.etl.backfill_ephemeris import run_ephemeris_backfill
 
-    existing = [(datetime(2024, 4, 15, 14, tzinfo=UTC),)]
+    existing = [(datetime(2024, 4, 15, 14, tzinfo=UTC), "moon_phase_pct")]
     fact_writer = RecordingFactWriter()
     result = run_ephemeris_backfill(
         start_utc=datetime(2024, 4, 15, 13, 0, tzinfo=UTC),
@@ -103,9 +103,11 @@ def test_run_ephemeris_backfill_skips_existing_hours():
     rows = fact_writer.batches[0]
 
     assert result.hours_seen == 3
-    assert result.written == 4
+    assert result.written == 5
     assert result.skipped_existing == 1
-    assert {row["ts"] for row in rows} == {
-        datetime(2024, 4, 15, 13, tzinfo=UTC),
-        datetime(2024, 4, 15, 15, tzinfo=UTC),
+    assert (datetime(2024, 4, 15, 14, tzinfo=UTC), "moon_phase_pct") not in {
+        (row["ts"], row["metric_name"]) for row in rows
+    }
+    assert (datetime(2024, 4, 15, 14, tzinfo=UTC), "moon_is_waxing") in {
+        (row["ts"], row["metric_name"]) for row in rows
     }
