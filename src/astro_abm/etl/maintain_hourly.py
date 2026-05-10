@@ -10,6 +10,8 @@ from astro_abm.etl.backfill_binance_spot import run_binance_spot_backfill
 from astro_abm.etl.backfill_ephemeris import run_ephemeris_backfill
 from astro_abm.etl.backfill_noaa_swpc_recent import run_noaa_swpc_recent_backfill
 from astro_abm.etl.build_price_features import run_price_feature_build
+from astro_abm.etl.build_regime_features import run_regime_feature_build
+from astro_abm.etl.build_regime_labels import run_regime_label_build
 from astro_abm.etl.collect_binance_open_interest import run_binance_open_interest_collect
 from astro_abm.etl.maintenance import (
     MaintenanceSummary,
@@ -27,8 +29,12 @@ def run_hourly_maintenance(
     symbols: Sequence[str] = ("BTCUSDT", "ETHUSDT"),
     lookback_hours: int = 6,
     price_action_lookback_hours: int = 14 * 24,
+    regime_lookback_hours: int = 14 * 24,
+    regime_label_lookback_hours: int = 14 * 24,
     collect_market: bool = True,
     build_price_action: bool = True,
+    build_regime_features: bool = True,
+    build_regime_labels: bool = True,
     collect_derivatives: bool = True,
     collect_current_open_interest: bool = True,
     collect_space_weather_recent: bool = True,
@@ -38,6 +44,10 @@ def run_hourly_maintenance(
         raise ValueError("lookback_hours must be greater than 0.")
     if price_action_lookback_hours <= 24:
         raise ValueError("price_action_lookback_hours must be greater than 24.")
+    if regime_lookback_hours <= 24:
+        raise ValueError("regime_lookback_hours must be greater than 24.")
+    if regime_label_lookback_hours <= 24:
+        raise ValueError("regime_label_lookback_hours must be greater than 24.")
     symbol_list = split_symbols(symbols)
     if not symbol_list:
         raise ValueError("symbols must contain at least one symbol.")
@@ -45,6 +55,9 @@ def run_hourly_maintenance(
     bucket_ts = normalize_to_utc_hour(ensure_utc(run_ts or datetime.now(UTC)))
     window_start = bucket_ts - timedelta(hours=lookback_hours)
     price_action_start = bucket_ts - timedelta(hours=price_action_lookback_hours)
+    regime_start = bucket_ts - timedelta(hours=regime_lookback_hours)
+    regime_label_end = bucket_ts - timedelta(hours=24)
+    regime_label_start = regime_label_end - timedelta(hours=regime_label_lookback_hours)
     complete_market_end = bucket_ts
     current_window_end = bucket_ts + timedelta(hours=1)
 
@@ -92,6 +105,31 @@ def run_hourly_maintenance(
                 lambda: run_binance_open_interest_collect(symbols=symbol_list, run_ts=bucket_ts),
             )
         )
+    if build_regime_features:
+        tasks.append(
+            (
+                "regime_features_recent",
+                lambda: run_regime_feature_build(
+                    symbols=symbol_list,
+                    start_utc=regime_start,
+                    end_utc=complete_market_end,
+                    chunk_days=max(1, regime_lookback_hours // 24),
+                ),
+            )
+        )
+    if build_regime_labels:
+        tasks.append(
+            (
+                "regime_labels_matured",
+                lambda: run_regime_label_build(
+                    symbols=symbol_list,
+                    start_utc=regime_label_start,
+                    end_utc=regime_label_end,
+                    horizon_hours=24,
+                    chunk_days=max(1, regime_label_lookback_hours // 24),
+                ),
+            )
+        )
     if collect_space_weather_recent:
         tasks.append(
             (
@@ -136,8 +174,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--symbols", default=",".join(_env_symbols()), help="Comma-separated Binance symbols.")
     parser.add_argument("--lookback-hours", type=int, default=6, help="Recent window to refresh.")
     parser.add_argument("--price-action-lookback-hours", type=int, default=14 * 24, help="Recent window to rebuild price-action features.")
+    parser.add_argument("--regime-lookback-hours", type=int, default=14 * 24, help="Recent window to rebuild regime features.")
+    parser.add_argument(
+        "--regime-label-lookback-hours",
+        type=int,
+        default=14 * 24,
+        help="Recent matured window to rebuild 24h forward regime labels.",
+    )
     parser.add_argument("--skip-market", action="store_true", help="Skip Binance spot OHLCV refresh.")
     parser.add_argument("--skip-price-action", action="store_true", help="Skip price-action feature rebuild.")
+    parser.add_argument("--skip-regime-features", action="store_true", help="Skip price/OI/funding regime feature rebuild.")
+    parser.add_argument("--skip-regime-labels", action="store_true", help="Skip matured forward regime label rebuild.")
     parser.add_argument("--skip-derivatives", action="store_true", help="Skip Binance derivatives refresh.")
     parser.add_argument("--skip-current-oi", action="store_true", help="Skip Binance current open-interest snapshot.")
     parser.add_argument("--skip-swpc", action="store_true", help="Skip NOAA SWPC recent refresh.")
@@ -149,8 +196,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         symbols=split_symbols(args.symbols),
         lookback_hours=args.lookback_hours,
         price_action_lookback_hours=args.price_action_lookback_hours,
+        regime_lookback_hours=args.regime_lookback_hours,
+        regime_label_lookback_hours=args.regime_label_lookback_hours,
         collect_market=not args.skip_market,
         build_price_action=not args.skip_price_action,
+        build_regime_features=not args.skip_regime_features,
+        build_regime_labels=not args.skip_regime_labels,
         collect_derivatives=not args.skip_derivatives,
         collect_current_open_interest=not args.skip_current_oi,
         collect_space_weather_recent=not args.skip_swpc,

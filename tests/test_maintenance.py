@@ -50,6 +50,8 @@ def test_run_hourly_maintenance_wires_1h_tasks_without_social_sentiment(monkeypa
     monkeypatch.setattr(maintain_hourly, "run_binance_derivatives_backfill", record("derivatives"))
     monkeypatch.setattr(maintain_hourly, "run_price_feature_build", record("price_action"))
     monkeypatch.setattr(maintain_hourly, "run_binance_open_interest_collect", record("current_oi"))
+    monkeypatch.setattr(maintain_hourly, "run_regime_feature_build", record("regime_features"))
+    monkeypatch.setattr(maintain_hourly, "run_regime_label_build", record("regime_labels"))
     monkeypatch.setattr(maintain_hourly, "run_noaa_swpc_recent_backfill", record("swpc"))
     monkeypatch.setattr(maintain_hourly, "run_ephemeris_backfill", record("ephemeris"))
 
@@ -65,6 +67,8 @@ def test_run_hourly_maintenance_wires_1h_tasks_without_social_sentiment(monkeypa
         "binance_derivatives_recent",
         "price_action_recent",
         "binance_current_open_interest",
+        "regime_features_recent",
+        "regime_labels_matured",
         "noaa_swpc_recent",
         "ephemeris_current_hour",
     ]
@@ -73,6 +77,11 @@ def test_run_hourly_maintenance_wires_1h_tasks_without_social_sentiment(monkeypa
     assert calls[2][1]["start_utc"] == datetime(2024, 4, 1, 10, tzinfo=UTC)
     assert calls[2][1]["end_utc"] == datetime(2024, 4, 15, 10, tzinfo=UTC)
     assert calls[3][1]["run_ts"] == datetime(2024, 4, 15, 10, tzinfo=UTC)
+    assert calls[4][1]["start_utc"] == datetime(2024, 4, 1, 10, tzinfo=UTC)
+    assert calls[4][1]["end_utc"] == datetime(2024, 4, 15, 10, tzinfo=UTC)
+    assert calls[5][1]["start_utc"] == datetime(2024, 3, 31, 10, tzinfo=UTC)
+    assert calls[5][1]["end_utc"] == datetime(2024, 4, 14, 10, tzinfo=UTC)
+    assert calls[5][1]["horizon_hours"] == 24
     assert all("social" not in name for name, _kwargs in calls)
 
 
