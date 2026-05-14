@@ -16,6 +16,8 @@ dist/
 *.egg-info/
 logs/
 exports/
+outputs/
+LOCAL_MEMO_*.md
 
 # QuestDB local data if bind-mounted later
 questdb-data/

@@ -178,6 +178,29 @@ The maintenance service runs:
 
 It intentionally excludes disabled sentiment/vendor providers from scheduled maintenance.
 
+On macOS with OrbStack, install the user LaunchAgent if you want the stack to
+come back automatically after login/reboot:
+
+```bash
+ops/launchd/install_astro_abm_launchd.sh
+```
+
+The LaunchAgent runs at login and then every 5 minutes. It opens OrbStack if the
+Docker API is unavailable, then idempotently runs:
+
+```bash
+docker compose -f docker-compose.questdb.yml --profile maintenance up -d
+```
+
+The installed LaunchAgent stores its runtime wrapper in
+`~/Library/Application Support/AstroABM/` so macOS background permissions do not
+need to read scripts from `~/Documents`. Logs are written to
+`~/Library/Logs/AstroABM/`. To remove the LaunchAgent:
+
+```bash
+ops/launchd/uninstall_astro_abm_launchd.sh
+```
+
 Stop it:
 
 ```bash
