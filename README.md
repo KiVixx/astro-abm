@@ -737,7 +737,34 @@ astro-abm-feature-summary
 
 Use that output to decide which time windows deserve deeper analysis before writing ABM simulation logic.
 
-### 7. Simulation layer
+### 7. Research astro volatility windows
+
+Run a rolling-regime alpha scan that uses future-computable ephemeris features
+to score whether specific astro states historically coincided with unusually
+large next-24h volatility:
+
+```bash
+astro-abm-astro-volatility-alpha \
+  --event-mode rolling_quantile \
+  --event-window-hours 8760 \
+  --event-min-periods 2160 \
+  --output outputs/astro_volatility_alpha_rolling.csv
+```
+
+Turn the strongest held-out signal rows into a future risk calendar:
+
+```bash
+astro-abm-astro-risk-calendar \
+  --signals outputs/astro_volatility_alpha_rolling.csv \
+  --frequency daily \
+  --output outputs/astro_risk_calendar_daily.csv
+```
+
+The calendar is a research product, not a trade signal. Correlated ephemeris
+features can cluster around the same station/retrograde event, so high scores
+should be read as an event-window warning rather than independent evidence.
+
+### 8. Simulation layer
 After the live hourly pipeline is stable, the project can move into:
 
 - retail swarm agents
