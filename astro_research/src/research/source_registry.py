@@ -44,6 +44,7 @@ def build_source_registry(config_path: str | Path, *, created_at: datetime | Non
                     "requires_api_key": bool(values.get("requires_api_key", False)),
                     "license_note": str(values.get("license_note", "")),
                     "source_url": str(values.get("source_url", "")),
+                    "metadata": "",
                     "data_version": data_version,
                     "created_at": created_at,
                 }
@@ -62,11 +63,12 @@ def write_source_registry_report(registry: SourceRegistry, output_path: str | Pa
         "",
         f"data_version: `{registry.data_version}`",
         "",
-        "| source | provider | series_id | canonical | requires_api_key |",
-        "|---|---|---|---:|---:|",
+        "| source | provider | series_id | canonical | requires_api_key | metadata |",
+        "|---|---|---|---:|---:|---|",
     ]
     for row in registry.rows.itertuples(index=False):
-        lines.append(f"| {row.source} | {row.provider} | {row.series_id} | {row.is_canonical} | {row.requires_api_key} |")
+        metadata = getattr(row, "metadata", "")
+        lines.append(f"| {row.source} | {row.provider} | {row.series_id} | {row.is_canonical} | {row.requires_api_key} | {metadata} |")
     if registry.warnings:
         lines.extend(["", "## Warnings", ""])
         lines.extend(f"- {warning}" for warning in registry.warnings)
@@ -125,8 +127,48 @@ def _local_csv_rows(*, root_path: Path, created_at: datetime, data_version: str,
                     "requires_api_key": False,
                     "license_note": license_note or "missing_license_note",
                     "source_url": str(target if status == "available" else f"unavailable_local_file:{local_path}"),
+                    "metadata": _local_metadata(name=name, values=values),
                     "data_version": data_version,
                     "created_at": created_at,
                 }
             )
     return rows
+
+
+def _local_metadata(*, name: str, values: dict[str, Any]) -> str:
+    source_note = str(values.get("license_note", "")).lower()
+    metadata: dict[str, Any] = {
+        "local_research_only": True,
+        "redistribution_allowed": False,
+        "publication_grade": False,
+        "licensing_review_required": True,
+    }
+    if name in {"SPX", "DXY"} or "yahoo" in source_note:
+        metadata.update(
+            {
+                "provider_family": "Yahoo",
+                "local_research_only": True,
+                "redistribution_allowed": False,
+                "publication_grade": False,
+                "licensing_review_required": True,
+            }
+        )
+    if name == "Gold" or "lbma" in source_note or "ice" in source_note:
+        metadata.update(
+            {
+                "provider_family": "LBMA_ICE",
+                "redistribution_allowed": False,
+                "publication_grade": False,
+                "licensing_review_required": True,
+            }
+        )
+    if name == "BAMLH0A0HYM2":
+        metadata.update(
+            {
+                "proxy_type": "BAA_MINUS_AAA",
+                "not_equivalent_to": "ICE_BofA_HY_OAS",
+                "original_frequency": str(values.get("original_frequency", "monthly")),
+                "fill_method": "business_daily_forward_fill",
+            }
+        )
+    return ";".join(f"{key}={value}" for key, value in sorted(metadata.items()))

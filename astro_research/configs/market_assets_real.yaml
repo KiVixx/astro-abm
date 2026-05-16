@@ -21,15 +21,15 @@ assets:
     currency: "USD"
 
   SPX:
-    source: "fred"
+    source: "local_csv"
     symbol: "SP500"
     timezone: "America/New_York"
-    start_date: "2012-01-03"
+    start_date: "1927-12-30"
     currency: "USD"
     frequency: "business_daily"
-    fallback_source: "local_csv"
-    fallback_path: "astro_research/data/local/equity/spx_daily.csv"
-    license_note: "Local CSV fallback provenance required before formal publication."
+    path: "astro_research/data/local/equity/spx_daily.csv"
+    fallback_source: "fred"
+    license_note: "Research-local Yahoo Finance chart endpoint export; verify redistribution rights before publication."
 
   NDX:
     source: "fred"
@@ -42,21 +42,21 @@ assets:
     source: "local_csv"
     symbol: "GOLD_EXTENDED"
     timezone: "UTC"
-    start_date: "1974-12-31"
+    start_date: "1968-01-02"
     currency: "USD"
     frequency: "business_daily"
     path: "astro_research/data/local/commodities/gold_daily.csv"
-    license_note: "Local CSV provenance required before formal publication."
+    license_note: "Research-local LBMA historical gold price JSON; verify LBMA/ICE licensing before publication."
 
   DXY:
     source: "local_csv"
     symbol: "DXY_EXTENDED"
     timezone: "UTC"
-    start_date: "1973-01-01"
+    start_date: "1971-01-04"
     currency: "INDEX"
     frequency: "business_daily"
     path: "astro_research/data/local/fx/dxy_daily.csv"
-    license_note: "Local CSV provenance required before formal publication."
+    license_note: "Research-local Yahoo Finance chart endpoint export; verify redistribution rights before publication."
 
   VIX:
     source: "fred"

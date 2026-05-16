@@ -43,7 +43,15 @@ def build_macro_daily(config_path: str | Path, *, start: date, end: date) -> Mac
     warnings = []
     for series_id, values in raw.get("series", {}).items():
         frame = pd.DataFrame()
-        if provider.available:
+        series_source = str(values.get("source", raw.get("provider", {}).get("source", "fred")))
+        if series_source == "local_csv":
+            frame = _read_local_fallback(series_id, values, provider=local_provider, start=start, end=end)
+            if frame.empty:
+                warnings.extend(frame.attrs.get("warnings", []))
+                warnings.append(f"{series_id}: local_csv missing or empty.")
+                continue
+            warnings.extend(frame.attrs.get("warnings", []))
+        elif provider.available:
             try:
                 frame = provider.fetch_observations(series_id=series_id, start=start, end=end)
             except Exception as exc:
@@ -86,9 +94,9 @@ def export_macro_daily(result: MacroBuildResult, output_dir: str | Path) -> dict
 
 
 def _read_local_fallback(series_id: str, values: dict[str, Any], *, provider: LocalCSVProvider, start: date, end: date) -> pd.DataFrame:
-    if str(values.get("fallback_source", "")) != "local_csv":
+    if str(values.get("source", "")) != "local_csv" and str(values.get("fallback_source", "")) != "local_csv":
         return pd.DataFrame()
-    fallback_path = values.get("fallback_path")
+    fallback_path = values.get("path") or values.get("fallback_path")
     if not fallback_path:
         return pd.DataFrame()
     return provider.fetch_indicator_observations(series_id=series_id, path=str(fallback_path), start=start, end=end)

@@ -32,12 +32,12 @@ series:
     fill_method: "ffill_weekly_regime"
 
   BAMLH0A0HYM2:
+    source: "local_csv"
     units: "percent"
     original_frequency: "daily"
     fill_method: "none"
-    fallback_source: "local_csv"
-    fallback_path: "astro_research/data/local/credit/hy_oas_daily.csv"
-    license_note: "Local CSV fallback provenance required before formal publication."
+    path: "astro_research/data/local/credit/hy_oas_daily.csv"
+    license_note: "Research-local credit stress proxy may use Moody's BAA-AAA spread when ICE HY OAS history is unavailable; verify methodology before formal publication."
 
   CBBTCUSD:
     units: "usd"
