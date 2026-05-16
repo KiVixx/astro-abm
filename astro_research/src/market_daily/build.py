@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -36,11 +37,20 @@ def build_market_daily_dataset(
             continue
         fetch_start = max(start or asset_config.start_date, asset_config.start_date)
         fetch_end = end or date.today()
-        try:
-            frame = provider.fetch_daily_bars(asset=asset_config, start=fetch_start, end=fetch_end)
-        except Exception as exc:
-            errors.append(f"{asset_config.asset}: {exc}")
-            continue
+        frame = _fetch_with_provider(provider, asset_config=asset_config, start=fetch_start, end=fetch_end, errors=errors)
+        if frame.empty and asset_config.fallback_source:
+            fallback_provider = providers.get(asset_config.fallback_source)
+            if fallback_provider is None:
+                errors.append(f"{asset_config.asset}: fallback provider not configured: {asset_config.fallback_source}")
+            else:
+                fallback_config = replace(
+                    asset_config,
+                    source=asset_config.fallback_source,
+                    path=asset_config.fallback_path or asset_config.path,
+                )
+                fallback_frame = _fetch_with_provider(fallback_provider, asset_config=fallback_config, start=fetch_start, end=fetch_end, errors=errors)
+                if not fallback_frame.empty:
+                    frame = fallback_frame
         if frame.empty:
             continue
         frame = frame.copy()
@@ -52,6 +62,17 @@ def build_market_daily_dataset(
         bar_frame.attrs["warnings"] = errors
         feature_frame.attrs["warnings"] = errors
     return bar_frame, feature_frame
+
+
+def _fetch_with_provider(provider, *, asset_config: AssetConfig, start: date, end: date, errors: list[str]) -> pd.DataFrame:
+    try:
+        frame = provider.fetch_daily_bars(asset=asset_config, start=start, end=end)
+    except Exception as exc:
+        errors.append(f"{asset_config.asset}: {exc}")
+        return pd.DataFrame()
+    for warning in frame.attrs.get("warnings", []):
+        errors.append(str(warning))
+    return frame
 
 
 def export_market_dataset(bars: pd.DataFrame, features: pd.DataFrame, output_dir: str | Path, *, write_parquet: bool = True) -> dict[str, Path]:

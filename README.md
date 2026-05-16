@@ -954,7 +954,116 @@ month-matched baselines, and weekday-matched baselines. It outputs bootstrap
 confidence intervals, permutation p-values, Benjamini-Hochberg FDR q-values,
 and placebo percentiles.
 
-### 10. Simulation layer
+### 10. Formal research layer MVP5
+
+MVP5 turns the daily astro dataset into a reproducible historical association
+research layer. The research question is deliberately limited:
+
+> Do specific astro event windows historically coincide with higher financial
+> stress or market turmoil?
+
+The layer does not make causal claims. Formal reports should use language such
+as association, historical relationship, stress-regime exploration, or event
+study.
+
+New configs:
+
+- `astro_research/configs/data_sources.yaml`
+- `astro_research/configs/market_assets_real.yaml`
+- `astro_research/configs/macro_series.yaml`
+- `astro_research/configs/financial_stress.yaml`
+- `astro_research/configs/research_events.yaml`
+- `astro_research/configs/research_hypotheses.yaml`
+- `astro_research/configs/research_batch_v1.yaml`
+- `astro_research/configs/crisis_casebook.yaml`
+
+New canonical research tables:
+
+- `data_source_registry`
+- `macro_daily_observations`
+- `market_asset_coverage`
+- `financial_stress_daily`
+- `research_events`
+- `research_hypotheses`
+- `event_study_runs`
+- `event_study_results_v2`
+- `world_event_catalog`
+
+Build the source registry:
+
+```bash
+python scripts/build_data_source_registry.py \
+  --config astro_research/configs/data_sources.yaml \
+  --output astro_research/output/reports/source_registry.md
+```
+
+Build real macro data when `FRED_API_KEY` is available:
+
+```bash
+python scripts/build_macro_daily.py \
+  --config astro_research/configs/macro_series.yaml \
+  --start 1926-01-01 \
+  --end 2025-12-31 \
+  --write-parquet astro_research/output/parquet/macro_daily
+```
+
+Without `FRED_API_KEY`, the macro build exits successfully with a warning and
+an empty snapshot, so local/synthetic smoke tests remain runnable.
+
+Build financial stress features:
+
+```bash
+python scripts/build_financial_stress_daily.py \
+  --config astro_research/configs/financial_stress.yaml \
+  --write-parquet astro_research/output/parquet/financial_stress
+```
+
+The stress layer is coverage-aware. Missing components remain null; cross-asset
+stress is calculated from available components and marked
+`insufficient_coverage` when too little data is present.
+
+Normalize research events:
+
+```bash
+python scripts/build_research_events.py \
+  --config astro_research/configs/research_events.yaml \
+  --write-parquet astro_research/output/parquet/research_events
+```
+
+Register formal hypotheses:
+
+```bash
+python scripts/register_hypotheses.py \
+  --config astro_research/configs/research_hypotheses.yaml \
+  --git-commit auto \
+  --write-parquet astro_research/output/parquet/research_hypotheses
+```
+
+Run the first formal batch:
+
+```bash
+python scripts/run_research_batch.py \
+  --config astro_research/configs/research_batch_v1.yaml \
+  --run-id research_batch_v1_1926_2025 \
+  --output astro_research/output/reports/research_batch_v1_1926_2025
+```
+
+Build the descriptive crisis casebook:
+
+```bash
+python scripts/build_crisis_casebook.py \
+  --config astro_research/configs/crisis_casebook.yaml \
+  --output astro_research/output/reports/casebook
+```
+
+Validate the research layer:
+
+```bash
+python scripts/validate_research_layer.py \
+  --output astro_research/output/reports/research_layer_validation.md
+```
+
+### 11. Simulation layer
 After the live hourly pipeline is stable, the project can move into:
 
 - retail swarm agents

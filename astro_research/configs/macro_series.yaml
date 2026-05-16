@@ -1,0 +1,60 @@
+dataset:
+  data_version: "macro_daily_v1"
+
+provider:
+  source: "fred"
+  api_key_env: "FRED_API_KEY"
+
+series:
+  VIXCLS:
+    units: "index"
+    original_frequency: "daily"
+    fill_method: "none"
+
+  DGS10:
+    units: "percent"
+    original_frequency: "daily"
+    fill_method: "none"
+
+  DGS2:
+    units: "percent"
+    original_frequency: "daily"
+    fill_method: "none"
+
+  USREC:
+    units: "binary"
+    original_frequency: "monthly"
+    fill_method: "ffill_monthly_regime"
+
+  NFCI:
+    units: "index"
+    original_frequency: "weekly"
+    fill_method: "ffill_weekly_regime"
+
+  BAMLH0A0HYM2:
+    units: "percent"
+    original_frequency: "daily"
+    fill_method: "none"
+    fallback_source: "local_csv"
+    fallback_path: "astro_research/data/local/credit/hy_oas_daily.csv"
+    license_note: "Local CSV fallback provenance required before formal publication."
+
+  CBBTCUSD:
+    units: "usd"
+    original_frequency: "daily"
+    fill_method: "none"
+
+  CBETHUSD:
+    units: "usd"
+    original_frequency: "daily"
+    fill_method: "none"
+
+  NASDAQ100:
+    units: "index"
+    original_frequency: "daily"
+    fill_method: "none"
+
+  SP500:
+    units: "index"
+    original_frequency: "daily"
+    fill_method: "none"

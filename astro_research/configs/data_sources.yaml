@@ -1,0 +1,32 @@
+dataset:
+  data_version: "research_sources_v1"
+
+sources:
+  fred:
+    provider: "FREDProvider"
+    requires_api_key: true
+    api_key_env: "FRED_API_KEY"
+    is_canonical: true
+    canonical_for: "DGS10,DGS2,VIXCLS,USREC,NFCI,BAMLH0A0HYM2,CBBTCUSD,CBETHUSD,NASDAQ100,SP500"
+    frequency: "daily_or_source"
+    license_note: "FRED terms apply; verify downstream redistribution rights."
+    source_url: "https://fred.stlouisfed.org/"
+
+  local_csv:
+    provider: "LocalCSVProvider"
+    requires_api_key: false
+    is_canonical: true
+    canonical_for: "SPX_EXTENDED,GOLD_EXTENDED,DXY_EXTENDED"
+    frequency: "daily"
+    license_note: "Local file provenance must be documented per file."
+    source_url: "local"
+
+  yfinance:
+    provider: "YFinanceProvider"
+    requires_api_key: false
+    optional: true
+    is_canonical: false
+    canonical_for: ""
+    frequency: "daily"
+    license_note: "Research fallback only; not canonical."
+    source_url: "https://finance.yahoo.com/"

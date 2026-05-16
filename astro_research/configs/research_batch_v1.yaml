@@ -1,0 +1,50 @@
+run:
+  run_id: "research_batch_v1_smoke"
+  run_type: "formal"
+  data_version: "research_batch_v1"
+  calc_version: "event_study_v2"
+  random_seed: 42
+  bootstrap_samples: 100
+  placebo_samples: 100
+
+inputs:
+  research_events_path: "astro_research/output/parquet/research_events/research_events.parquet"
+  market_features_path: "astro_research/output/parquet/market_daily/market_daily_features.parquet"
+  financial_stress_path: "astro_research/output/parquet/financial_stress/financial_stress_daily.parquet"
+  hypotheses_path: "astro_research/output/parquet/research_hypotheses/research_hypotheses.parquet"
+
+studies:
+  H001_station_cluster_stress:
+    event_family: "station_cluster"
+    assets: "SPX,VIX,Gold,DXY,BTC"
+    metrics: "realized_vol,extreme_absret_frequency,max_drawdown,cross_asset_stress_score"
+    windows: "pm7,pm14,pm30"
+    baselines: "non_event,month_matched,volatility_regime_matched"
+
+  H002_mercury_station_volatility:
+    event_family: "mercury_station"
+    assets: "SPX,NDX,VIX,BTC,ETH"
+    metrics: "realized_vol,extreme_absret_frequency,max_drawdown"
+    windows: "pm7,pm14,pm30"
+    baselines: "non_event,month_matched,weekday_matched"
+
+  H003_mars_saturn_hard_aspects:
+    event_family: "mars_saturn_hard_aspect"
+    assets: "SPX,VIX,Gold,DXY,BTC"
+    metrics: "max_drawdown,realized_vol,vix_spike_frequency"
+    windows: "pm7,pm14"
+    baselines: "non_event,month_matched"
+
+  H004_macro_core_aspect_cluster:
+    event_family: "macro_core_aspect_cluster"
+    assets: "SPX,VIX,Gold,US10Y,HY_OAS"
+    metrics: "cross_asset_stress_score,vol_stress_score,credit_stress_score"
+    windows: "pm14,pm30"
+    baselines: "non_event,month_matched,volatility_regime_matched"
+
+  H005_active_retrograde_count:
+    event_family: "active_retrograde_count"
+    assets: "SPX,VIX,Gold,BTC"
+    metrics: "realized_vol,stress_score_mean"
+    windows: "event_days,pm14"
+    baselines: "non_event,month_matched"

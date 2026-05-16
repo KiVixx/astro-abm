@@ -14,6 +14,7 @@ from astro_daily.ingest_questdb import apply_migrations
 from market_daily.build import build_market_daily_dataset, export_market_dataset
 from market_daily.config import load_market_daily_config
 from market_daily.ingest_questdb import ingest_market_frames
+from research.coverage import build_asset_coverage, write_coverage_report
 
 
 def main() -> int:
@@ -39,16 +40,25 @@ def main() -> int:
         end=parse_date(args.end) if args.end else None,
     )
     paths = export_market_dataset(bars, features, ROOT / args.write_parquet, write_parquet=not args.no_parquet)
+    coverage = build_asset_coverage(bars, data_version=config.data_version) if not bars.empty else build_asset_coverage(bars, data_version=config.data_version)
+    coverage.to_csv(ROOT / args.write_parquet / "market_asset_coverage.csv", index=False)
+    if not args.no_parquet:
+        coverage.to_parquet(ROOT / args.write_parquet / "market_asset_coverage.parquet", index=False)
+    write_coverage_report(coverage, ROOT / "astro_research/output/reports/market_data_coverage.md")
     warnings = bars.attrs.get("warnings", []) or features.attrs.get("warnings", [])
     print("Market daily build complete")
     print(f"assets={sorted(bars['asset'].unique().tolist()) if not bars.empty and 'asset' in bars.columns else []}")
     print(f"bars={len(bars)} features={len(features)} output_dir={ROOT / args.write_parquet}")
+    print(f"coverage_rows={len(coverage)}")
     for warning in warnings:
         print(f"warning={warning}")
     print(f"files={len(paths)}")
     if args.ingest and not args.dry_run:
         apply_migrations()
         counts = ingest_market_frames(bars=bars, features=features)
+        from astro_daily.ingest_questdb import ingest_csv_snapshot
+
+        counts.update(ingest_csv_snapshot(ROOT / args.write_parquet, tables=("market_asset_coverage",)))
         print(f"ingested={counts}")
     else:
         print(f"ingest_skipped={not args.ingest or args.dry_run}")

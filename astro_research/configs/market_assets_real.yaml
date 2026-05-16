@@ -1,0 +1,73 @@
+dataset:
+  data_version: "market_real_v1"
+
+providers:
+  fred:
+    api_key_env: "FRED_API_KEY"
+
+assets:
+  BTC:
+    source: "fred"
+    symbol: "CBBTCUSD"
+    timezone: "UTC"
+    start_date: "2014-12-01"
+    currency: "USD"
+
+  ETH:
+    source: "fred"
+    symbol: "CBETHUSD"
+    timezone: "UTC"
+    start_date: "2016-05-18"
+    currency: "USD"
+
+  SPX:
+    source: "fred"
+    symbol: "SP500"
+    timezone: "America/New_York"
+    start_date: "2012-01-03"
+    currency: "USD"
+    frequency: "business_daily"
+    fallback_source: "local_csv"
+    fallback_path: "astro_research/data/local/equity/spx_daily.csv"
+    license_note: "Local CSV fallback provenance required before formal publication."
+
+  NDX:
+    source: "fred"
+    symbol: "NASDAQ100"
+    timezone: "America/New_York"
+    start_date: "1986-01-02"
+    currency: "USD"
+
+  Gold:
+    source: "local_csv"
+    symbol: "GOLD_EXTENDED"
+    timezone: "UTC"
+    start_date: "1974-12-31"
+    currency: "USD"
+    frequency: "business_daily"
+    path: "astro_research/data/local/commodities/gold_daily.csv"
+    license_note: "Local CSV provenance required before formal publication."
+
+  DXY:
+    source: "local_csv"
+    symbol: "DXY_EXTENDED"
+    timezone: "UTC"
+    start_date: "1973-01-01"
+    currency: "INDEX"
+    frequency: "business_daily"
+    path: "astro_research/data/local/fx/dxy_daily.csv"
+    license_note: "Local CSV provenance required before formal publication."
+
+  VIX:
+    source: "fred"
+    symbol: "VIXCLS"
+    timezone: "America/New_York"
+    start_date: "1990-01-02"
+    currency: "INDEX"
+
+  US10Y:
+    source: "fred"
+    symbol: "DGS10"
+    timezone: "America/New_York"
+    start_date: "1962-01-02"
+    currency: "PCT"

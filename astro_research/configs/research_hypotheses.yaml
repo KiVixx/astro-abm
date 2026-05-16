@@ -1,0 +1,87 @@
+dataset:
+  data_version: "research_hypotheses_v1"
+
+hypotheses:
+  H001_station_cluster_stress:
+    title: "Station cluster windows are associated with higher market stress"
+    status: "active"
+    event_family: "station_cluster"
+    event_filter: "station_cluster_count_7d_gte=2"
+    primary_assets: "SPX,VIX,Gold,DXY,BTC"
+    primary_metrics: "realized_vol,max_drawdown,extreme_absret_frequency,cross_asset_stress_score"
+    windows: "pm7,pm14,pm30"
+    expected_direction: "realized_vol:higher,extreme_absret_frequency:higher,max_drawdown:lower,cross_asset_stress_score:higher"
+    baseline_methods: "non_event,month_matched,volatility_regime_matched"
+    multiple_testing_group: "station_cluster_primary"
+    min_events: 20
+    min_observations: 100
+
+  H002_mercury_station_volatility:
+    title: "Mercury station windows are associated with higher volatility"
+    status: "exploratory"
+    event_family: "mercury_station"
+    event_filter: "station_type=direct_to_retrograde|retrograde_to_direct"
+    primary_assets: "SPX,NDX,VIX,BTC,ETH"
+    primary_metrics: "realized_vol,extreme_absret_frequency,max_drawdown"
+    windows: "pm7,pm14,pm30"
+    expected_direction: "realized_vol:higher,extreme_absret_frequency:higher,max_drawdown:lower"
+    baseline_methods: "non_event,month_matched,weekday_matched"
+    multiple_testing_group: "mercury_station_exploratory"
+    min_events: 20
+    min_observations: 100
+
+  H003_mars_saturn_hard_aspects:
+    title: "Mars-Saturn hard aspects are associated with drawdown and volatility stress"
+    status: "active"
+    event_family: "mars_saturn_hard_aspect"
+    event_filter: "aspect=conjunction|square|opposition"
+    primary_assets: "SPX,VIX,Gold,DXY,BTC"
+    primary_metrics: "max_drawdown,realized_vol,vix_spike_frequency"
+    windows: "pm7,pm14"
+    expected_direction: "max_drawdown:lower,realized_vol:higher,vix_spike_frequency:higher"
+    baseline_methods: "non_event,month_matched"
+    multiple_testing_group: "mars_saturn_primary"
+    min_events: 10
+    min_observations: 50
+
+  H004_macro_core_aspect_cluster:
+    title: "Macro-core aspect clusters are associated with cross-asset stress"
+    status: "active"
+    event_family: "macro_core_aspect_cluster"
+    event_filter: "aspect_cluster_count_14d_percentile_gte=0.90"
+    primary_assets: "SPX,VIX,Gold,US10Y,HY_OAS"
+    primary_metrics: "cross_asset_stress_score,vol_stress_score,credit_stress_score"
+    windows: "pm14,pm30"
+    expected_direction: "cross_asset_stress_score:higher,vol_stress_score:higher,credit_stress_score:higher"
+    baseline_methods: "non_event,month_matched,volatility_regime_matched"
+    multiple_testing_group: "macro_core_cluster_primary"
+    min_events: 20
+    min_observations: 100
+
+  H005_active_retrograde_count:
+    title: "High active retrograde counts are associated with market stress"
+    status: "exploratory"
+    event_family: "active_retrograde_count"
+    event_filter: "active_retrograde_count_gte=3"
+    primary_assets: "SPX,VIX,Gold,BTC"
+    primary_metrics: "realized_vol,stress_score_mean"
+    windows: "event_days,pm14"
+    expected_direction: "realized_vol:higher,stress_score_mean:higher"
+    baseline_methods: "non_event,month_matched"
+    multiple_testing_group: "retrograde_count_exploratory"
+    min_events: 20
+    min_observations: 100
+
+  H006_crisis_casebook_alignment:
+    title: "Curated crisis windows are reviewed against astro events and stress regimes"
+    status: "casebook"
+    event_family: "world_crisis"
+    event_filter: "manual_catalog"
+    primary_assets: "SPX,VIX,Gold,DXY,BTC"
+    primary_metrics: "casebook_context"
+    windows: "pm90"
+    expected_direction: "casebook_context:descriptive"
+    baseline_methods: "none"
+    multiple_testing_group: "casebook_descriptive"
+    min_events: 1
+    min_observations: 1

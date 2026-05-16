@@ -1,0 +1,13 @@
+dataset:
+  data_version: "financial_stress_v1"
+  stress_universe: "global_cross_asset"
+
+inputs:
+  market_features_path: "astro_research/output/parquet/market_daily/market_daily_features.parquet"
+  macro_observations_path: "astro_research/output/parquet/macro_daily/macro_daily_observations.parquet"
+
+thresholds:
+  low_tail: 0.10
+  high_tail: 0.90
+  extreme_tail: 0.95
+  min_components: 2

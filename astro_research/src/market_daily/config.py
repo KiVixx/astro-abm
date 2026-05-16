@@ -18,6 +18,10 @@ class AssetConfig:
     start_date: date
     currency: str
     path: str | None = None
+    frequency: str = "daily"
+    fallback_source: str | None = None
+    fallback_path: str | None = None
+    license_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,10 @@ def load_market_daily_config(path: str | Path) -> MarketDailyConfig:
             start_date=parse_date(str(values["start_date"])),
             currency=str(values.get("currency", "USD")),
             path=str(values["path"]) if "path" in values else None,
+            frequency=str(values.get("frequency", "daily")),
+            fallback_source=str(values["fallback_source"]) if "fallback_source" in values else None,
+            fallback_path=str(values["fallback_path"]) if "fallback_path" in values else None,
+            license_note=str(values.get("license_note", "")),
         )
         for asset, values in raw.get("assets", {}).items()
     }

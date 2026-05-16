@@ -1,0 +1,10 @@
+event_id,event_name,start_date,end_date,category,region,country,severity_score,source,source_url,date_confidence,notes
+crisis_1929_crash,1929 Crash / Great Depression,1929-10-24,1933-03-01,financial_crisis,global,US,1.0,manual,,medium,Dates are broad historical anchors.
+crisis_1971_nixon_shock,1971 Nixon Shock,1971-08-15,1971-08-15,monetary_regime,global,US,0.8,manual,,high,USD convertibility suspension.
+crisis_1973_oil_crisis,1973 Oil Crisis,1973-10-17,1974-03-18,energy_shock,global,,0.9,manual,,medium,OPEC oil embargo period.
+crisis_1987_black_monday,1987 Black Monday,1987-10-19,1987-10-19,market_crash,global,US,0.9,manual,,high,Single-day global equity crash.
+crisis_1997_asian_financial_crisis,1997 Asian Financial Crisis,1997-07-02,1998-09-01,financial_crisis,Asia,,0.9,manual,,medium,Regional crisis with global spillover.
+crisis_2000_dotcom,2000 Dot-com Crash,2000-03-10,2002-10-09,market_crash,US,US,0.8,manual,,medium,NASDAQ bubble unwind.
+crisis_2008_gfc,2008 Global Financial Crisis,2008-09-15,2009-03-09,financial_crisis,global,US,1.0,manual,,high,Lehman to equity trough anchor.
+crisis_2020_covid,2020 COVID Crash,2020-02-20,2020-03-23,pandemic,global,,1.0,manual,,high,COVID liquidity and equity crash.
+crisis_2022_inflation_rate_shock,2022 Inflation / Rate Shock,2022-03-16,2022-10-14,rates_shock,global,US,0.8,manual,,medium,Fed hiking cycle and risk-asset repricing.

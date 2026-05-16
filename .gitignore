@@ -18,6 +18,10 @@ logs/
 exports/
 outputs/
 astro_research/output/
+astro_research/data/local/*
+!astro_research/data/local/README.md
+!astro_research/data/local/examples/
+!astro_research/data/local/**/*.example.csv
 LOCAL_MEMO_*.md
 
 # QuestDB local data if bind-mounted later

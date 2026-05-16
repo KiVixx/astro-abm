@@ -1,0 +1,20 @@
+dataset:
+  data_version: "research_events_v1"
+  dataset_id: "astro_daily_v1_swe_utc00"
+  calc_version: "research_events_v1"
+
+inputs:
+  astro_event_windows_path: "astro_research/output/parquet/astro_daily/astro_event_windows.parquet"
+  astro_daily_features_path: "astro_research/output/parquet/astro_daily/astro_daily_features.parquet"
+  aspect_chunks_dir: "astro_research/output/parquet/aspect_chunks/macro_core_1926_2025/aspects"
+  moon_phase_events_path: "astro_research/output/parquet/astro_daily/astro_moon_phase_events.parquet"
+
+event_families:
+  station_bodies: "Mercury,Venus,Mars,Jupiter,Saturn"
+  station_cluster_count_7d_gte: 2
+  active_retrograde_count_gte: 3
+  moon_phases: "NewMoon,FullMoon"
+
+overlap:
+  policy: "cluster_overlapping_events"
+  window_days: 7

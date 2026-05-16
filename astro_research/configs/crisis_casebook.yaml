@@ -1,0 +1,10 @@
+dataset:
+  data_version: "crisis_casebook_v1"
+
+inputs:
+  crisis_catalog_path: "astro_research/data/manual/world_crisis_catalog.csv"
+  research_events_path: "astro_research/output/parquet/research_events/research_events.parquet"
+  market_features_path: "astro_research/output/parquet/market_daily/market_daily_features.parquet"
+  financial_stress_path: "astro_research/output/parquet/financial_stress/financial_stress_daily.parquet"
+
+window_days: 90

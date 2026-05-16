@@ -18,9 +18,12 @@ def read_table(path: str | Path) -> pd.DataFrame:
 
 def read_optional_table(path: str | Path) -> pd.DataFrame:
     target = Path(path)
-    if not str(path) or not target.exists():
+    if not str(path) or not target.exists() or target.is_dir():
         return pd.DataFrame()
-    return read_table(target)
+    try:
+        return read_table(target)
+    except ValueError:
+        return pd.DataFrame()
 
 
 def read_aspect_chunk_windows(path: str | Path) -> pd.DataFrame:
