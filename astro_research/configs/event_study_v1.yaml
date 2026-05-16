@@ -1,0 +1,56 @@
+run:
+  run_id: "event_study_v1_smoke"
+  data_version: "market_daily_v1"
+  calc_version: "event_study_v1"
+  random_seed: 42
+  bootstrap_samples: 1000
+  placebo_samples: 1000
+
+inputs:
+  market_features_path: "astro_research/output/parquet/market_daily/market_daily_features.parquet"
+  astro_event_windows_path: "astro_research/output/parquet/astro_daily/astro_event_windows.parquet"
+  astro_daily_features_path: "astro_research/output/parquet/astro_daily/astro_daily_features.parquet"
+  aspect_chunks_dir: "astro_research/output/parquet/aspect_chunks/macro_core_1926_2025/aspects"
+
+event_groups:
+  mercury_station:
+    kind: "station"
+    body: "Mercury"
+
+  venus_station:
+    kind: "station"
+    body: "Venus"
+
+  mars_station:
+    kind: "station"
+    body: "Mars"
+
+  jupiter_station:
+    kind: "station"
+    body: "Jupiter"
+
+  saturn_station:
+    kind: "station"
+    body: "Saturn"
+
+  station_cluster_7d:
+    kind: "daily_feature_threshold"
+    feature: "station_cluster_count_7d"
+    min_value: 2
+
+  macro_core_aspects:
+    kind: "aspect"
+    body_pairs: "Mars-Jupiter,Mars-Saturn,Mars-Uranus,Mars-Neptune,Mars-Pluto,Jupiter-Saturn,Jupiter-Uranus,Jupiter-Neptune,Jupiter-Pluto,Saturn-Uranus,Saturn-Neptune,Saturn-Pluto,Uranus-Neptune,Uranus-Pluto,Neptune-Pluto"
+
+windows:
+  - "-30,30"
+  - "-14,14"
+  - "-7,7"
+  - "core"
+
+baseline:
+  exclude_event_windows: true
+  types:
+    - "all_non_event"
+    - "month_matched"
+    - "weekday_matched"

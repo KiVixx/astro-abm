@@ -17,6 +17,7 @@ dist/
 logs/
 exports/
 outputs/
+astro_research/output/
 LOCAL_MEMO_*.md
 
 # QuestDB local data if bind-mounted later

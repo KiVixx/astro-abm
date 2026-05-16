@@ -17,6 +17,7 @@ dependencies = [
   "apscheduler>=3.10.4",
   "h5py>=3.11.0",
   "python-dotenv>=1.0.1",
+  "pyarrow>=24.0.0",
 ]
 
 [project.optional-dependencies]
@@ -54,5 +55,5 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
+pythonpath = ["src", "astro_research/src"]
+testpaths = ["tests", "astro_research/tests"]

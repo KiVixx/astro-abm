@@ -756,15 +756,205 @@ Turn the strongest held-out signal rows into a future risk calendar:
 ```bash
 astro-abm-astro-risk-calendar \
   --signals outputs/astro_volatility_alpha_rolling.csv \
+  --cluster-mode station_direction \
   --frequency daily \
   --output outputs/astro_risk_calendar_daily.csv
 ```
 
 The calendar is a research product, not a trade signal. Correlated ephemeris
-features can cluster around the same station/retrograde event, so high scores
-should be read as an event-window warning rather than independent evidence.
+features can cluster around the same station/retrograde event, so the default
+calendar collapses raw feature rows into event clusters such as Venus
+direct-to-retrograde station or Mercury retrograde-to-direct station. High
+scores should be read as an event-window warning rather than independent
+evidence.
 
-### 8. Simulation layer
+### 8. Build a 100-year daily astro research dataset
+
+The hourly crypto pipeline remains the trading-data layer. Long-horizon
+retrograde, station, lunar, aspect, and macro-history research lives in the
+separate `astro_research/` daily layer.
+
+The daily layer uses its own QuestDB tables:
+
+- `astro_daily_positions`
+- `astro_daily_facts`
+- `astro_retrograde_cycles`
+- `astro_event_windows`
+- `astro_daily_features`
+
+The first dataset is configured by `astro_research/configs/astro_daily.yaml`.
+It samples deterministic Swiss Ephemeris positions at `00:00 UTC`, scans
+retrograde station sign flips on a buffered range, refines exact station
+timestamps, pairs station-in/out events into retrograde cycles, and labels each
+daily row with:
+
+- `direct`
+- `pre_station`
+- `retrograde_entry`
+- `retrograde_core`
+- `retrograde_exit`
+- `post_station`
+
+Build a smoke dataset:
+
+```bash
+python scripts/build_astro_daily.py \
+  --config astro_research/configs/astro_daily.yaml \
+  --start 2020-01-01 \
+  --end 2021-12-31 \
+  --write-parquet astro_research/output/parquet/astro_daily_smoke_2020_2021 \
+  --dry-run
+```
+
+Build the full 100 calendar-year dataset:
+
+```bash
+python scripts/build_astro_daily.py \
+  --config astro_research/configs/astro_daily.yaml \
+  --start 1926-01-01 \
+  --end 2025-12-31 \
+  --write-parquet astro_research/output/parquet/astro_daily_1926_2025 \
+  --no-parquet \
+  --dry-run
+```
+
+MVP3 also writes:
+
+- `astro_moon_phase_events`
+- `astro_aspect_events`
+- Parquet files next to each CSV snapshot
+
+All-body exact aspect scans are the expensive part of the daily layer. The
+default config scans Sun through Pluto, including Moon pairs, so full 100-year
+rebuilds should be treated as long batch jobs. For frequent iteration, use a
+small date range first and keep generated snapshots under
+`astro_research/output/`, which is git-ignored.
+
+For maintainable 100-year exact aspect builds, use the optimized chunk mode.
+It writes one pair/year snapshot per directory:
+
+```bash
+python scripts/build_astro_daily.py \
+  --config astro_research/configs/astro_daily.yaml \
+  --aspect-profile macro_core \
+  --aspect-start 1926-01-01 \
+  --aspect-end 2025-12-31 \
+  --write-parquet astro_research/output/parquet/aspect_chunks/macro_core_1926_2025 \
+  --workers 4 \
+  --resume \
+  --skip-existing
+```
+
+Supported aspect profiles:
+
+- `macro_core`: Mars/Jupiter/Saturn/Uranus/Neptune/Pluto
+- `market_core`: Mercury/Venus/Mars/Jupiter/Saturn
+- `lunar_short_term`: Moon with Sun/Mercury/Venus/Mars/Saturn/Uranus
+- `all_no_moon`: Sun through Pluto excluding Moon pairs
+- `all`: Sun through Pluto including Moon pairs
+
+Validate aspect chunks:
+
+```bash
+python scripts/validate_astro_daily.py \
+  --config astro_research/configs/astro_daily.yaml \
+  --start 1926-01-01 \
+  --end 2025-12-31 \
+  --aspect-only \
+  --aspect-chunks-dir astro_research/output/parquet/aspect_chunks/macro_core_1926_2025 \
+  --aspect-profile macro_core \
+  --output astro_research/output/reports/aspect_chunks_macro_core_1926_2025_validation.md
+```
+
+Benchmark profile cost before running a large build:
+
+```bash
+python scripts/benchmark_aspect_build.py \
+  --profiles macro_core,market_core,lunar_short_term \
+  --year 2020 \
+  --workers 2
+```
+
+Validate a snapshot:
+
+```bash
+python scripts/validate_astro_daily.py \
+  --config astro_research/configs/astro_daily.yaml \
+  --snapshot-dir astro_research/output/parquet/astro_daily_1926_2025 \
+  --start 1926-01-01 \
+  --end 2025-12-31 \
+  --output astro_research/output/reports/astro_daily_validation_1926_2025.md
+```
+
+Ingest is intentionally a separate step and supports dry-run first:
+
+```bash
+python scripts/ingest_astro_daily.py \
+  --parquet-dir astro_research/output/parquet/astro_daily_1926_2025 \
+  --dry-run
+```
+
+Swiss Ephemeris licensing matters for public or commercial distribution; see
+`LICENSE_NOTES.md` before turning this into a hosted service.
+
+### 9. Daily market layer and event study v1
+
+MVP4 adds a daily market research layer and a first event-study engine. The
+market config lives at `astro_research/configs/market_assets.yaml` and covers:
+
+- `BTC`
+- `ETH`
+- `SPX`
+- `NDX`
+- `Gold`
+- `DXY`
+- `VIX`
+- `US10Y`
+
+Providers are intentionally pluggable:
+
+- `local_csv` for reproducible local research snapshots
+- `fred` for daily macro/rates series when `FRED_API_KEY` is available
+- `yfinance` as an optional provider that is skipped gracefully when the
+  package is not installed
+
+Build daily bars and features:
+
+```bash
+python scripts/build_market_daily.py \
+  --config astro_research/configs/market_assets.yaml \
+  --asset BTC \
+  --source local_csv \
+  --start 2020-01-01 \
+  --end 2020-12-31 \
+  --write-parquet astro_research/output/parquet/market_daily \
+  --dry-run
+```
+
+The output tables are:
+
+- `market_daily_bars`
+- `market_daily_features`
+
+`market_daily_features` includes 1d log returns, 3/5/10/20d returns, realized
+volatility, trailing drawdown, 252d absolute-return percentile ranks, and
+extreme-move flags.
+
+Run the first event study:
+
+```bash
+python scripts/run_event_study.py \
+  --config astro_research/configs/event_study_v1.yaml \
+  --output astro_research/output/reports/event_study_v1
+```
+
+The v1 study is calendar-day based. It compares station windows, station
+clusters, and macro-core aspect windows against all non-event days,
+month-matched baselines, and weekday-matched baselines. It outputs bootstrap
+confidence intervals, permutation p-values, Benjamini-Hochberg FDR q-values,
+and placebo percentiles.
+
+### 10. Simulation layer
 After the live hourly pipeline is stable, the project can move into:
 
 - retail swarm agents

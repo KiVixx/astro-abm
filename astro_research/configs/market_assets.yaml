@@ -1,0 +1,65 @@
+dataset:
+  data_version: "market_daily_v1"
+
+providers:
+  fred:
+    api_key_env: "FRED_API_KEY"
+
+assets:
+  BTC:
+    source: "local_csv"
+    symbol: "BTC"
+    timezone: "UTC"
+    start_date: "2010-07-17"
+    currency: "USD"
+    path: "astro_research/data/market_daily/BTC.csv"
+
+  ETH:
+    source: "local_csv"
+    symbol: "ETH"
+    timezone: "UTC"
+    start_date: "2015-08-07"
+    currency: "USD"
+    path: "astro_research/data/market_daily/ETH.csv"
+
+  SPX:
+    source: "yfinance"
+    symbol: "^GSPC"
+    timezone: "America/New_York"
+    start_date: "1927-12-30"
+    currency: "USD"
+
+  NDX:
+    source: "yfinance"
+    symbol: "^NDX"
+    timezone: "America/New_York"
+    start_date: "1985-10-01"
+    currency: "USD"
+
+  Gold:
+    source: "yfinance"
+    symbol: "GC=F"
+    timezone: "America/New_York"
+    start_date: "1974-12-31"
+    currency: "USD"
+
+  DXY:
+    source: "yfinance"
+    symbol: "DX-Y.NYB"
+    timezone: "America/New_York"
+    start_date: "1973-01-01"
+    currency: "INDEX"
+
+  VIX:
+    source: "fred"
+    symbol: "VIXCLS"
+    timezone: "America/New_York"
+    start_date: "1990-01-02"
+    currency: "INDEX"
+
+  US10Y:
+    source: "fred"
+    symbol: "DGS10"
+    timezone: "America/New_York"
+    start_date: "1962-01-02"
+    currency: "PCT"

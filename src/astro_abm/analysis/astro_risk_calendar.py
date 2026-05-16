@@ -15,6 +15,9 @@ from astro_abm.storage.questdb import QuestDBMarketBarWriter
 DEFAULT_SIGNAL_SPLIT = "test"
 DEFAULT_MIN_LIFT = 1.5
 DEFAULT_MIN_SIGNAL_OBSERVATIONS = 100
+DEFAULT_CLUSTER_MODE = "station_direction"
+STATION_BODIES = ("mercury", "venus", "mars", "jupiter", "saturn")
+STATION_FEATURE_MARKERS = ("station", "speed", "retrograde", "lon_speed")
 
 
 def load_signal_frame(
@@ -51,22 +54,32 @@ def build_astro_risk_calendar(
     signal_frame: pd.DataFrame,
     *,
     frequency: str = "daily",
+    cluster_mode: str = DEFAULT_CLUSTER_MODE,
 ) -> pd.DataFrame:
     if frequency not in {"hourly", "daily"}:
         raise ValueError("frequency must be hourly or daily.")
-    hourly = score_ephemeris_risk(ephemeris_frame, signal_frame)
+    hourly = score_ephemeris_risk(ephemeris_frame, signal_frame, cluster_mode=cluster_mode)
     if frequency == "hourly" or hourly.empty:
         return hourly
     return _daily_calendar(hourly)
 
 
-def score_ephemeris_risk(ephemeris_frame: pd.DataFrame, signal_frame: pd.DataFrame) -> pd.DataFrame:
+def score_ephemeris_risk(
+    ephemeris_frame: pd.DataFrame,
+    signal_frame: pd.DataFrame,
+    *,
+    cluster_mode: str = DEFAULT_CLUSTER_MODE,
+) -> pd.DataFrame:
+    if cluster_mode not in {"raw", "station", "station_direction"}:
+        raise ValueError("cluster_mode must be raw, station, or station_direction.")
     if ephemeris_frame.empty:
-        return pd.DataFrame(columns=["ts", "risk_score", "risk_score_0_100", "active_signal_count", "active_signals"])
+        return pd.DataFrame(columns=_calendar_columns())
     if signal_frame.empty:
         result = ephemeris_frame[["ts"]].copy()
         result["risk_score"] = 0.0
         result["risk_score_0_100"] = 0.0
+        result["active_cluster_count"] = 0
+        result["active_clusters"] = ""
         result["active_signal_count"] = 0
         result["active_signals"] = ""
         return result
@@ -74,9 +87,8 @@ def score_ephemeris_risk(ephemeris_frame: pd.DataFrame, signal_frame: pd.DataFra
     frame = ephemeris_frame.copy()
     frame["ts"] = pd.to_datetime(frame["ts"], utc=True)
     frame = frame.sort_values("ts").reset_index(drop=True)
-    raw_scores = pd.Series(0.0, index=frame.index)
-    active_counts = pd.Series(0, index=frame.index)
-    active_names: list[list[str]] = [[] for _ in range(len(frame))]
+    active_cluster_weights: list[dict[str, float]] = [{} for _ in range(len(frame))]
+    active_raw_names: list[list[str]] = [[] for _ in range(len(frame))]
 
     for signal in signal_frame.to_dict(orient="records"):
         feature = str(signal["feature"])
@@ -96,23 +108,32 @@ def score_ephemeris_risk(ephemeris_frame: pd.DataFrame, signal_frame: pd.DataFra
 
         lift = float(signal["lift"])
         weight = max(0.0, math.log(lift)) if math.isfinite(lift) and lift > 0 else 0.0
-        raw_scores = raw_scores + active.fillna(False).astype(float) * weight
-        active_counts = active_counts + active.fillna(False).astype(int)
-        label = f"{feature}:{tail}"
+        raw_label = f"{feature}:{tail}"
         for index in active[active.fillna(False)].index:
-            active_names[index].append(label)
+            cluster_label = _cluster_label_for_signal(
+                frame,
+                index=index,
+                feature=feature,
+                tail=tail,
+                cluster_mode=cluster_mode,
+            )
+            active_cluster_weights[index][cluster_label] = max(active_cluster_weights[index].get(cluster_label, 0.0), weight)
+            active_raw_names[index].append(raw_label)
 
+    raw_scores = pd.Series((sum(weights.values()) for weights in active_cluster_weights), index=frame.index)
     result = pd.DataFrame(
         {
             "ts": frame["ts"],
             "risk_score": raw_scores,
-            "active_signal_count": active_counts,
-            "active_signals": [", ".join(names[:8]) for names in active_names],
+            "active_cluster_count": [len(weights) for weights in active_cluster_weights],
+            "active_clusters": [", ".join(weights.keys()) for weights in active_cluster_weights],
+            "active_signal_count": [len(names) for names in active_raw_names],
+            "active_signals": [", ".join(names[:10]) for names in active_raw_names],
         }
     )
     max_score = float(result["risk_score"].max())
     result["risk_score_0_100"] = (result["risk_score"] / max_score * 100.0) if max_score > 0 else 0.0
-    return result[["ts", "risk_score", "risk_score_0_100", "active_signal_count", "active_signals"]]
+    return result[_calendar_columns()]
 
 
 def load_future_ephemeris_frame(
@@ -146,6 +167,24 @@ def load_future_ephemeris_frame(
     return pivot_ephemeris_facts(facts)
 
 
+def required_cluster_context_metrics(signal_frame: pd.DataFrame, *, cluster_mode: str = DEFAULT_CLUSTER_MODE) -> tuple[str, ...]:
+    if cluster_mode != "station_direction" or signal_frame.empty:
+        return ()
+    metrics: list[str] = []
+    for feature in signal_frame["feature"].dropna().astype(str):
+        body = _station_body(feature)
+        if body is None:
+            continue
+        metrics.extend(
+            [
+                f"{body}_lon_speed",
+                f"{body}_days_since_station",
+                f"{body}_days_until_station",
+            ]
+        )
+    return tuple(dict.fromkeys(metrics))
+
+
 def pivot_ephemeris_facts(facts: pd.DataFrame) -> pd.DataFrame:
     if facts.empty:
         return pd.DataFrame(columns=["ts"])
@@ -176,8 +215,9 @@ def format_astro_risk_calendar_report(calendar: pd.DataFrame, signal_frame: pd.D
                 "  - "
                 f"{_format_ts(row['ts'])}: "
                 f"risk={row['risk_score_0_100']:.1f} "
-                f"active={int(row['active_signal_count'])} "
-                f"signals={row['active_signals'] or '-'}"
+                f"clusters={int(row.get('active_cluster_count', 0))} "
+                f"raw_signals={int(row.get('active_signal_count', 0))} "
+                f"active={row.get('active_clusters') or row.get('active_signals') or '-'}"
             )
     return "\n".join(lines)
 
@@ -196,6 +236,148 @@ def _daily_calendar(hourly: pd.DataFrame) -> pd.DataFrame:
     selected["ts"] = selected["date"]
     selected = selected.drop(columns=["date"])
     return selected.reset_index(drop=True)
+
+
+def _calendar_columns() -> list[str]:
+    return [
+        "ts",
+        "risk_score",
+        "risk_score_0_100",
+        "active_cluster_count",
+        "active_clusters",
+        "active_signal_count",
+        "active_signals",
+    ]
+
+
+def _cluster_label_for_signal(
+    frame: pd.DataFrame,
+    *,
+    index: int,
+    feature: str,
+    tail: str,
+    cluster_mode: str,
+) -> str:
+    raw_label = f"{feature}:{tail}"
+    if cluster_mode == "raw":
+        return raw_label
+
+    body = _station_body(feature)
+    if body is None:
+        return _generic_cluster_label(feature, tail)
+
+    title = body.capitalize()
+    if cluster_mode == "station":
+        return f"{title} station / retrograde cluster"
+    return _station_direction_label(frame, index=index, body=body, fallback=f"{title} station / retrograde cluster")
+
+
+def _station_body(feature: str) -> str | None:
+    for body in STATION_BODIES:
+        prefix = f"{body}_"
+        if feature.startswith(prefix) and any(marker in feature for marker in STATION_FEATURE_MARKERS):
+            return body
+    return None
+
+
+def _station_direction_label(frame: pd.DataFrame, *, index: int, body: str, fallback: str) -> str:
+    sign_change_direction = _nearest_station_sign_change_direction(frame, index=index, body=body)
+    if sign_change_direction is not None:
+        return f"{body.capitalize()} {sign_change_direction} station cluster"
+
+    speed = _row_number(frame, index, f"{body}_lon_speed")
+    if speed is None:
+        return fallback
+
+    since = _row_number(frame, index, f"{body}_days_since_station")
+    until = _row_number(frame, index, f"{body}_days_until_station")
+    title = body.capitalize()
+
+    if since is not None and until is not None:
+        station_is_behind = since <= until
+    elif since is not None:
+        station_is_behind = True
+    elif until is not None:
+        station_is_behind = False
+    else:
+        return f"{title} retrograde window cluster" if speed < 0 else f"{title} direct-motion slowdown cluster"
+
+    if station_is_behind:
+        return f"{title} direct-to-retrograde station cluster" if speed < 0 else f"{title} retrograde-to-direct station cluster"
+    return f"{title} direct-to-retrograde station cluster" if speed >= 0 else f"{title} retrograde-to-direct station cluster"
+
+
+def _nearest_station_sign_change_direction(frame: pd.DataFrame, *, index: int, body: str) -> str | None:
+    column = f"{body}_lon_speed"
+    if column not in frame.columns:
+        return None
+    speeds = pd.to_numeric(frame[column], errors="coerce")
+    if speeds.notna().sum() < 2:
+        return None
+
+    candidates: list[tuple[int, str]] = []
+    previous_index = None
+    previous_speed = None
+    for current_index, current_speed in speeds.items():
+        if pd.isna(current_speed):
+            continue
+        current_speed = float(current_speed)
+        if previous_index is not None and previous_speed is not None:
+            if previous_speed > 0 and current_speed < 0:
+                candidates.append((int(current_index), "direct-to-retrograde"))
+            elif previous_speed < 0 and current_speed > 0:
+                candidates.append((int(current_index), "retrograde-to-direct"))
+        previous_index = int(current_index)
+        previous_speed = current_speed
+    if not candidates:
+        return None
+
+    distances = [value for value in (_row_number(frame, index, f"{body}_days_since_station"), _row_number(frame, index, f"{body}_days_until_station")) if value is not None]
+    max_distance_days = max(1.0, max(distances) if distances else 10.0)
+    nearest_index, direction = min(candidates, key=lambda candidate: abs(candidate[0] - index))
+    if _index_distance_days(frame, index, nearest_index) <= max_distance_days + 1.0:
+        return direction
+    return None
+
+
+def _index_distance_days(frame: pd.DataFrame, left_index: int, right_index: int) -> float:
+    if "ts" not in frame.columns:
+        return float(abs(left_index - right_index)) / 24.0
+    try:
+        left_ts = pd.Timestamp(frame.at[left_index, "ts"])
+        right_ts = pd.Timestamp(frame.at[right_index, "ts"])
+    except (KeyError, TypeError, ValueError):
+        return float(abs(left_index - right_index)) / 24.0
+    if pd.isna(left_ts) or pd.isna(right_ts):
+        return float(abs(left_index - right_index)) / 24.0
+    return abs((right_ts - left_ts).total_seconds()) / 86400.0
+
+
+def _generic_cluster_label(feature: str, tail: str) -> str:
+    if "aspect_strength" in feature or "_angle_" in feature:
+        return f"{_feature_prefix(feature)} angle / aspect cluster"
+    if "declination" in feature or feature.endswith("_is_oob"):
+        return f"{_feature_prefix(feature)} declination / OOB cluster"
+    if feature.startswith("moon_phase") or feature == "moon_is_waxing":
+        return "Moon phase cluster"
+    return f"{feature}:{tail}"
+
+
+def _feature_prefix(feature: str) -> str:
+    parts = feature.split("_")
+    return " ".join(part.capitalize() for part in parts[:2])
+
+
+def _row_number(frame: pd.DataFrame, index: int, column: str) -> float | None:
+    if column not in frame.columns:
+        return None
+    try:
+        value = float(frame.at[index, column])
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
 
 
 def _parse_utc(value: str) -> datetime:
@@ -223,6 +405,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--min-lift", type=float, default=DEFAULT_MIN_LIFT, help="Minimum signal lift to include.")
     parser.add_argument("--min-signal-observations", type=int, default=DEFAULT_MIN_SIGNAL_OBSERVATIONS)
     parser.add_argument("--top-signals", type=int, default=25, help="Maximum number of historical signal rules to apply.")
+    parser.add_argument(
+        "--cluster-mode",
+        choices=("raw", "station", "station_direction"),
+        default=DEFAULT_CLUSTER_MODE,
+        help="How to collapse correlated raw signal rows.",
+    )
     parser.add_argument("--frequency", choices=("hourly", "daily"), default="daily", help="Output calendar frequency.")
     parser.add_argument("--top", type=int, default=15, help="Number of top risk windows to print.")
     parser.add_argument("--output", default=None, help="Optional CSV output path.")
@@ -238,9 +426,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ephemeris = load_future_ephemeris_frame(
         start_utc=_parse_utc(args.start),
         end_utc=_parse_utc(args.end),
-        metrics=tuple(signals["feature"].dropna().astype(str).unique()),
+        metrics=tuple(
+            dict.fromkeys(
+                tuple(signals["feature"].dropna().astype(str).unique())
+                + required_cluster_context_metrics(signals, cluster_mode=args.cluster_mode)
+            )
+        ),
     )
-    calendar = build_astro_risk_calendar(ephemeris, signals, frequency=args.frequency)
+    calendar = build_astro_risk_calendar(ephemeris, signals, frequency=args.frequency, cluster_mode=args.cluster_mode)
     print(format_astro_risk_calendar_report(calendar, signals, top=args.top))
     if args.output:
         export_calendar(calendar, Path(args.output))

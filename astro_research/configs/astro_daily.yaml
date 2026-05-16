@@ -1,0 +1,98 @@
+dataset:
+  dataset_id: astro_daily_v1_swe_utc00
+  calc_version: v1
+  timezone: UTC
+  daily_sample_time_utc: "00:00:00"
+  target_start: "1926-01-01"
+  target_end: "2025-12-31"
+  buffer_days: 400
+
+ephemeris:
+  backend: swiss_ephemeris
+  validation_backend: jpl_horizons
+  position_type: geocentric
+  zodiac: tropical
+  apparent_position: true
+  include_speed: true
+
+bodies:
+  position_bodies:
+    - Sun
+    - Moon
+    - Mercury
+    - Venus
+    - Mars
+    - Jupiter
+    - Saturn
+    - Uranus
+    - Neptune
+    - Pluto
+  retrograde_bodies:
+    - Mercury
+    - Venus
+    - Mars
+    - Jupiter
+    - Saturn
+    - Uranus
+    - Neptune
+    - Pluto
+
+retrograde:
+  station_scan_step_hours: 6
+  station_refine_tolerance_seconds: 60
+  station_phase_days: 7
+  pre_post_window_days: 14
+  event_study_window_days: 30
+
+moon_phase:
+  exact_events:
+    - NewMoon
+    - FirstQuarter
+    - FullMoon
+    - LastQuarter
+  daily_bins:
+    enabled: true
+
+aspects:
+  aspect_bodies:
+    - Sun
+    - Moon
+    - Mercury
+    - Venus
+    - Mars
+    - Jupiter
+    - Saturn
+    - Uranus
+    - Neptune
+    - Pluto
+  major_aspects:
+    conjunction: 0
+    sextile: 60
+    square: 90
+    trine: 120
+    opposition: 180
+  default_orbs_deg:
+    conjunction: 8
+    opposition: 8
+    square: 6
+    trine: 6
+    sextile: 4
+  exact_scan_step_hours: 12
+  exact_refine_tolerance_seconds: 120
+
+declination:
+  oob_threshold_mode: dynamic_obliquity
+  fallback_oob_threshold_deg: 23.4367
+
+clusters:
+  station_cluster_windows_days:
+    - 3
+    - 7
+    - 14
+  aspect_cluster_windows_days:
+    - 3
+    - 7
+    - 14
+  weighted_pressure:
+    enabled: true
+    half_life_days: 3

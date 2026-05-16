@@ -106,9 +106,12 @@ test split 裡較強的例子：
 
 1. 把高度相關的 raw features 折疊成事件簇。
    - 例如 Venus station cluster、Mercury station cluster、Mars station cluster。
+   - 已在 `astro-abm-astro-risk-calendar --cluster-mode station_direction` 中實作初版。
+   - station 類事件會進一步分成 direct-to-retrograde station 與 retrograde-to-direct station。
 
 2. 風險日曆不要用 raw active feature count 加總。
    - 改成 cluster-level score，避免同一個天體事件被重複計分。
+   - raw signal count 仍可保留作為 debug 欄位，但不應直接當作風險分數。
 
 3. 加入市場側確認。
    - realized volatility
