@@ -31,6 +31,8 @@ window_days: 90
     assert len(paths) == 1
     assert "no causal claim" in paths[0].read_text()
     assert "missing_component: `market_features`" in paths[0].read_text()
+    assert (tmp_path / "out" / "index.md").exists()
+    assert "descriptive case-study overview" in (tmp_path / "out" / "index.md").read_text()
 
 
 def test_casebook_reports_descriptive_market_stress_and_event_context(tmp_path):
@@ -88,3 +90,14 @@ window_days: 90
     assert "| mean_cross_asset_stress_score | 0.8000 |" in text
     assert "| mars_saturn_hard_aspect | astro_aspect_events | 1 | 1 |" in text
     assert "does not assert causality, prediction, investment advice, or a trading signal" in text
+
+    index = (tmp_path / "out" / "index.md").read_text()
+    assert "# Crisis Casebook Index" in index
+    assert "Case" in index
+    assert "2020-03-16 to 2020-03-16" in index
+    assert "SPX abs_ret_rank_252d=0.9900 on 2020-03-16" in index
+    assert "rows=2;mean=0.8000;max=0.9000;max_components=5.0000" in index
+    assert "macro_core_aspect_cluster=1;mars_saturn_hard_aspect=1" in index
+    assert "market_asset:BTC" in index
+    assert "descriptive_only,association_review_only,local_data_caveats_apply,missing_components" in index
+    assert "does not assert causality, prediction, investment advice, or a trading signal" in index

@@ -24,6 +24,7 @@ def build_casebook(config_path: str | Path, *, root: str | Path | None = None, o
         if not frame.empty and column in frame.columns:
             frame[column] = pd.to_datetime(frame[column], utc=True).dt.normalize()
     paths = []
+    index_rows = []
     for row in catalog.itertuples(index=False):
         start = pd.Timestamp(row.start_date, tz="UTC")
         left = start - pd.Timedelta(days=window_days)
@@ -31,6 +32,7 @@ def build_casebook(config_path: str | Path, *, root: str | Path | None = None, o
         nearby_events = events[(events["event_ts"] >= left) & (events["event_ts"] <= right)] if not events.empty else pd.DataFrame()
         nearby_market = market[(market["ts"] >= left) & (market["ts"] <= right)] if not market.empty else pd.DataFrame()
         nearby_stress = stress[(stress["ts"] >= left) & (stress["ts"] <= right)] if not stress.empty else pd.DataFrame()
+        missing_components = _missing_case_components(events=nearby_events, market=nearby_market, stress=nearby_stress)
         path = output / f"{row.event_id}.md"
         path.write_text(
             _case_markdown(
@@ -44,6 +46,17 @@ def build_casebook(config_path: str | Path, *, root: str | Path | None = None, o
             )
         )
         paths.append(path)
+        index_rows.append(
+            _case_index_row(
+                row,
+                nearby_events,
+                nearby_market,
+                nearby_stress,
+                missing_components=missing_components,
+                report_path=path.name,
+            )
+        )
+    (output / "index.md").write_text(_casebook_index_markdown(index_rows, data_version=data_version, window_days=window_days))
     return paths
 
 
@@ -122,6 +135,75 @@ def _input_availability(*, events: pd.DataFrame, market: pd.DataFrame, stress: p
     }
 
 
+def _casebook_index_markdown(rows: list[dict[str, str]], *, data_version: str, window_days: int) -> str:
+    lines = [
+        "# Crisis Casebook Index",
+        "",
+        f"data_version: `{data_version}`",
+        f"default_case_window: `+/- {window_days} days`",
+        "",
+        "## Interpretation Boundary",
+        "",
+        "This index is a descriptive case-study overview for historical association review only. It does not assert causality, prediction, investment advice, or a trading signal.",
+        "",
+        "## Case Overview",
+        "",
+        "| crisis | window | market_stress_peak | financial_stress_daily | astro_event_families | missing_components | caveat_flags | report |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    if not rows:
+        lines.append("| none |  |  |  |  |  |  |  |")
+    for row in rows:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    row["crisis"],
+                    row["window"],
+                    row["market_stress_peak"],
+                    row["financial_stress_daily"],
+                    row["astro_event_families"],
+                    row["missing_components"],
+                    row["caveat_flags"],
+                    row["report"],
+                ]
+            )
+            + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Caveats",
+            "",
+            "- Descriptive case-study overview only; no causal claim is made.",
+            "- Local data caveats, proxy flags, coverage gaps, and licensing limitations still apply.",
+            "- Missing inputs are surfaced as review gaps and are not silently filled.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _case_index_row(
+    row,
+    events: pd.DataFrame,
+    market: pd.DataFrame,
+    stress: pd.DataFrame,
+    *,
+    missing_components: list[str],
+    report_path: str,
+) -> dict[str, str]:
+    return {
+        "crisis": _pipe_safe(str(getattr(row, "event_name", ""))),
+        "window": _pipe_safe(f"{getattr(row, 'start_date', '')} to {getattr(row, 'end_date', '')}"),
+        "market_stress_peak": _pipe_safe(_market_stress_peak(market)),
+        "financial_stress_daily": _pipe_safe(_financial_stress_text(stress)),
+        "astro_event_families": _pipe_safe(_event_family_counts(events)),
+        "missing_components": _pipe_safe(",".join(missing_components) if missing_components else "none"),
+        "caveat_flags": _pipe_safe(_case_caveat_flags(missing_components=missing_components, market=market, stress=stress)),
+        "report": f"[{report_path}]({report_path})",
+    }
+
+
 def _missing_case_components(*, events: pd.DataFrame, market: pd.DataFrame, stress: pd.DataFrame) -> list[str]:
     missing = []
     if events.empty:
@@ -138,6 +220,56 @@ def _missing_case_components(*, events: pd.DataFrame, market: pd.DataFrame, stre
     elif "cross_asset_stress_score" not in stress.columns or stress["cross_asset_stress_score"].dropna().empty:
         missing.append("cross_asset_stress_score")
     return missing
+
+
+def _market_stress_peak(market: pd.DataFrame) -> str:
+    if market.empty or "asset" not in market.columns:
+        return "none"
+    candidates: list[tuple[float, str]] = []
+    for row in market.itertuples(index=False):
+        asset = str(getattr(row, "asset", ""))
+        ts = _date_text(getattr(row, "ts", pd.NaT))
+        if hasattr(row, "abs_ret_rank_252d") and pd.notna(getattr(row, "abs_ret_rank_252d")):
+            value = float(getattr(row, "abs_ret_rank_252d"))
+            candidates.append((value, f"{asset} abs_ret_rank_252d={value:.4f} on {ts}"))
+        if hasattr(row, "realized_vol_20d") and pd.notna(getattr(row, "realized_vol_20d")):
+            value = float(getattr(row, "realized_vol_20d"))
+            candidates.append((value, f"{asset} realized_vol_20d={value:.4f} on {ts}"))
+        if hasattr(row, "drawdown_60d") and pd.notna(getattr(row, "drawdown_60d")):
+            value = abs(float(getattr(row, "drawdown_60d")))
+            candidates.append((value, f"{asset} drawdown_60d={float(getattr(row, 'drawdown_60d')):.4f} on {ts}"))
+    if not candidates:
+        return "none"
+    return max(candidates, key=lambda item: item[0])[1]
+
+
+def _financial_stress_text(stress: pd.DataFrame) -> str:
+    if stress.empty:
+        return "rows=0"
+    return (
+        f"rows={len(stress)};"
+        f"mean={_fmt(_series_mean(stress, 'cross_asset_stress_score'))};"
+        f"max={_fmt(_series_max(stress, 'cross_asset_stress_score'))};"
+        f"max_components={_fmt(_series_max(stress, 'component_count'))}"
+    )
+
+
+def _event_family_counts(events: pd.DataFrame) -> str:
+    if events.empty or "event_family" not in events.columns:
+        return "none"
+    counts = events["event_family"].fillna("missing").astype(str).value_counts().sort_index()
+    return ";".join(f"{family}={count}" for family, count in counts.items())
+
+
+def _case_caveat_flags(*, missing_components: list[str], market: pd.DataFrame, stress: pd.DataFrame) -> str:
+    flags = ["descriptive_only", "association_review_only", "local_data_caveats_apply"]
+    if missing_components:
+        flags.append("missing_components")
+    if market.empty:
+        flags.append("market_missing")
+    if stress.empty:
+        flags.append("financial_stress_missing")
+    return ",".join(flags)
 
 
 def _market_summary_table(market: pd.DataFrame) -> str:
@@ -217,6 +349,10 @@ def _date_text(value) -> str:
 
 def _fmt(value: float) -> str:
     return "nan" if pd.isna(value) else f"{value:.4f}"
+
+
+def _pipe_safe(value: str) -> str:
+    return str(value).replace("|", "/").replace("\n", " ").strip()
 
 
 def _resolve(root: Path, path: str) -> Path:
