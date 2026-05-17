@@ -1084,6 +1084,20 @@ astro event family/source-table counts, and missing components. These reports
 are for review of historical overlap and must not be interpreted as causal
 claims, forecasts, investment advice, or trading signals.
 
+Run the end-to-end research workflow checkpoint:
+
+```bash
+uv run python scripts/research_workflow_checkpoint.py
+```
+
+The checkpoint regenerates the current research-output path in order: crisis
+casebook reports and `index.md`, the H001-H004 exploratory formal batch, and
+the research readout summary. It writes generated artifacts under
+`astro_research/output/reports/research_workflow_checkpoint/`, checks that no
+generated outputs or local CSVs are staged, scans the staged diff for common
+secret patterns, and verifies that the readout remains descriptive only: no
+causality, prediction, investment advice, or trading signal.
+
 Validate the research layer:
 
 ```bash
