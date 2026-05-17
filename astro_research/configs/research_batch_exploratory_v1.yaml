@@ -1,0 +1,55 @@
+run:
+  run_id: "exploratory_formal_batch_v1_1926_2025"
+  run_type: "exploratory_formal_batch"
+  not_publication_grade: true
+  association_only: true
+  local_data_warnings: true
+  credit_proxy_used: "BAA_MINUS_AAA"
+  yahoo_source_used: true
+  lbma_source_used: true
+  data_version: "exploratory_formal_batch_v1"
+  calc_version: "event_study_v2"
+  random_seed: 42
+  bootstrap_samples: 10
+  placebo_samples: 10
+  placebo_event_cap: 40
+
+asset_groups:
+  long_history_assets: "SPX,Gold,DXY,US10Y,CreditProxy"
+  modern_assets: "VIX,BTC,ETH,NDX"
+
+inputs:
+  research_events_path: "astro_research/output/parquet/research_events/research_events.parquet"
+  market_features_path: "astro_research/output/parquet/market_daily/market_daily_features.parquet"
+  financial_stress_path: "astro_research/output/parquet/financial_stress/financial_stress_daily.parquet"
+  hypotheses_path: "astro_research/output/parquet/research_hypotheses/research_hypotheses.parquet"
+  readiness_json_path: "astro_research/output/reports/formal_research_readiness.json"
+
+studies:
+  H001_station_cluster_stress:
+    event_family: "station_cluster"
+    assets: "SPX,VIX,Gold,DXY,BTC"
+    metrics: "cumulative_log_ret,realized_vol,max_drawdown,extreme_absret_frequency,stress_score_mean,cross_asset_stress_frequency"
+    windows: "pm7,pm14,pm30"
+    baselines: "non_event,month_matched,volatility_regime_matched"
+
+  H002_mercury_station_volatility:
+    event_family: "mercury_station"
+    assets: "SPX,NDX,VIX,BTC,ETH"
+    metrics: "cumulative_log_ret,realized_vol,max_drawdown,extreme_absret_frequency,stress_score_mean,cross_asset_stress_frequency"
+    windows: "pm7,pm14,pm30"
+    baselines: "non_event,month_matched,volatility_regime_matched,weekday_matched"
+
+  H003_mars_saturn_hard_aspects:
+    event_family: "mars_saturn_hard_aspect"
+    assets: "SPX,VIX,Gold,DXY,BTC"
+    metrics: "cumulative_log_ret,realized_vol,max_drawdown,extreme_absret_frequency,stress_score_mean,cross_asset_stress_frequency"
+    windows: "pm7,pm14,pm30"
+    baselines: "non_event,month_matched,volatility_regime_matched"
+
+  H004_macro_core_aspect_cluster:
+    event_family: "macro_core_aspect_cluster"
+    assets: "SPX,VIX,Gold,US10Y,CreditProxy"
+    metrics: "stress_score_mean,cross_asset_stress_frequency,realized_vol,max_drawdown"
+    windows: "pm7,pm14,pm30"
+    baselines: "non_event,month_matched,volatility_regime_matched"

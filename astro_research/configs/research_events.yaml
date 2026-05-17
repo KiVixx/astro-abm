@@ -4,10 +4,20 @@ dataset:
   calc_version: "research_events_v1"
 
 inputs:
-  astro_event_windows_path: "astro_research/output/parquet/astro_daily/astro_event_windows.parquet"
-  astro_daily_features_path: "astro_research/output/parquet/astro_daily/astro_daily_features.parquet"
-  aspect_chunks_dir: "astro_research/output/parquet/aspect_chunks/macro_core_1926_2025/aspects"
+  astro_event_windows_path: "astro_research/output/parquet/astro_daily_1926_2025/astro_event_windows.csv"
+  astro_daily_features_path: "astro_research/output/parquet/astro_daily_1926_2025/astro_daily_features.csv"
   moon_phase_events_path: "astro_research/output/parquet/astro_daily/astro_moon_phase_events.parquet"
+
+aspect_inputs:
+  macro_core:
+    aspect_chunks_dir: "astro_research/output/parquet/aspect_chunks_mvp35/macro_core_1926_2025/aspects"
+    aspect_profile: "macro_core"
+    body_pairs: "Jupiter_Mars,Jupiter_Neptune,Jupiter_Pluto,Jupiter_Saturn,Jupiter_Uranus,Mars_Neptune,Mars_Pluto,Mars_Saturn,Mars_Uranus,Neptune_Pluto,Neptune_Saturn,Neptune_Uranus,Pluto_Saturn,Pluto_Uranus,Saturn_Uranus"
+    aspect_names: "conjunction,sextile,square,trine,opposition"
+    hard_aspects: "conjunction,square,opposition"
+    cluster_window_days: "14,7"
+    cluster_percentile: 0.90
+    cluster_merge_days: 7
 
 event_families:
   station_bodies: "Mercury,Venus,Mars,Jupiter,Saturn"

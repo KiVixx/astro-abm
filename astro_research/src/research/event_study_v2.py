@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -40,8 +41,14 @@ RESULT_COLUMNS = [
     "effect_direction",
     "effect_direction_match",
     "n_events",
+    "n_events_with_asset_coverage",
+    "n_events_total",
+    "coverage_pct",
     "n_observations",
     "n_baseline_observations",
+    "asset_start",
+    "asset_end",
+    "missing_components",
     "sample_warning",
     "overlap_warning",
     "coverage_warning",
@@ -95,6 +102,8 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
     random_seed = int(run_config.get("random_seed", 42))
     bootstrap_samples = int(run_config.get("bootstrap_samples", 500))
     placebo_samples = int(run_config.get("placebo_samples", 500))
+    placebo_event_cap = int(run_config.get("placebo_event_cap", 0))
+    run_metadata = _run_metadata(run_config, raw.get("asset_groups", {}))
 
     events = _prepare_events(read_table(_resolve(root_path, str(inputs.get("research_events_path", "")))))
     market = _prepare_market(read_table(_resolve(root_path, str(inputs.get("market_features_path", "")))))
@@ -104,7 +113,7 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
         raise ValueError("Formal research batch requires registered hypotheses.")
     rows = []
     run_rows = []
-    warnings = []
+    warnings = _metadata_warnings(run_metadata)
     placebo_cache: dict[tuple[str, str, str, str], float] = {}
     now = datetime.now(UTC)
     for hypothesis_id, study in raw.get("studies", {}).items():
@@ -124,13 +133,20 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
         for asset in assets:
             asset_market = market[market["asset"] == asset].copy()
             asset_panel = _join_stress(asset_market, stress)
+            if asset_panel.empty and asset in {"CreditProxy", "HY_OAS"} and not stress.empty:
+                asset_panel = _stress_only_panel(stress, asset=asset)
             coverage_warning = "" if not asset_panel.empty else "missing_asset_coverage"
+            asset_start = asset_panel["ts"].min() if not asset_panel.empty and "ts" in asset_panel.columns else pd.NaT
+            asset_end = asset_panel["ts"].max() if not asset_panel.empty and "ts" in asset_panel.columns else pd.NaT
             for window in windows:
                 event_window = _expand_events(study_events, window)
                 if event_window.empty:
                     continue
+                coverage = _event_coverage(event_window, asset_panel, total_events=int(study_events["event_id"].nunique()))
+                missing_components = _missing_components(asset, asset_panel, metrics)
                 overlap_warning = "overlap_detected" if study_events["is_overlapping"].astype(bool).any() else ""
                 for baseline in baselines:
+                    baseline_warning = "weekday_matched_unstable_for_sparse_history" if baseline == "weekday_matched" and coverage["n_events_with_asset_coverage"] < 20 else ""
                     baseline_panel = _baseline_panel(asset_panel, event_window, baseline)
                     for metric in metrics:
                         event_values = _metric_values(event_window, asset_panel, metric)
@@ -141,15 +157,16 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
                         p_value = permutation_p_value(event_values, baseline_values, samples=bootstrap_samples, seed=random_seed)
                         placebo_key = (event_family, window, asset, metric)
                         if placebo_key not in placebo_cache:
-                            placebo_cache[placebo_key] = _placebo_percentile(event_window, asset_panel, metric, effect, samples=placebo_samples, seed=random_seed)
+                            placebo_cache[placebo_key] = _placebo_percentile(event_window, asset_panel, metric, effect, samples=placebo_samples, seed=random_seed, event_cap=placebo_event_cap)
                         placebo = placebo_cache[placebo_key]
                         sample_warning = _sample_warning(
-                            n_events=event_window["event_id"].nunique(),
+                            n_events=coverage["n_events_with_asset_coverage"],
                             n_observations=len(event_values),
                             min_events=int(hypothesis_row.get("min_events", 0)),
                             min_observations=int(hypothesis_row.get("min_observations", 0)),
                         )
-                        warning_count += int(bool(sample_warning or overlap_warning or coverage_warning))
+                        combined_coverage_warning = ";".join(item for item in (coverage_warning, baseline_warning) if item)
+                        warning_count += int(bool(sample_warning or overlap_warning or combined_coverage_warning or missing_components))
                         expected = direction_map.get(metric, "")
                         direction = _effect_direction(effect, base)
                         rows.append(
@@ -176,14 +193,20 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
                                 "effect_direction": direction,
                                 "effect_direction_match": _direction_match(expected, direction),
                                 "n_events": int(event_window["event_id"].nunique()),
+                                "n_events_with_asset_coverage": coverage["n_events_with_asset_coverage"],
+                                "n_events_total": coverage["n_events_total"],
+                                "coverage_pct": coverage["coverage_pct"],
                                 "n_observations": int(len(event_values)),
                                 "n_baseline_observations": int(len(baseline_values)),
+                                "asset_start": asset_start,
+                                "asset_end": asset_end,
+                                "missing_components": ",".join(missing_components),
                                 "sample_warning": sample_warning,
                                 "overlap_warning": overlap_warning,
-                                "coverage_warning": coverage_warning,
+                                "coverage_warning": combined_coverage_warning,
                                 "data_version": data_version,
                                 "calc_version": calc_version,
-                                "source_note": "association_only;calendar_day",
+                                "source_note": _source_note(run_metadata),
                                 "multiple_testing_group": str(hypothesis_row.get("multiple_testing_group", hypothesis_id)),
                             }
                         )
@@ -207,7 +230,7 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
                 "status": "completed_with_warnings" if warning_count else "completed",
                 "warning_count": warning_count,
                 "report_path": "",
-                "source_note": "association_only",
+                "source_note": _source_note(run_metadata),
             }
         )
     results = pd.DataFrame(rows, columns=RESULT_COLUMNS)
@@ -231,6 +254,7 @@ def write_batch_report(batch: BatchStudyResult, output_dir: str | Path, *, confi
         "hypothesis_snapshot.yaml": output / "hypothesis_snapshot.yaml",
         "coverage_report.csv": output / "coverage_report.csv",
         "warnings.json": output / "warnings.json",
+        "top_findings.md": output / "top_findings.md",
     }
     batch.results.to_csv(paths["results.csv"], index=False)
     batch.results.to_parquet(paths["results.parquet"], index=False)
@@ -239,8 +263,9 @@ def write_batch_report(batch: BatchStudyResult, output_dir: str | Path, *, confi
     paths["config_snapshot.yaml"].write_text(config_text)
     hypothesis_snapshot.to_csv(paths["hypothesis_snapshot.yaml"], index=False)
     _coverage_report(batch.results).to_csv(paths["coverage_report.csv"], index=False)
-    paths["warnings.json"].write_text(json.dumps(batch.warnings, indent=2))
+    paths["warnings.json"].write_text(json.dumps(_warnings_payload(batch), indent=2))
     paths["summary.md"].write_text(_summary(batch))
+    paths["top_findings.md"].write_text(top_findings_markdown(batch.results))
     return paths
 
 
@@ -270,6 +295,17 @@ def _join_stress(market: pd.DataFrame, stress: pd.DataFrame) -> pd.DataFrame:
     if stress.empty:
         return market
     return market.merge(stress, on="ts", how="left", suffixes=("", "_stress"))
+
+
+def _stress_only_panel(stress: pd.DataFrame, *, asset: str) -> pd.DataFrame:
+    panel = stress.copy()
+    panel["asset"] = asset
+    panel["source"] = "financial_stress_daily"
+    panel["log_ret_1d"] = math.nan
+    panel["realized_vol_20d"] = math.nan
+    panel["drawdown_20d"] = math.nan
+    panel["is_extreme_absret_95"] = math.nan
+    return panel
 
 
 def _expand_events(events: pd.DataFrame, window: str) -> pd.DataFrame:
@@ -319,6 +355,8 @@ def _metric_values(event_window: pd.DataFrame, panel: pd.DataFrame, metric: str)
         source = "is_extreme_absret_95"
     elif metric in {"cross_asset_stress_score", "stress_score_mean"}:
         source = "cross_asset_stress_score"
+    elif metric == "cross_asset_stress_frequency":
+        source = "is_cross_asset_stress"
     elif metric == "vix_spike_frequency":
         source = "is_vol_stress"
     elif metric == "vol_stress_score":
@@ -338,7 +376,7 @@ def _metric_values(event_window: pd.DataFrame, panel: pd.DataFrame, metric: str)
             values.append(float(series.sum()))
         elif metric == "median_log_ret":
             values.append(float(series.median()))
-        elif metric in {"extreme_absret_frequency", "vix_spike_frequency"}:
+        elif metric in {"extreme_absret_frequency", "vix_spike_frequency", "cross_asset_stress_frequency"}:
             values.append(float(series.mean()))
         else:
             values.append(float(series.mean()))
@@ -353,9 +391,13 @@ def _baseline_metric_values(panel: pd.DataFrame, metric: str) -> list[float]:
     return _metric_values(pseudo[["ts", "event_id"]], pseudo, metric)
 
 
-def _placebo_percentile(event_window: pd.DataFrame, panel: pd.DataFrame, metric: str, effect: float, *, samples: int, seed: int) -> float:
+def _placebo_percentile(event_window: pd.DataFrame, panel: pd.DataFrame, metric: str, effect: float, *, samples: int, seed: int, event_cap: int = 0) -> float:
     if math.isnan(effect) or event_window.empty or panel.empty:
         return math.nan
+    if event_cap and event_window["event_id"].nunique() > event_cap:
+        rng = np.random.default_rng(seed)
+        sampled_ids = rng.choice(event_window["event_id"].drop_duplicates().to_numpy(), size=event_cap, replace=False)
+        event_window = event_window[event_window["event_id"].isin(set(sampled_ids))].copy()
     eligible = panel[~panel["ts"].isin(set(event_window["ts"]))]["ts"].drop_duplicates().to_numpy()
     if len(eligible) == 0:
         return math.nan
@@ -406,39 +448,267 @@ def _mean(values) -> float:
 
 def _coverage_report(results: pd.DataFrame) -> pd.DataFrame:
     if results.empty:
-        return pd.DataFrame(columns=["asset", "coverage_warning_count"])
-    return results.groupby("asset", as_index=False)["coverage_warning"].apply(lambda series: int(series.astype(bool).sum())).rename(columns={"coverage_warning": "coverage_warning_count"})
+        return pd.DataFrame(columns=["hypothesis_id", "asset", "asset_start", "asset_end", "n_events_with_asset_coverage", "n_events_total", "coverage_pct", "missing_components", "coverage_warning_count"])
+    return (
+        results.groupby(["hypothesis_id", "asset"], as_index=False)
+        .agg(
+            asset_start=("asset_start", "min"),
+            asset_end=("asset_end", "max"),
+            n_events_with_asset_coverage=("n_events_with_asset_coverage", "max"),
+            n_events_total=("n_events_total", "max"),
+            coverage_pct=("coverage_pct", "max"),
+            missing_components=("missing_components", _join_unique),
+            coverage_warning_count=("coverage_warning", lambda series: int(series.astype(bool).sum())),
+        )
+    )
 
 
 def _summary(batch: BatchStudyResult) -> str:
     run_type = str(batch.runs["run_type"].iloc[0]) if not batch.runs.empty and "run_type" in batch.runs.columns else ""
     not_formal = run_type == "real_data_smoke"
+    exploratory = run_type == "exploratory_formal_batch"
     if batch.results.empty:
-        findings = "No rows produced.\n"
+        grouped = pd.DataFrame(columns=["hypothesis_id", "rows", "min_q", "warnings", "coverage"])
     else:
-        grouped = batch.results.groupby("hypothesis_id").agg(rows=("metric", "count"), min_q=("q_value_fdr", "min"), warnings=("sample_warning", lambda s: int(s.astype(bool).sum()))).reset_index()
-        lines = ["| hypothesis | rows | min_q | warning_rows | status |", "|---|---:|---:|---:|---|"]
-        for row in grouped.itertuples(index=False):
-            status = "insufficient_sample" if row.warnings else ("suggestive" if row.min_q < 0.10 else "exploratory")
-            lines.append(f"| {row.hypothesis_id} | {row.rows} | {row.min_q:.4g} | {row.warnings} | {status} |")
-        findings = "\n".join(lines) + "\n"
+        grouped = batch.results.groupby("hypothesis_id").agg(
+            rows=("metric", "count"),
+            min_q=("q_value_fdr", "min"),
+            warnings=("sample_warning", lambda s: int(s.astype(bool).sum())),
+            coverage=("coverage_pct", "mean"),
+        ).reset_index()
+    run_hypotheses = batch.runs[["hypothesis_id"]].drop_duplicates() if not batch.runs.empty else pd.DataFrame(columns=["hypothesis_id"])
+    grouped = run_hypotheses.merge(grouped, on="hypothesis_id", how="left")
+    lines = ["| hypothesis | rows | min_q | mean coverage | warning_rows | status |", "|---|---:|---:|---:|---:|---|"]
+    for row in grouped.itertuples(index=False):
+        rows = int(row.rows) if pd.notna(row.rows) else 0
+        warnings = int(row.warnings) if pd.notna(row.warnings) else 0
+        min_q = float(row.min_q) if pd.notna(row.min_q) else math.nan
+        coverage = float(row.coverage) if pd.notna(row.coverage) else 0.0
+        status = "no_eligible_rows" if rows == 0 else ("insufficient_sample" if warnings else ("suggestive" if min_q < 0.10 else "exploratory"))
+        min_q_text = f"{min_q:.4g}" if not math.isnan(min_q) else "nan"
+        lines.append(f"| {row.hypothesis_id} | {rows} | {min_q_text} | {coverage:.2%} | {warnings} | {status} |")
+    findings = "\n".join(lines) + "\n"
+    warning_payload = _warnings_payload(batch)
     return (
-        "# Research Batch Summary\n\n"
+        "# Exploratory Formal Batch Summary\n\n"
+        "## Executive Summary\n\n"
         f"run_id: `{batch.run_id}`\n\n"
         f"run_type: `{run_type}`\n\n"
-        f"not_formal_research: `{str(not_formal).lower()}`\n\n"
-        "Interpretation: historical association only; no causal claim is made. "
-        + ("This smoke run is for data and pipeline validation, not a formal research conclusion.\n\n" if not_formal else "\n\n")
-        + "## Primary Results\n\n"
+        f"not_publication_grade: `{str(exploratory).lower()}`\n\n"
+        "This run is exploratory and association-only. It is not publication-grade.\n\n"
+        "## Data Readiness Status\n\n"
+        "Formal readiness gate allowed exploratory formal batch execution with warnings.\n\n"
+        "## Major Caveats\n\n"
+        "- Local data provenance is incomplete.\n"
+        "- Results are coverage-aware and should be reviewed by asset history.\n"
+        "- This report is for hypothesis review, not operational decisions.\n\n"
+        "## Source/Licensing Warnings\n\n"
+        "- Yahoo-derived local SPX/DXY data is local research only and needs licensing review.\n"
+        "- LBMA/ICE gold data needs licensing review before publication.\n\n"
+        "## Credit Proxy Warning\n\n"
+        "- CreditProxy uses BAA_MINUS_AAA and is not equivalent to ICE/BofA HY OAS.\n\n"
+        "## Hypothesis-by-Hypothesis Results\n\n"
         + f"{findings}\n"
-        + "## Warnings\n\n"
-        + ("\n".join(f"- {warning}" for warning in batch.warnings) if batch.warnings else "- none")
-        + "\n"
+        + "## Robustness Checks\n\n"
+        "Baselines include non_event, month_matched, and volatility_regime_matched where configured. Weekday matching may be unstable for sparse early-history windows. Large event-family placebo calculations may use the configured event cap for maintainable exploratory runtime.\n\n"
+        "## Placebo Summary\n\n"
+        + _placebo_summary(batch.results)
+        + "\n## FDR Summary\n\n"
+        + _fdr_summary(batch.results)
+        + "\n## Warnings\n\n"
+        + ("\n".join(f"- {item['category']}: {item['message']}" for item in warning_payload["warnings"]) if warning_payload["warnings"] else "- none")
+        + "\n\n## Interpretation\n\n"
+        "Association only, not causal. No operational recommendation is made.\n\n"
+        "## Recommended Next Studies\n\n"
+        "- Re-run after provenance fields are completed.\n"
+        "- Replace credit proxy with licensed long-history HY OAS if available.\n"
+        "- Compare results against randomized astro-event placebo calendars.\n"
     )
 
 
 def _split(value: Any) -> list[str]:
     return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def _event_coverage(event_window: pd.DataFrame, panel: pd.DataFrame, *, total_events: int) -> dict[str, Any]:
+    if event_window.empty or panel.empty:
+        return {"n_events_with_asset_coverage": 0, "n_events_total": total_events, "coverage_pct": 0.0}
+    observed_dates = set(panel["ts"].dropna())
+    covered = event_window[event_window["ts"].isin(observed_dates)]["event_id"].nunique()
+    return {
+        "n_events_with_asset_coverage": int(covered),
+        "n_events_total": int(total_events),
+        "coverage_pct": float(covered / total_events) if total_events else 0.0,
+    }
+
+
+def _missing_components(asset: str, panel: pd.DataFrame, metrics: list[str]) -> list[str]:
+    missing = []
+    required = {
+        "cumulative_log_ret": "log_ret_1d",
+        "realized_vol": "realized_vol_20d",
+        "max_drawdown": "drawdown_20d",
+        "extreme_absret_frequency": "is_extreme_absret_95",
+        "stress_score_mean": "cross_asset_stress_score",
+        "cross_asset_stress_frequency": "is_cross_asset_stress",
+        "vol_stress_score": "vol_stress_score",
+        "credit_stress_score": "credit_stress_score",
+    }
+    for metric in metrics:
+        column = required.get(metric, metric)
+        if panel.empty or column not in panel.columns or pd.to_numeric(panel[column], errors="coerce").dropna().empty:
+            missing.append(column)
+    if asset in {"CreditProxy", "HY_OAS"}:
+        return [item for item in missing if item not in {"log_ret_1d", "realized_vol_20d", "drawdown_20d", "is_extreme_absret_95"}]
+    return sorted(set(missing))
+
+
+def _run_metadata(run_config: dict[str, Any], asset_groups: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "run_type",
+        "not_publication_grade",
+        "association_only",
+        "local_data_warnings",
+        "credit_proxy_used",
+        "yahoo_source_used",
+        "lbma_source_used",
+    )
+    metadata = {key: run_config.get(key) for key in keys if key in run_config}
+    metadata["long_history_assets"] = str(asset_groups.get("long_history_assets", ""))
+    metadata["modern_assets"] = str(asset_groups.get("modern_assets", ""))
+    return metadata
+
+
+def _metadata_warnings(metadata: dict[str, Any]) -> list[str]:
+    warnings = []
+    if metadata.get("yahoo_source_used"):
+        warnings.append("licensing: Yahoo local data is local research only; redistribution_allowed=false; publication_grade=false.")
+    if metadata.get("lbma_source_used"):
+        warnings.append("licensing: LBMA/ICE gold data requires licensing review before publication.")
+    if metadata.get("credit_proxy_used"):
+        warnings.append(f"credit_proxy: {metadata['credit_proxy_used']} is not equivalent to ICE/BofA HY OAS.")
+    if metadata.get("not_publication_grade"):
+        warnings.append("readiness: exploratory run is not publication-grade.")
+    return warnings
+
+
+def _source_note(metadata: dict[str, Any]) -> str:
+    parts = [
+        "association_only",
+        f"run_type={metadata.get('run_type', '')}",
+        f"not_publication_grade={metadata.get('not_publication_grade', '')}",
+        f"credit_proxy_used={metadata.get('credit_proxy_used', '')}",
+        f"yahoo_source_used={metadata.get('yahoo_source_used', '')}",
+        f"lbma_source_used={metadata.get('lbma_source_used', '')}",
+    ]
+    return ";".join(parts)
+
+
+def top_findings_markdown(results: pd.DataFrame, *, q_threshold: float = 0.10) -> str:
+    lines = [
+        "# Top Findings",
+        "",
+        "Threshold: `q_value_fdr < 0.10` with no sample warning and non-zero covered events.",
+        "",
+        "Interpretation: association only, not causal. No operational recommendation is made.",
+        "",
+    ]
+    if results.empty:
+        return "\n".join(lines + ["No robust findings under current thresholds.\n"])
+    eligible = results[
+        (pd.to_numeric(results["q_value_fdr"], errors="coerce") < q_threshold)
+        & (results["sample_warning"].fillna("") == "")
+        & (pd.to_numeric(results["n_events_with_asset_coverage"], errors="coerce") > 0)
+    ].copy()
+    if eligible.empty:
+        return "\n".join(lines + ["No robust findings under current thresholds.\n"])
+    eligible = eligible.sort_values(["q_value_fdr", "hypothesis_id", "asset"]).head(25)
+    lines.extend(["| hypothesis | asset | window | baseline | metric | q_value_fdr | effect_minus_baseline | caveat |", "|---|---|---|---|---|---:|---:|---|"])
+    for row in eligible.itertuples(index=False):
+        caveat = "Exploratory local-data result; review coverage, licensing, proxy, and placebo robustness."
+        lines.append(
+            f"| {row.hypothesis_id} | {row.asset} | {row.window_name} | {row.baseline_method} | {row.metric} | "
+            f"{row.q_value_fdr:.4g} | {row.effect_minus_baseline:.4g} | {caveat} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def validate_exploratory_batch_outputs(output_dir: str | Path) -> list[str]:
+    output = Path(output_dir)
+    warnings: list[str] = []
+    forbidden = ("caused", "causes", "predicts with certainty", "guaranteed", "trading signal")
+    for name in ("summary.md", "top_findings.md"):
+        path = output / name
+        if not path.exists():
+            warnings.append(f"{name}: missing")
+            continue
+        text = path.read_text().lower()
+        for phrase in forbidden:
+            if phrase in text:
+                warnings.append(f"{name}: forbidden causal/operational phrase `{phrase}`")
+    runs_path = output / "event_study_runs.csv"
+    if runs_path.exists():
+        runs = pd.read_csv(runs_path)
+        if "run_type" in runs.columns and (runs["run_type"] == "final").any():
+            warnings.append("run_type must not be final")
+    else:
+        warnings.append("event_study_runs.csv: missing")
+    warnings_path = output / "warnings.json"
+    if warnings_path.exists():
+        payload = json.loads(warnings_path.read_text())
+        text = json.dumps(payload).lower()
+        if "licensing" not in text:
+            warnings.append("warnings.json missing licensing caveat")
+        if "credit_proxy" not in text and "baa_minus_aaa" not in text:
+            warnings.append("warnings.json missing credit proxy caveat")
+    else:
+        warnings.append("warnings.json: missing")
+    results_path = output / "results.parquet"
+    if results_path.exists():
+        results = pd.read_parquet(results_path)
+        if "hypothesis_id" not in results.columns or results["hypothesis_id"].isna().any() or (results["hypothesis_id"].astype(str) == "").any():
+            warnings.append("all formal results must reference hypothesis_id")
+    elif (output / "results.csv").exists():
+        results = pd.read_csv(output / "results.csv")
+        if "hypothesis_id" not in results.columns or results["hypothesis_id"].isna().any() or (results["hypothesis_id"].astype(str) == "").any():
+            warnings.append("all formal results must reference hypothesis_id")
+    else:
+        warnings.append("results file missing")
+    return warnings
+
+
+def _warnings_payload(batch: BatchStudyResult) -> dict[str, Any]:
+    warnings = []
+    for warning in batch.warnings:
+        if ":" in warning:
+            category, message = warning.split(":", 1)
+            warnings.append({"category": category.strip(), "message": message.strip()})
+        else:
+            warnings.append({"category": "batch", "message": warning})
+    return {"warnings": warnings, "warning_count": len(warnings)}
+
+
+def _placebo_summary(results: pd.DataFrame) -> str:
+    if results.empty or "placebo_percentile" not in results.columns:
+        return "- no placebo results\n"
+    clean = pd.to_numeric(results["placebo_percentile"], errors="coerce").dropna()
+    if clean.empty:
+        return "- no valid placebo percentiles\n"
+    return f"- median placebo percentile: {clean.median():.4f}\n- rows with placebo percentile: {len(clean)}\n"
+
+
+def _fdr_summary(results: pd.DataFrame) -> str:
+    if results.empty or "q_value_fdr" not in results.columns:
+        return "- no FDR results\n"
+    q = pd.to_numeric(results["q_value_fdr"], errors="coerce")
+    return f"- rows q<0.10: {int((q < 0.10).sum())}\n- minimum q: {q.min():.4g}\n"
+
+
+def _join_unique(values: pd.Series) -> str:
+    tokens = []
+    for value in values.dropna().astype(str):
+        tokens.extend(item for item in value.split(",") if item)
+    return ",".join(sorted(set(tokens)))
 
 
 def _resolve(root: Path, path: str) -> Path:
