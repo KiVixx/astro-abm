@@ -830,6 +830,12 @@ rebuilds should be treated as long batch jobs. For frequent iteration, use a
 small date range first and keep generated snapshots under
 `astro_research/output/`, which is git-ignored.
 
+Repository hygiene tests enforce this boundary: generated
+`astro_research/output/` files, real local research CSVs under
+`astro_research/data/local/`, `.env`, and private key files must not be tracked
+by git. Commit only the local data README, example schemas, and
+`LOCAL_DATA_PROVENANCE.json` manifest.
+
 For maintainable 100-year exact aspect builds, use the optimized chunk mode.
 It writes one pair/year snapshot per directory:
 
@@ -997,6 +1003,11 @@ python scripts/build_data_source_registry.py \
   --output astro_research/output/reports/source_registry.md
 ```
 
+The registry preserves local provenance metadata such as coverage dates,
+local-only flags, redistribution/publication status, proxy markers, and
+licensing-review caveats. These fields are part of the `data_source_registry`
+table schema and should survive optional QuestDB ingest.
+
 Build real macro data when `FRED_API_KEY` is available:
 
 ```bash
@@ -1048,6 +1059,16 @@ python scripts/run_research_batch.py \
   --output astro_research/output/reports/research_batch_v1_1926_2025
 ```
 
+Batch report directories include `config_snapshot.yaml`,
+`hypothesis_snapshot.yaml`, `coverage_report.csv`, `event_traceability.csv`,
+`warnings.json`, `run_manifest.json`, `summary.md`, and `top_findings.md`.
+`run_manifest.json` is the machine-readable reproducibility anchor: it records
+the run id, config snapshot hash, git commit/dirty state, readiness status,
+input row/schema fingerprints, output artifact hashes, and warning payload. The
+traceability file is part of the same contract: aspect-family studies such as
+H003 and H004 must show `astro_aspect_events` as their source table with
+non-zero eligible event counts and source event id examples.
+
 Build the descriptive crisis casebook:
 
 ```bash
@@ -1056,12 +1077,27 @@ python scripts/build_crisis_casebook.py \
   --output astro_research/output/reports/casebook
 ```
 
+Casebook reports are generated artifacts and should stay under
+`astro_research/output/`. Each case report is descriptive only: it lists input
+availability, market feature window summaries, financial-stress summaries,
+astro event family/source-table counts, and missing components. These reports
+are for review of historical overlap and must not be interpreted as causal
+claims, forecasts, investment advice, or trading signals.
+
 Validate the research layer:
 
 ```bash
 python scripts/validate_research_layer.py \
   --output astro_research/output/reports/research_layer_validation.md
 ```
+
+Validation checks duplicate keys, missing tables, source-registry metadata
+presence, macro original/transformed frequency consistency, coverage audit
+columns, event-study result hypothesis ids, research run manifest completeness,
+and H003/H004 aspect traceability when `event_traceability.csv` is available.
+It also warns when timing-sensitive daily research tables lack `available_ts`
+or `observed_ts`; those warnings mean the current output should be interpreted
+as historical association/event-study context, not as a point-in-time backtest.
 
 ### 11. Simulation layer
 After the live hourly pipeline is stable, the project can move into:

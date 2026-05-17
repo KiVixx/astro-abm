@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import math
 import re
-from dataclasses import dataclass
+import hashlib
+import subprocess
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -82,17 +84,43 @@ RUN_COLUMNS = [
 ]
 
 
+TRACEABILITY_COLUMNS = [
+    "hypothesis_id",
+    "event_family",
+    "source_table",
+    "source_event_count",
+    "eligible_event_count",
+    "primary_event_count",
+    "source_event_id_examples",
+    "source_note",
+]
+
+RUN_MANIFEST_VERSION = "research_run_manifest_v1"
+
+
 @dataclass(frozen=True)
 class BatchStudyResult:
     results: pd.DataFrame
     runs: pd.DataFrame
     warnings: list[str]
     run_id: str
+    event_traceability: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=TRACEABILITY_COLUMNS))
+    readiness: dict[str, Any] = field(default_factory=dict)
+    config_path: str = ""
+    config_hash: str = ""
+    git_commit: str = ""
+    git_dirty: bool = False
+    input_fingerprints: list[dict[str, Any]] = field(default_factory=list)
+    run_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def run_research_batch(config_path: str | Path, *, root: str | Path | None = None, run_id_override: str | None = None) -> BatchStudyResult:
     root_path = Path(root or Path.cwd())
-    config_text = Path(config_path).read_text()
+    config_file = Path(config_path)
+    config_text = config_file.read_text()
+    config_hash = _sha256_text(config_text)
+    git_commit = _git_commit(root_path)
+    git_dirty = _git_dirty(root_path)
     raw = _parse_simple_yaml(config_text)
     run_config = raw.get("run", {})
     inputs = raw.get("inputs", {})
@@ -104,16 +132,32 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
     placebo_samples = int(run_config.get("placebo_samples", 500))
     placebo_event_cap = int(run_config.get("placebo_event_cap", 0))
     run_metadata = _run_metadata(run_config, raw.get("asset_groups", {}))
+    readiness_path = _resolve(root_path, str(inputs.get("readiness_json_path", ""))) if inputs.get("readiness_json_path") else Path("")
+    readiness = _load_readiness(readiness_path) if inputs.get("readiness_json_path") else {}
 
-    events = _prepare_events(read_table(_resolve(root_path, str(inputs.get("research_events_path", "")))))
-    market = _prepare_market(read_table(_resolve(root_path, str(inputs.get("market_features_path", "")))))
-    stress = _prepare_stress(read_optional_table(_resolve(root_path, str(inputs.get("financial_stress_path", "")))))
-    hypotheses = read_table(_resolve(root_path, str(inputs.get("hypotheses_path", ""))))
+    events_path = _resolve(root_path, str(inputs.get("research_events_path", "")))
+    market_path = _resolve(root_path, str(inputs.get("market_features_path", "")))
+    stress_path = _resolve(root_path, str(inputs.get("financial_stress_path", "")))
+    hypotheses_path = _resolve(root_path, str(inputs.get("hypotheses_path", "")))
+    events = _prepare_events(read_table(events_path))
+    market = _prepare_market(read_table(market_path))
+    stress = _prepare_stress(read_optional_table(stress_path))
+    hypotheses = read_table(hypotheses_path)
+    input_fingerprints = [
+        _table_fingerprint("research_events", events_path, events, root=root_path),
+        _table_fingerprint("market_daily_features", market_path, market, root=root_path),
+        _table_fingerprint("financial_stress_daily", stress_path, stress, root=root_path),
+        _table_fingerprint("research_hypotheses", hypotheses_path, hypotheses, root=root_path),
+        _json_fingerprint("formal_readiness", readiness_path, readiness, root=root_path) if inputs.get("readiness_json_path") else {},
+    ]
+    input_fingerprints = [item for item in input_fingerprints if item]
     if "hypothesis_id" not in hypotheses.columns:
         raise ValueError("Formal research batch requires registered hypotheses.")
     rows = []
     run_rows = []
+    traceability_rows = []
     warnings = _metadata_warnings(run_metadata)
+    warnings.extend(_readiness_warnings(readiness))
     placebo_cache: dict[tuple[str, str, str, str], float] = {}
     now = datetime.now(UTC)
     for hypothesis_id, study in raw.get("studies", {}).items():
@@ -124,6 +168,7 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
         hypothesis_row = hypothesis.iloc[-1]
         event_family = str(study.get("event_family", hypothesis_row.get("event_family", "")))
         study_events = events[(events["event_family"] == event_family) & (events["eligible_for_event_study"].astype(bool))]
+        traceability_rows.extend(_event_traceability_rows(hypothesis_id=hypothesis_id, event_family=event_family, study_events=study_events))
         assets = _split(study.get("assets", hypothesis_row.get("primary_assets", "")))
         metrics = _split(study.get("metrics", hypothesis_row.get("primary_metrics", "")))
         windows = _split(study.get("windows", hypothesis_row.get("windows", "")))
@@ -217,8 +262,8 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
                 "hypothesis_id": hypothesis_id,
                 "run_type": str(run_config.get("run_type", "formal")),
                 "event_family": event_family,
-                "config_hash": str(hypothesis_row.get("config_hash", "")),
-                "git_commit": str(hypothesis_row.get("git_commit", "")),
+                "config_hash": config_hash,
+                "git_commit": git_commit,
                 "data_version": data_version,
                 "astro_dataset_id": "",
                 "start_ts": events["event_ts"].min() if not events.empty else pd.NaT,
@@ -238,7 +283,20 @@ def run_research_batch(config_path: str | Path, *, root: str | Path | None = Non
         results["q_value_fdr"] = np.nan
         for _, group_index in results.groupby("multiple_testing_group").groups.items():
             results.loc[group_index, "q_value_fdr"] = benjamini_hochberg(results.loc[group_index, "p_value"].tolist())
-    return BatchStudyResult(results=results, runs=pd.DataFrame(run_rows, columns=RUN_COLUMNS), warnings=warnings, run_id=run_id)
+    return BatchStudyResult(
+        results=results,
+        runs=pd.DataFrame(run_rows, columns=RUN_COLUMNS),
+        warnings=warnings,
+        run_id=run_id,
+        event_traceability=pd.DataFrame(traceability_rows, columns=TRACEABILITY_COLUMNS),
+        readiness=readiness,
+        config_path=_relative_path(config_file, root_path),
+        config_hash=config_hash,
+        git_commit=git_commit,
+        git_dirty=git_dirty,
+        input_fingerprints=input_fingerprints,
+        run_metadata=run_metadata,
+    )
 
 
 def write_batch_report(batch: BatchStudyResult, output_dir: str | Path, *, config_text: str, hypothesis_snapshot: pd.DataFrame) -> dict[str, Path]:
@@ -253,7 +311,9 @@ def write_batch_report(batch: BatchStudyResult, output_dir: str | Path, *, confi
         "config_snapshot.yaml": output / "config_snapshot.yaml",
         "hypothesis_snapshot.yaml": output / "hypothesis_snapshot.yaml",
         "coverage_report.csv": output / "coverage_report.csv",
+        "event_traceability.csv": output / "event_traceability.csv",
         "warnings.json": output / "warnings.json",
+        "run_manifest.json": output / "run_manifest.json",
         "top_findings.md": output / "top_findings.md",
     }
     batch.results.to_csv(paths["results.csv"], index=False)
@@ -263,9 +323,11 @@ def write_batch_report(batch: BatchStudyResult, output_dir: str | Path, *, confi
     paths["config_snapshot.yaml"].write_text(config_text)
     hypothesis_snapshot.to_csv(paths["hypothesis_snapshot.yaml"], index=False)
     _coverage_report(batch.results).to_csv(paths["coverage_report.csv"], index=False)
+    batch.event_traceability.to_csv(paths["event_traceability.csv"], index=False)
     paths["warnings.json"].write_text(json.dumps(_warnings_payload(batch), indent=2))
     paths["summary.md"].write_text(_summary(batch))
     paths["top_findings.md"].write_text(top_findings_markdown(batch.results))
+    paths["run_manifest.json"].write_text(json.dumps(_run_manifest(batch, output, paths), indent=2))
     return paths
 
 
@@ -489,6 +551,9 @@ def _summary(batch: BatchStudyResult) -> str:
         lines.append(f"| {row.hypothesis_id} | {rows} | {min_q_text} | {coverage:.2%} | {warnings} | {status} |")
     findings = "\n".join(lines) + "\n"
     warning_payload = _warnings_payload(batch)
+    readiness_section = _readiness_section(batch.readiness)
+    major_caveats = _major_caveats(batch)
+    recommended_next = _recommended_next_studies(batch.readiness)
     return (
         "# Exploratory Formal Batch Summary\n\n"
         "## Executive Summary\n\n"
@@ -497,16 +562,17 @@ def _summary(batch: BatchStudyResult) -> str:
         f"not_publication_grade: `{str(exploratory).lower()}`\n\n"
         "This run is exploratory and association-only. It is not publication-grade.\n\n"
         "## Data Readiness Status\n\n"
-        "Formal readiness gate allowed exploratory formal batch execution with warnings.\n\n"
+        f"{readiness_section}\n\n"
         "## Major Caveats\n\n"
-        "- Local data provenance is incomplete.\n"
-        "- Results are coverage-aware and should be reviewed by asset history.\n"
-        "- This report is for hypothesis review, not operational decisions.\n\n"
+        + major_caveats
+        + "\n"
         "## Source/Licensing Warnings\n\n"
         "- Yahoo-derived local SPX/DXY data is local research only and needs licensing review.\n"
         "- LBMA/ICE gold data needs licensing review before publication.\n\n"
         "## Credit Proxy Warning\n\n"
         "- CreditProxy uses BAA_MINUS_AAA and is not equivalent to ICE/BofA HY OAS.\n\n"
+        "## Event Traceability\n\n"
+        "See `event_traceability.csv` for per-hypothesis source-table counts. H003 and H004 aspect-family studies must trace back to `astro_aspect_events` through `research_events.source_table` and `research_events.source_event_id`.\n\n"
         "## Hypothesis-by-Hypothesis Results\n\n"
         + f"{findings}\n"
         + "## Robustness Checks\n\n"
@@ -520,9 +586,7 @@ def _summary(batch: BatchStudyResult) -> str:
         + "\n\n## Interpretation\n\n"
         "Association only, not causal. No operational recommendation is made.\n\n"
         "## Recommended Next Studies\n\n"
-        "- Re-run after provenance fields are completed.\n"
-        "- Replace credit proxy with licensed long-history HY OAS if available.\n"
-        "- Compare results against randomized astro-event placebo calendars.\n"
+        + recommended_next
     )
 
 
@@ -590,6 +654,76 @@ def _metadata_warnings(metadata: dict[str, Any]) -> list[str]:
     if metadata.get("not_publication_grade"):
         warnings.append("readiness: exploratory run is not publication-grade.")
     return warnings
+
+
+def _load_readiness(path: Path) -> dict[str, Any]:
+    if not path or not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def _readiness_warnings(readiness: dict[str, Any]) -> list[str]:
+    if not readiness:
+        return ["readiness: formal readiness report missing; batch summary cannot cite readiness gate details."]
+    warnings = []
+    status = str(readiness.get("status", ""))
+    if status and status not in {"ready_for_exploratory_formal_batch", "ready_with_warnings"}:
+        warnings.append(f"readiness: status={status}; review before interpreting batch outputs.")
+    if readiness.get("can_run_exploratory_formal_batch") is False:
+        warnings.append("readiness: can_run_exploratory_formal_batch=false.")
+    return warnings
+
+
+def _readiness_section(readiness: dict[str, Any]) -> str:
+    if not readiness:
+        return "Formal readiness report was not available to this batch run."
+    status = str(readiness.get("status", "unknown"))
+    can_run = readiness.get("can_run_exploratory_formal_batch", "unknown")
+    warning_counts = readiness.get("warning_counts", {}) if isinstance(readiness.get("warning_counts", {}), dict) else {}
+    lines = [
+        f"readiness_status: `{status}`",
+        f"can_run_exploratory_formal_batch: `{str(can_run).lower()}`",
+    ]
+    if warning_counts:
+        lines.extend(["", "| warning_category | count |", "|---|---:|"])
+        lines.extend(f"| {category} | {count} |" for category, count in sorted(warning_counts.items()))
+    else:
+        lines.append("")
+        lines.append("No readiness warning counts were reported.")
+    return "\n".join(lines)
+
+
+def _major_caveats(batch: BatchStudyResult) -> str:
+    caveats = [
+        "- Results are coverage-aware and should be reviewed by asset history.",
+        "- This report is for hypothesis review, not operational decisions.",
+    ]
+    readiness = batch.readiness or {}
+    warning_counts = readiness.get("warning_counts", {}) if isinstance(readiness.get("warning_counts", {}), dict) else {}
+    metrics = readiness.get("metrics", {}) if isinstance(readiness.get("metrics", {}), dict) else {}
+    if warning_counts.get("provenance") or metrics.get("has_local_provenance") is False:
+        caveats.insert(0, "- Local data provenance warnings remain; review `LOCAL_DATA_PROVENANCE.json` and readiness output.")
+    if warning_counts.get("data_quality"):
+        caveats.append("- Readiness reported data-quality warnings; review the formal readiness report before interpreting effects.")
+    if warning_counts.get("licensing"):
+        caveats.append("- Readiness reported licensing warnings; outputs are local research artifacts, not publication-grade data redistribution.")
+    if warning_counts.get("credit_proxy"):
+        caveats.append("- Readiness reported credit-proxy warnings; CreditProxy is not true ICE/BofA HY OAS.")
+    return "\n".join(caveats) + "\n\n"
+
+
+def _recommended_next_studies(readiness: dict[str, Any]) -> str:
+    warning_counts = readiness.get("warning_counts", {}) if isinstance(readiness.get("warning_counts", {}), dict) else {}
+    recommendations = []
+    if warning_counts.get("provenance"):
+        recommendations.append("- Re-run after provenance warnings are resolved.")
+    if warning_counts.get("data_quality"):
+        recommendations.append("- Review data-quality warnings and rerun affected market/macro builds.")
+    if warning_counts.get("credit_proxy"):
+        recommendations.append("- Replace credit proxy with licensed long-history HY OAS if available.")
+    recommendations.append("- Compare results against randomized astro-event placebo calendars.")
+    return "\n".join(recommendations) + "\n"
 
 
 def _source_note(metadata: dict[str, Any]) -> str:
@@ -674,6 +808,8 @@ def validate_exploratory_batch_outputs(output_dir: str | Path) -> list[str]:
             warnings.append("all formal results must reference hypothesis_id")
     else:
         warnings.append("results file missing")
+    warnings.extend(_validate_event_traceability(output))
+    warnings.extend(_validate_run_manifest(output))
     return warnings
 
 
@@ -686,6 +822,184 @@ def _warnings_payload(batch: BatchStudyResult) -> dict[str, Any]:
         else:
             warnings.append({"category": "batch", "message": warning})
     return {"warnings": warnings, "warning_count": len(warnings)}
+
+
+def _run_manifest(batch: BatchStudyResult, output: Path, paths: dict[str, Path]) -> dict[str, Any]:
+    outputs = []
+    for artifact, path in sorted(paths.items()):
+        if artifact == "run_manifest.json":
+            continue
+        outputs.append(_artifact_fingerprint(artifact, path, base=output))
+    run_type = str(batch.runs["run_type"].iloc[0]) if not batch.runs.empty and "run_type" in batch.runs.columns else ""
+    return _json_safe(
+        {
+            "manifest_version": RUN_MANIFEST_VERSION,
+            "created_at": datetime.now(UTC).isoformat(),
+            "run_id": batch.run_id,
+            "run_type": run_type,
+            "not_publication_grade": bool(batch.run_metadata.get("not_publication_grade", False)),
+            "association_only": bool(batch.run_metadata.get("association_only", False)),
+            "config": {
+                "path": batch.config_path,
+                "sha256": batch.config_hash,
+                "snapshot_artifact": "config_snapshot.yaml",
+            },
+            "git": {
+                "commit": batch.git_commit,
+                "dirty": bool(batch.git_dirty),
+            },
+            "readiness": {
+                "status": batch.readiness.get("status", "") if isinstance(batch.readiness, dict) else "",
+                "can_run_exploratory_formal_batch": batch.readiness.get("can_run_exploratory_formal_batch", "") if isinstance(batch.readiness, dict) else "",
+                "warning_counts": batch.readiness.get("warning_counts", {}) if isinstance(batch.readiness, dict) else {},
+            },
+            "inputs": batch.input_fingerprints,
+            "outputs": outputs,
+            "warnings": _warnings_payload(batch),
+        }
+    )
+
+
+def _artifact_fingerprint(artifact: str, path: Path, *, base: Path) -> dict[str, Any]:
+    item = {
+        "artifact": artifact,
+        "path": _relative_path(path, base),
+        "exists": path.exists(),
+    }
+    if path.exists() and path.is_file():
+        item["size_bytes"] = path.stat().st_size
+        item["sha256"] = _sha256_file(path)
+    return item
+
+
+def _table_fingerprint(name: str, path: Path, frame: pd.DataFrame, *, root: Path) -> dict[str, Any]:
+    columns = [str(column) for column in frame.columns]
+    dtypes = {str(column): str(dtype) for column, dtype in frame.dtypes.items()}
+    schema_payload = json.dumps({"columns": columns, "dtypes": dtypes}, sort_keys=True)
+    item: dict[str, Any] = {
+        "name": name,
+        "path": _relative_path(path, root),
+        "exists": path.exists(),
+        "row_count": int(len(frame)),
+        "columns": columns,
+        "dtypes": dtypes,
+        "schema_sha256": _sha256_text(schema_payload),
+    }
+    if path.exists() and path.is_file():
+        item["size_bytes"] = path.stat().st_size
+    return item
+
+
+def _json_fingerprint(name: str, path: Path, payload: dict[str, Any], *, root: Path) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "name": name,
+        "path": _relative_path(path, root),
+        "exists": path.exists(),
+        "keys": sorted(str(key) for key in payload.keys()) if isinstance(payload, dict) else [],
+        "schema_sha256": _sha256_text(json.dumps(sorted(str(key) for key in payload.keys()), sort_keys=True)) if isinstance(payload, dict) else "",
+    }
+    if path.exists() and path.is_file():
+        item["size_bytes"] = path.stat().st_size
+        item["sha256"] = _sha256_file(path)
+    return item
+
+
+def _validate_run_manifest(output: Path) -> list[str]:
+    path = output / "run_manifest.json"
+    if not path.exists():
+        return ["run_manifest.json: missing"]
+    try:
+        manifest = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        return [f"run_manifest.json: invalid json: {exc}"]
+    warnings = []
+    if manifest.get("manifest_version") != RUN_MANIFEST_VERSION:
+        warnings.append("run_manifest.json: unexpected manifest_version")
+    if not str(manifest.get("run_id", "")):
+        warnings.append("run_manifest.json: missing run_id")
+    config = manifest.get("config", {}) if isinstance(manifest.get("config", {}), dict) else {}
+    if len(str(config.get("sha256", ""))) != 64:
+        warnings.append("run_manifest.json: missing config sha256")
+    git = manifest.get("git", {}) if isinstance(manifest.get("git", {}), dict) else {}
+    if not str(git.get("commit", "")):
+        warnings.append("run_manifest.json: missing git commit")
+    outputs = manifest.get("outputs", []) if isinstance(manifest.get("outputs", []), list) else []
+    output_artifacts = {str(item.get("artifact", "")) for item in outputs if isinstance(item, dict)}
+    for artifact in ("results.parquet", "event_traceability.csv", "warnings.json", "config_snapshot.yaml"):
+        if artifact not in output_artifacts:
+            warnings.append(f"run_manifest.json: missing output artifact {artifact}")
+    inputs = manifest.get("inputs", []) if isinstance(manifest.get("inputs", []), list) else []
+    for name in ("research_events", "market_daily_features", "research_hypotheses"):
+        rows = [item for item in inputs if isinstance(item, dict) and item.get("name") == name]
+        if not rows:
+            warnings.append(f"run_manifest.json: missing input fingerprint {name}")
+        elif len(str(rows[0].get("schema_sha256", ""))) != 64:
+            warnings.append(f"run_manifest.json: missing schema fingerprint for {name}")
+    return warnings
+
+
+def _event_traceability_rows(*, hypothesis_id: str, event_family: str, study_events: pd.DataFrame) -> list[dict[str, Any]]:
+    if study_events.empty:
+        return [
+            {
+                "hypothesis_id": hypothesis_id,
+                "event_family": event_family,
+                "source_table": "missing",
+                "source_event_count": 0,
+                "eligible_event_count": 0,
+                "primary_event_count": 0,
+                "source_event_id_examples": "",
+                "source_note": "no eligible research_events rows for event_family",
+            }
+        ]
+    working = study_events.copy()
+    if "source_table" not in working.columns:
+        working["source_table"] = "missing"
+    rows = []
+    for source_table, group in working.groupby("source_table", dropna=False, sort=True):
+        examples = []
+        if "source_event_id" in group.columns:
+            examples = group["source_event_id"].dropna().astype(str).drop_duplicates().head(5).tolist()
+        primary_count = int(group["is_primary"].fillna(False).astype(bool).sum()) if "is_primary" in group.columns else 0
+        rows.append(
+            {
+                "hypothesis_id": hypothesis_id,
+                "event_family": event_family,
+                "source_table": str(source_table or "missing"),
+                "source_event_count": int(group["source_event_id"].nunique()) if "source_event_id" in group.columns else int(len(group)),
+                "eligible_event_count": int(group["event_id"].nunique()) if "event_id" in group.columns else int(len(group)),
+                "primary_event_count": primary_count,
+                "source_event_id_examples": ",".join(examples),
+                "source_note": "research_events source-table traceability snapshot",
+            }
+        )
+    return rows
+
+
+def _validate_event_traceability(output: Path) -> list[str]:
+    warnings: list[str] = []
+    runs_path = output / "event_study_runs.csv"
+    if not runs_path.exists():
+        return warnings
+    runs = pd.read_csv(runs_path)
+    aspect_hypotheses = {"H003_mars_saturn_hard_aspects", "H004_macro_core_aspect_cluster"}
+    present = aspect_hypotheses.intersection(set(runs.get("hypothesis_id", pd.Series(dtype=str)).astype(str)))
+    if not present:
+        return warnings
+    trace_path = output / "event_traceability.csv"
+    if not trace_path.exists():
+        return [f"event_traceability.csv missing for aspect hypotheses: {','.join(sorted(present))}"]
+    trace = pd.read_csv(trace_path)
+    required_columns = set(TRACEABILITY_COLUMNS)
+    if not required_columns.issubset(trace.columns):
+        missing = ",".join(sorted(required_columns - set(trace.columns)))
+        return [f"event_traceability.csv missing columns: {missing}"]
+    for hypothesis_id in sorted(present):
+        rows = trace[(trace["hypothesis_id"].astype(str) == hypothesis_id) & (trace["source_table"].astype(str) == "astro_aspect_events")]
+        event_count = int(pd.to_numeric(rows.get("eligible_event_count", pd.Series(dtype=int)), errors="coerce").fillna(0).sum())
+        if event_count <= 0:
+            warnings.append(f"{hypothesis_id}: aspect events must trace to astro_aspect_events with eligible_event_count>0")
+    return warnings
 
 
 def _placebo_summary(results: pd.DataFrame) -> str:
@@ -714,3 +1028,51 @@ def _join_unique(values: pd.Series) -> str:
 def _resolve(root: Path, path: str) -> Path:
     target = Path(path)
     return target if target.is_absolute() else root / target
+
+
+def _relative_path(path: Path, root: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _git_commit(root: Path) -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True, stderr=subprocess.DEVNULL).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
+
+
+def _git_dirty(root: Path) -> bool:
+    try:
+        status = subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return True
+    return bool(status.strip())
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return value.isoformat()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
