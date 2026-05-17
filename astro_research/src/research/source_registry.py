@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,7 +50,15 @@ def build_source_registry(config_path: str | Path, *, created_at: datetime | Non
                     "created_at": created_at,
                 }
             )
-    rows.extend(_local_csv_rows(root_path=root_path, created_at=created_at, data_version=data_version, warnings=warnings))
+    rows.extend(
+        _local_csv_rows(
+            root_path=root_path,
+            created_at=created_at,
+            data_version=data_version,
+            warnings=warnings,
+            provenance=_load_local_provenance(root_path),
+        )
+    )
     if not rows:
         warnings.append("No sources configured.")
     return SourceRegistry(data_version=data_version, rows=pd.DataFrame(rows), warnings=tuple(warnings))
@@ -93,7 +102,14 @@ def _asset_from_series(series_id: str) -> str:
     return mapping.get(series_id, series_id)
 
 
-def _local_csv_rows(*, root_path: Path, created_at: datetime, data_version: str, warnings: list[str]) -> list[dict[str, Any]]:
+def _local_csv_rows(
+    *,
+    root_path: Path,
+    created_at: datetime,
+    data_version: str,
+    warnings: list[str],
+    provenance: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for config_name, section_name in (("market_assets_real.yaml", "assets"), ("macro_series.yaml", "series")):
         path = root_path / "astro_research" / "configs" / config_name
@@ -104,7 +120,9 @@ def _local_csv_rows(*, root_path: Path, created_at: datetime, data_version: str,
             local_path = values.get("path") if values.get("source") == "local_csv" else values.get("fallback_path")
             if not local_path:
                 continue
-            license_note = str(values.get("license_note", raw.get("sources", {}).get("local_csv", {}).get("license_note", "")))
+            series_id = str(values.get("symbol", name))
+            provenance_item = _match_local_provenance(name=name, series_id=series_id, provenance=provenance)
+            license_note = str(provenance_item.get("license_note") or values.get("license_note", raw.get("sources", {}).get("local_csv", {}).get("license_note", "")))
             if not license_note:
                 warnings.append(f"{name}: local_csv license_note missing")
             target = Path(str(local_path))
@@ -118,7 +136,7 @@ def _local_csv_rows(*, root_path: Path, created_at: datetime, data_version: str,
                     "ts": created_at,
                     "source": "local_csv",
                     "provider": "LocalCSVProvider",
-                    "series_id": str(values.get("symbol", name)),
+                    "series_id": series_id,
                     "asset": name,
                     "frequency": str(values.get("frequency", values.get("original_frequency", "daily"))),
                     "coverage_start_ts": pd.NaT,
@@ -126,8 +144,8 @@ def _local_csv_rows(*, root_path: Path, created_at: datetime, data_version: str,
                     "is_canonical": bool(values.get("source") == "local_csv" or values.get("fallback_source") == "local_csv"),
                     "requires_api_key": False,
                     "license_note": license_note or "missing_license_note",
-                    "source_url": str(target if status == "available" else f"unavailable_local_file:{local_path}"),
-                    "metadata": _local_metadata(name=name, values=values),
+                    "source_url": f"local:{local_path}",
+                    "metadata": _local_metadata(name=name, values=values, provenance=provenance_item, availability_status=status),
                     "data_version": data_version,
                     "created_at": created_at,
                 }
@@ -135,14 +153,35 @@ def _local_csv_rows(*, root_path: Path, created_at: datetime, data_version: str,
     return rows
 
 
-def _local_metadata(*, name: str, values: dict[str, Any]) -> str:
+def _local_metadata(*, name: str, values: dict[str, Any], provenance: dict[str, Any], availability_status: str) -> str:
     source_note = str(values.get("license_note", "")).lower()
     metadata: dict[str, Any] = {
+        "data_availability_status": availability_status,
         "local_research_only": True,
         "redistribution_allowed": False,
         "publication_grade": False,
         "licensing_review_required": True,
     }
+    if provenance:
+        metadata.update(
+            {
+                "upstream_provider": str(provenance.get("provider", "")),
+                "provider_family": str(provenance.get("provider_family", "")),
+                "retrieved_at": str(provenance.get("retrieved_at", "")),
+                "coverage_start": str(provenance.get("coverage_start", "")),
+                "coverage_end": str(provenance.get("coverage_end", "")),
+                "source_role": str(provenance.get("source_role", "")),
+                "is_canonical": bool(provenance.get("is_canonical", False)),
+                "is_proxy": bool(provenance.get("is_proxy", False)),
+                "is_provisional": bool(provenance.get("is_provisional", True)),
+                "redistribution_allowed": bool(provenance.get("redistribution_allowed", False)),
+                "publication_grade": bool(provenance.get("publication_grade", False)),
+                "caveat_count": len(provenance.get("caveats", [])) if isinstance(provenance.get("caveats"), list) else 1,
+            }
+        )
+        for key in ("proxy_type", "proxy_for", "not_equivalent_to"):
+            if provenance.get(key):
+                metadata[key] = str(provenance[key])
     if name in {"SPX", "DXY"} or "yahoo" in source_note:
         metadata.update(
             {
@@ -171,4 +210,37 @@ def _local_metadata(*, name: str, values: dict[str, Any]) -> str:
                 "fill_method": "business_daily_forward_fill",
             }
         )
-    return ";".join(f"{key}={value}" for key, value in sorted(metadata.items()))
+    return ";".join(f"{key}={value}" for key, value in sorted(metadata.items()) if value != "")
+
+
+def _load_local_provenance(root_path: Path) -> dict[str, dict[str, Any]]:
+    path = root_path / "astro_research" / "data" / "local" / "LOCAL_DATA_PROVENANCE.json"
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        items = payload.get("series", [])
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        items = []
+    provenance: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for key in (item.get("asset"), item.get("series_id"), item.get("original_symbol_or_series")):
+            if key:
+                provenance[str(key)] = dict(item)
+    return provenance
+
+
+def _match_local_provenance(*, name: str, series_id: str, provenance: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    if name == "BAMLH0A0HYM2":
+        return provenance.get("HY_OAS_PROXY") or provenance.get(name) or {}
+    return provenance.get(name) or provenance.get(series_id) or {}
+
+
+def _provenance_ts(value: Any) -> pd.Timestamp:
+    if not value:
+        return pd.NaT
+    return pd.to_datetime(value, utc=True, errors="coerce")
