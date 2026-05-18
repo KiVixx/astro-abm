@@ -36,6 +36,10 @@ Implemented and unit-tested:
 - Phase 5 — ETL alignment helpers, hourly/daily maintenance, Docker runtime
 - Active-only data completeness reporting
 
+Chinese maintainer briefing:
+
+- [Astro ABM 項目維護者簡報](docs/research/project_maintenance_brief_zh.md)
+
 Current test status:
 
 ```bash
