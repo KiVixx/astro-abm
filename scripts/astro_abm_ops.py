@@ -20,6 +20,7 @@ ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
 OUTPUT_ROOT = ROOT / "astro_research" / "output"
 ASTRO_DAILY_START = "1926-01-01"
+ASTRO_DAILY_QUESTDB_START = "1970-01-01"
 ASTRO_DAILY_END = "2025-12-31"
 ASTRO_DAILY_SNAPSHOT = OUTPUT_ROOT / "parquet/astro_daily_1926_2025"
 
@@ -188,12 +189,14 @@ def command_status() -> int:
     checks.append(CheckResult("questdb_tcp", tcp_open("localhost", int(env_value("QUESTDB_PG_PORT") or "8812")), "localhost:8812"))
     db_tables = questdb_table_summary()
     checks.append(CheckResult("questdb_tables", db_tables != "unavailable", db_tables))
-    astro_daily_ready = astro_daily_questdb_ready() if db_tables != "unavailable" else False
+    astro_daily_ready = astro_daily_snapshot_ready() and (astro_daily_questdb_ready() if db_tables != "unavailable" else False)
     checks.append(
         CheckResult(
             "astro_daily_100y_questdb",
             astro_daily_ready,
-            "complete 1926-2025" if astro_daily_ready else "missing or incomplete; run `make astro-daily`",
+            "snapshot 1926-2025; QuestDB slice 1970-2025 complete"
+            if astro_daily_ready
+            else "missing or incomplete; run `make astro-daily`",
         )
     )
 
@@ -223,11 +226,12 @@ def command_maintain_now(*, hourly: bool, daily: bool, allow_partial: bool = Fal
 
 
 def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, include_exact_aspects: bool = False) -> int:
-    if ingest and not force and astro_daily_questdb_ready():
-        print(f"astro daily QuestDB dataset already complete: {ASTRO_DAILY_START}..{ASTRO_DAILY_END}")
+    snapshot_ready = astro_daily_snapshot_ready()
+    if ingest and not force and snapshot_ready and astro_daily_questdb_ready():
+        print(f"astro daily QuestDB slice already complete: {ASTRO_DAILY_QUESTDB_START}..{ASTRO_DAILY_END}")
         return 0
 
-    if force or not astro_daily_snapshot_ready():
+    if force or not snapshot_ready:
         cmd = [
             "uv",
             "run",
@@ -264,6 +268,8 @@ def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, incl
             "--parquet-dir",
             str(ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)),
             "--skip-migrations",
+            "--min-ts",
+            ASTRO_DAILY_QUESTDB_START,
         ],
         check=False,
     ).returncode
@@ -408,7 +414,7 @@ def astro_daily_snapshot_ready(root: Path = ROOT) -> bool:
     return all((snapshot / name).exists() and (snapshot / name).stat().st_size > 0 for name in required)
 
 
-def astro_daily_questdb_ready(connection_factory=None, *, start: str = ASTRO_DAILY_START, end: str = ASTRO_DAILY_END) -> bool:
+def astro_daily_questdb_ready(connection_factory=None, *, start: str = ASTRO_DAILY_QUESTDB_START, end: str = ASTRO_DAILY_END) -> bool:
     try:
         import psycopg
     except ImportError:

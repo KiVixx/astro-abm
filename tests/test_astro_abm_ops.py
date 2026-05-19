@@ -143,8 +143,7 @@ def test_command_ensure_astro_daily_builds_snapshot_then_ingests(monkeypatch):
         calls.append(list(cmd))
         return Result()
 
-    ready_values = iter([False, True])
-    monkeypatch.setattr(ops, "astro_daily_questdb_ready", lambda: next(ready_values))
+    monkeypatch.setattr(ops, "astro_daily_questdb_ready", lambda: True)
     monkeypatch.setattr(ops, "astro_daily_snapshot_ready", lambda: False)
     monkeypatch.setattr(ops, "run", fake_run)
 

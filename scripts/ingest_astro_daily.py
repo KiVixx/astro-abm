@@ -19,6 +19,12 @@ def main() -> int:
     parser.add_argument("--questdb-dsn", default=None, help="Reserved; current implementation uses repo .env QuestDB settings.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-migrations", action="store_true")
+    parser.add_argument(
+        "--min-ts",
+        default="1970-01-01T00:00:00Z",
+        help="Filter designated timestamps before this value. QuestDB WAL tables reject pre-1970 designated timestamps.",
+    )
+    parser.add_argument("--include-pre-1970", action="store_true", help="Attempt to ingest pre-1970 timestamps.")
     args = parser.parse_args()
 
     snapshot_dir = ROOT / args.parquet_dir
@@ -29,8 +35,11 @@ def main() -> int:
         return 0
     if not args.skip_migrations:
         apply_migrations()
-    counts = ingest_csv_snapshot(snapshot_dir)
+    min_ts = None if args.include_pre_1970 else args.min_ts
+    counts = ingest_csv_snapshot(snapshot_dir, min_ts=min_ts)
     print("Astro daily ingest complete")
+    if min_ts:
+        print(f"min_ts={min_ts}")
     for table, count in counts.items():
         print(f"{table}={count}")
     return 0

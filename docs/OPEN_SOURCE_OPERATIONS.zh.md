@@ -16,7 +16,7 @@ make bootstrap
 2. 啟動 QuestDB 與 maintenance daemon（維護常駐服務）。
 3. 等待 QuestDB 可連線。
 4. 套用小時級與日線研究層 schema（資料庫表結構）。
-5. 確保 1926-2025 的 100 年日線核心天體資料已生成並寫入 QuestDB。
+5. 確保 1926-2025 的 100 年日線核心天體 snapshot 已生成，並把 QuestDB 支援的 1970-2025 切片寫入資料庫。
 6. 印出環境、資料、研究快照、Docker、QuestDB 狀態。
 
 ## 新人 10 分鐘路徑
@@ -35,7 +35,9 @@ make test
 
 `make test` 會自動使用 `uv run --extra dev pytest`，所以乾淨 clone 後不需要手動安裝 pytest。
 
-`make bootstrap` 會建立/補齊 100 年日線核心天體資料。這批資料是 deterministic（可重算）的 Swiss Ephemeris 天體資料，不依賴 API key；第一次跑會花比較久，之後 `make maintain-now` 只會檢查 QuestDB 是否已有完整 1926-2025 daily features，完整時會快速跳過。
+`make bootstrap` 會建立/補齊 100 年日線核心天體資料。這批資料是 deterministic（可重算）的 Swiss Ephemeris 天體資料，不依賴 API key；第一次跑會花比較久，之後 `make maintain-now` 只會檢查本機 snapshot 與 QuestDB 1970-2025 daily features 是否完整，完整時會快速跳過。
+
+注意：QuestDB 的 WAL/partitioned designated timestamp table 不接受 1970 年以前的 timestamp。因此 `make astro-daily` 會保留完整 `1926-2025` CSV snapshot，但寫入 QuestDB 時只 ingest `1970-2025` 的可查切片；1926-1969 仍在本機 snapshot 裡，可用 Python / DuckDB / CSV 分析。
 
 ## 常用命令
 
@@ -48,7 +50,7 @@ make test
 | `make down` | 停止 Docker 服務，但不刪資料庫 volume |
 | `make migrate` | 套用 QuestDB schema / migrations |
 | `make maintain-now` | 立即跑一次 hourly + daily 維護；手動入口會容忍單一上游暫時失敗並保留摘要 |
-| `make astro-daily` | 確保 1926-2025 的 100 年日線核心天體資料已生成並寫入 QuestDB |
+| `make astro-daily` | 確保 1926-2025 的 100 年日線核心天體 snapshot 已生成，並寫入 QuestDB 1970-2025 切片 |
 | `make smoke` | 跑小型公開 smoke build |
 | `make checkpoint` | 重建研究 workflow checkpoint |
 | `make checkpoint-check` | 只檢查現有 checkpoint，不重建 |

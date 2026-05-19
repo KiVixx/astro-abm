@@ -63,6 +63,9 @@ strict non-zero exit code.
 
 `make astro-daily` can be run directly to ensure the deterministic 100-year
 daily astro data exists without running the hourly/daily market maintenance.
+Because QuestDB WAL/partitioned designated timestamp tables reject pre-1970
+timestamps, this command keeps the full 1926-2025 CSV snapshot locally and
+ingests the QuestDB-queryable 1970-2025 slice.
 
 Current test status:
 

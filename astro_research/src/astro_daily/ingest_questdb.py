@@ -406,6 +406,16 @@ TABLE_COLUMNS["world_event_catalog"] = [
     "data_version",
 ]
 
+TIMESTAMP_COLUMNS = {
+    "astro_aspect_events": "exact_ts",
+    "astro_moon_phase_events": "exact_ts",
+    "astro_daily_positions": "ts",
+    "astro_daily_facts": "ts",
+    "astro_retrograde_cycles": "station_in_ts",
+    "astro_event_windows": "ts",
+    "astro_daily_features": "ts",
+}
+
 
 def apply_migrations(*, connection_factory=None, migration_dir: Path = MIGRATION_DIR) -> None:
     connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
@@ -419,7 +429,14 @@ def apply_migrations(*, connection_factory=None, migration_dir: Path = MIGRATION
         connection.commit()
 
 
-def ingest_csv_snapshot(snapshot_dir: str | Path, *, tables: Iterable[str] | None = None, connection_factory=None, batch_size: int = 1000) -> dict[str, int]:
+def ingest_csv_snapshot(
+    snapshot_dir: str | Path,
+    *,
+    tables: Iterable[str] | None = None,
+    connection_factory=None,
+    batch_size: int = 1000,
+    min_ts: str | None = "1970-01-01T00:00:00Z",
+) -> dict[str, int]:
     connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
     snapshot = Path(snapshot_dir)
     selected_tables = tuple(tables or TABLE_COLUMNS.keys())
@@ -433,6 +450,7 @@ def ingest_csv_snapshot(snapshot_dir: str | Path, *, tables: Iterable[str] | Non
                 frame = pd.read_csv(path)
                 columns = TABLE_COLUMNS[table]
                 frame = frame.reindex(columns=columns)
+                frame = _filter_min_timestamp(frame, table=table, min_ts=min_ts)
                 rows = [tuple(_null_to_none(value) for value in row) for row in frame.itertuples(index=False, name=None)]
                 if not rows:
                     counts[table] = 0
@@ -444,6 +462,19 @@ def ingest_csv_snapshot(snapshot_dir: str | Path, *, tables: Iterable[str] | Non
                 counts[table] = len(rows)
         connection.commit()
     return counts
+
+
+def _filter_min_timestamp(frame: pd.DataFrame, *, table: str, min_ts: str | None) -> pd.DataFrame:
+    if not min_ts:
+        return frame
+    timestamp_column = TIMESTAMP_COLUMNS.get(table)
+    if not timestamp_column or timestamp_column not in frame.columns or frame.empty:
+        return frame
+    timestamps = pd.to_datetime(frame[timestamp_column], utc=True, errors="coerce")
+    min_timestamp = pd.Timestamp(min_ts)
+    if min_timestamp.tzinfo is None:
+        min_timestamp = min_timestamp.tz_localize("UTC")
+    return frame[timestamps >= min_timestamp]
 
 
 def _split_sql(sql: str) -> list[str]:
