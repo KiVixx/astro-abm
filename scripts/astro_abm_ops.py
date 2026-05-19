@@ -80,9 +80,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_status()
     if args.command == "bootstrap":
         ensure_env_file()
-        command_up(db_only=args.db_only, build=not args.no_build)
+        command_up(db_only=True, build=False)
         wait_for_questdb(timeout=args.timeout)
         command_migrate(timeout=args.timeout)
+        if not args.db_only:
+            command_up(db_only=False, build=not args.no_build)
         return command_status()
     if args.command == "up":
         return command_up(db_only=args.db_only, build=not args.no_build)
@@ -225,12 +227,40 @@ def wait_for_questdb(*, timeout: int) -> None:
     host = env_value("QUESTDB_HOST") or "localhost"
     port = int(env_value("QUESTDB_PG_PORT") or "8812")
     deadline = time.time() + timeout
+    last_error = "not attempted"
     while time.time() < deadline:
-        if tcp_open(host, port):
+        ready, detail = questdb_ready(host=host, port=port)
+        if ready:
             print(f"QuestDB ready at {host}:{port}")
             return
+        last_error = detail
         time.sleep(1)
-    raise SystemExit(f"QuestDB did not become ready at {host}:{port} within {timeout}s")
+    raise SystemExit(f"QuestDB did not become ready at {host}:{port} within {timeout}s: {last_error}")
+
+
+def questdb_ready(*, host: str, port: int) -> tuple[bool, str]:
+    if not tcp_open(host, port):
+        return False, "tcp not open"
+    try:
+        import psycopg
+    except ImportError:
+        return True, "tcp open; psycopg unavailable"
+    env = read_env_file(ENV_FILE)
+    try:
+        with psycopg.connect(
+            host=host,
+            port=port,
+            user=env.get("QUESTDB_USER", os.getenv("QUESTDB_USER", "admin")),
+            password=env.get("QUESTDB_PASSWORD", os.getenv("QUESTDB_PASSWORD", "quest")),
+            dbname=env.get("QUESTDB_DATABASE", os.getenv("QUESTDB_DATABASE", "qdb")),
+            connect_timeout=1,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        return True, "sql ready"
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
 
 
 def sql_files() -> list[Path]:

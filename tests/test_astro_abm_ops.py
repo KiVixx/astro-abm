@@ -65,3 +65,22 @@ def test_research_input_checks_report_existing_directory(tmp_path):
 
     assert checks["research_input_macro_core_aspect_chunks"].ok is True
     assert checks["research_input_research_events"].ok is False
+
+
+def test_questdb_ready_uses_tcp_fallback_when_psycopg_missing(monkeypatch):
+    ops = load_ops_module()
+    monkeypatch.setattr(ops, "tcp_open", lambda host, port: True)
+
+    real_import = __import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "psycopg":
+            raise ImportError("missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", fake_import)
+
+    ready, detail = ops.questdb_ready(host="localhost", port=8812)
+
+    assert ready is True
+    assert detail == "tcp open; psycopg unavailable"
