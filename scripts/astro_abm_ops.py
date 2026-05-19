@@ -275,7 +275,7 @@ def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, incl
     ).returncode
     if code:
         return code
-    return 0 if astro_daily_questdb_ready() else 1
+    return 0 if wait_for_astro_daily_questdb(timeout=30) else 1
 
 
 def command_smoke(*, start: str, end: str) -> int:
@@ -434,6 +434,15 @@ def astro_daily_questdb_ready(connection_factory=None, *, start: str = ASTRO_DAI
         return int(count) >= expected_days and min_date <= _parse_date(start) and max_date >= _parse_date(end)
     except (psycopg.Error, OSError, ValueError):
         return False
+
+
+def wait_for_astro_daily_questdb(*, timeout: int = 30) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if astro_daily_questdb_ready():
+            return True
+        time.sleep(1)
+    return astro_daily_questdb_ready()
 
 
 def _default_psycopg_connection():
