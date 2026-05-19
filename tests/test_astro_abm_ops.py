@@ -84,3 +84,28 @@ def test_questdb_ready_uses_tcp_fallback_when_psycopg_missing(monkeypatch):
 
     assert ready is True
     assert detail == "tcp open; psycopg unavailable"
+
+
+def test_maintain_now_allow_partial_returns_success(monkeypatch, capsys):
+    ops = load_ops_module()
+
+    class Result:
+        def __init__(self, returncode: int):
+            self.returncode = returncode
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(list(cmd))
+        return Result(1 if cmd[-1] == "astro-abm-maintain-daily" else 0)
+
+    monkeypatch.setattr(ops, "run", fake_run)
+
+    strict_code = ops.command_maintain_now(hourly=True, daily=True, allow_partial=False)
+    partial_code = ops.command_maintain_now(hourly=True, daily=True, allow_partial=True)
+
+    assert strict_code == 1
+    assert partial_code == 0
+    assert calls.count(["uv", "run", "astro-abm-maintain-hourly"]) == 2
+    assert calls.count(["uv", "run", "astro-abm-maintain-daily"]) == 2
+    assert "partial upstream failures" in capsys.readouterr().out

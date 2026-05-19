@@ -67,6 +67,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     maintain = sub.add_parser("maintain-now", help="Run one local hourly and daily maintenance pass.")
     maintain.add_argument("--hourly-only", action="store_true")
     maintain.add_argument("--daily-only", action="store_true")
+    maintain.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Return success even if a transient upstream source fails; failed tasks remain visible in the summary.",
+    )
 
     smoke = sub.add_parser("smoke", help="Run a small public smoke build that does not require private local CSVs.")
     smoke.add_argument("--start", default="2020-01-01")
@@ -93,7 +98,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "migrate":
         return command_migrate(timeout=args.timeout)
     if args.command == "maintain-now":
-        return command_maintain_now(hourly=not args.daily_only, daily=not args.hourly_only)
+        return command_maintain_now(
+            hourly=not args.daily_only,
+            daily=not args.hourly_only,
+            allow_partial=args.allow_partial,
+        )
     if args.command == "smoke":
         return command_smoke(start=args.start, end=args.end)
     if args.command == "checkpoint":
@@ -171,12 +180,15 @@ def command_status() -> int:
     return 0
 
 
-def command_maintain_now(*, hourly: bool, daily: bool) -> int:
+def command_maintain_now(*, hourly: bool, daily: bool, allow_partial: bool = False) -> int:
     code = 0
     if hourly:
-        code |= run(["uv", "run", "astro-abm-maintain-hourly"]).returncode
+        code |= run(["uv", "run", "astro-abm-maintain-hourly"], check=False).returncode
     if daily:
-        code |= run(["uv", "run", "astro-abm-maintain-daily"]).returncode
+        code |= run(["uv", "run", "astro-abm-maintain-daily"], check=False).returncode
+    if code and allow_partial:
+        print("maintenance completed with partial upstream failures; see task summary above")
+        return 0
     return code
 
 

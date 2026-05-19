@@ -55,6 +55,11 @@ schemas, and prints database/data readiness. Generated outputs remain under
 `astro_research/output/`, and real local research CSVs remain under
 `astro_research/data/local/`; both are intentionally git-ignored.
 
+For manual maintenance, `make maintain-now` tolerates partial transient upstream
+failures while preserving the failed-task summary. Use
+`uv run python scripts/astro_abm_ops.py maintain-now` directly when you need a
+strict non-zero exit code.
+
 Current test status:
 
 ```bash

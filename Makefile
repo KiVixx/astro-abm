@@ -34,7 +34,7 @@ migrate:
 	uv run python scripts/astro_abm_ops.py migrate
 
 maintain-now:
-	uv run python scripts/astro_abm_ops.py maintain-now
+	uv run python scripts/astro_abm_ops.py maintain-now --allow-partial
 
 smoke:
 	uv run python scripts/astro_abm_ops.py smoke

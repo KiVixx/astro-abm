@@ -44,7 +44,7 @@ make test
 | `make db-up` | 只啟動 QuestDB |
 | `make down` | 停止 Docker 服務，但不刪資料庫 volume |
 | `make migrate` | 套用 QuestDB schema / migrations |
-| `make maintain-now` | 立即跑一次 hourly + daily 維護 |
+| `make maintain-now` | 立即跑一次 hourly + daily 維護；手動入口會容忍單一上游暫時失敗並保留摘要 |
 | `make smoke` | 跑小型公開 smoke build |
 | `make checkpoint` | 重建研究 workflow checkpoint |
 | `make checkpoint-check` | 只檢查現有 checkpoint，不重建 |
@@ -61,8 +61,11 @@ uv run python scripts/astro_abm_ops.py <command>
 ```bash
 uv run python scripts/astro_abm_ops.py status
 uv run python scripts/astro_abm_ops.py bootstrap --db-only
+uv run python scripts/astro_abm_ops.py maintain-now
 uv run python scripts/astro_abm_ops.py checkpoint --check-only
 ```
+
+`make maintain-now` 會使用 `--allow-partial`，適合人工維護：例如 NOAA / GOES 這類上游偶發 timeout 時，其他資料源仍會完成，輸出裡會清楚標出 failed task。若要在排程或 CI 裡使用嚴格失敗碼，可直接跑不帶 `--allow-partial` 的 `uv run python scripts/astro_abm_ops.py maintain-now`。
 
 ## 三種資料完整度
 
