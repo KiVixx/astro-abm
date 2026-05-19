@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 from typing import Sequence
 
@@ -18,6 +19,9 @@ COMPOSE_FILE = ROOT / "docker-compose.questdb.yml"
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
 OUTPUT_ROOT = ROOT / "astro_research" / "output"
+ASTRO_DAILY_START = "1926-01-01"
+ASTRO_DAILY_END = "2025-12-31"
+ASTRO_DAILY_SNAPSHOT = OUTPUT_ROOT / "parquet/astro_daily_1926_2025"
 
 LOCAL_DATA_FILES = {
     "SPX": ROOT / "astro_research/data/local/equity/spx_daily.csv",
@@ -53,6 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     bootstrap = sub.add_parser("bootstrap", help="Create .env if missing, start QuestDB+maintenance, apply migrations, print status.")
     bootstrap.add_argument("--db-only", action="store_true", help="Start QuestDB only; do not start the maintenance daemon.")
     bootstrap.add_argument("--no-build", action="store_true", help="Do not rebuild the maintenance image.")
+    bootstrap.add_argument("--skip-astro-daily", action="store_true", help="Skip the 100-year core daily astro dataset build/ingest.")
     bootstrap.add_argument("--timeout", type=int, default=90, help="Seconds to wait for QuestDB.")
 
     up = sub.add_parser("up", help="Start Docker services.")
@@ -72,6 +77,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Return success even if a transient upstream source fails; failed tasks remain visible in the summary.",
     )
+    maintain.add_argument("--skip-astro-daily", action="store_true", help="Skip 100-year core daily astro dataset maintenance.")
+
+    astro_daily = sub.add_parser("astro-daily", help="Ensure the 100-year core daily astro dataset snapshot and QuestDB tables exist.")
+    astro_daily.add_argument("--force", action="store_true", help="Rebuild the snapshot and re-ingest even if QuestDB already looks complete.")
+    astro_daily.add_argument("--skip-ingest", action="store_true", help="Only build/refresh the local snapshot; do not ingest QuestDB.")
+    astro_daily.add_argument("--include-exact-aspects", action="store_true", help="Include expensive exact all-body aspect events in the core snapshot.")
 
     smoke = sub.add_parser("smoke", help="Run a small public smoke build that does not require private local CSVs.")
     smoke.add_argument("--start", default="2020-01-01")
@@ -89,6 +100,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         wait_for_questdb(timeout=args.timeout)
         command_migrate(timeout=args.timeout)
         if not args.db_only:
+            if not args.skip_astro_daily:
+                command_ensure_astro_daily()
             command_up(db_only=False, build=not args.no_build)
         return command_status()
     if args.command == "up":
@@ -102,6 +115,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             hourly=not args.daily_only,
             daily=not args.hourly_only,
             allow_partial=args.allow_partial,
+            ensure_astro_daily=not args.hourly_only and not args.skip_astro_daily,
+        )
+    if args.command == "astro-daily":
+        return command_ensure_astro_daily(
+            force=args.force,
+            ingest=not args.skip_ingest,
+            include_exact_aspects=args.include_exact_aspects,
         )
     if args.command == "smoke":
         return command_smoke(start=args.start, end=args.end)
@@ -168,6 +188,14 @@ def command_status() -> int:
     checks.append(CheckResult("questdb_tcp", tcp_open("localhost", int(env_value("QUESTDB_PG_PORT") or "8812")), "localhost:8812"))
     db_tables = questdb_table_summary()
     checks.append(CheckResult("questdb_tables", db_tables != "unavailable", db_tables))
+    astro_daily_ready = astro_daily_questdb_ready() if db_tables != "unavailable" else False
+    checks.append(
+        CheckResult(
+            "astro_daily_100y_questdb",
+            astro_daily_ready,
+            "complete 1926-2025" if astro_daily_ready else "missing or incomplete; run `make astro-daily`",
+        )
+    )
 
     print("# Astro ABM Ops Status")
     for check in checks:
@@ -180,16 +208,68 @@ def command_status() -> int:
     return 0
 
 
-def command_maintain_now(*, hourly: bool, daily: bool, allow_partial: bool = False) -> int:
+def command_maintain_now(*, hourly: bool, daily: bool, allow_partial: bool = False, ensure_astro_daily: bool = True) -> int:
     code = 0
     if hourly:
         code |= run(["uv", "run", "astro-abm-maintain-hourly"], check=False).returncode
     if daily:
         code |= run(["uv", "run", "astro-abm-maintain-daily"], check=False).returncode
+    if ensure_astro_daily:
+        code |= command_ensure_astro_daily()
     if code and allow_partial:
         print("maintenance completed with partial upstream failures; see task summary above")
         return 0
     return code
+
+
+def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, include_exact_aspects: bool = False) -> int:
+    if ingest and not force and astro_daily_questdb_ready():
+        print(f"astro daily QuestDB dataset already complete: {ASTRO_DAILY_START}..{ASTRO_DAILY_END}")
+        return 0
+
+    if force or not astro_daily_snapshot_ready():
+        cmd = [
+            "uv",
+            "run",
+            "python",
+            "scripts/build_astro_daily.py",
+            "--config",
+            "astro_research/configs/astro_daily.yaml",
+            "--start",
+            ASTRO_DAILY_START,
+            "--end",
+            ASTRO_DAILY_END,
+            "--write-parquet",
+            str(ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)),
+            "--no-parquet",
+            "--dry-run",
+        ]
+        if not include_exact_aspects:
+            cmd.append("--skip-exact-aspects")
+        code = run(cmd, check=False).returncode
+        if code:
+            return code
+    else:
+        print(f"astro daily snapshot already exists: {ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)}")
+
+    if not ingest:
+        return 0
+
+    code = run(
+        [
+            "uv",
+            "run",
+            "python",
+            "scripts/ingest_astro_daily.py",
+            "--parquet-dir",
+            str(ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)),
+            "--skip-migrations",
+        ],
+        check=False,
+    ).returncode
+    if code:
+        return code
+    return 0 if astro_daily_questdb_ready() else 1
 
 
 def command_smoke(*, start: str, end: str) -> int:
@@ -313,6 +393,67 @@ def research_input_checks(root: Path = ROOT) -> list[CheckResult]:
         target = root / path.relative_to(ROOT)
         checks.append(CheckResult(f"research_input_{label}", target.exists(), str(target.relative_to(root)) if target.exists() else "missing; run smoke/public rebuild first"))
     return checks
+
+
+def astro_daily_snapshot_ready(root: Path = ROOT) -> bool:
+    snapshot = root / ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)
+    required = (
+        "astro_daily_positions.csv",
+        "astro_retrograde_cycles.csv",
+        "astro_moon_phase_events.csv",
+        "astro_event_windows.csv",
+        "astro_daily_features.csv",
+        "astro_daily_facts.csv",
+    )
+    return all((snapshot / name).exists() and (snapshot / name).stat().st_size > 0 for name in required)
+
+
+def astro_daily_questdb_ready(connection_factory=None, *, start: str = ASTRO_DAILY_START, end: str = ASTRO_DAILY_END) -> bool:
+    try:
+        import psycopg
+    except ImportError:
+        return False
+
+    expected_days = (_parse_date(end) - _parse_date(start)).days + 1
+    connection_factory = connection_factory or _default_psycopg_connection
+    try:
+        with connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT count(), min(ts), max(ts) FROM astro_daily_features")
+                count, min_ts, max_ts = cursor.fetchone()
+        if min_ts is None or max_ts is None:
+            return False
+        min_date = _to_date(min_ts)
+        max_date = _to_date(max_ts)
+        return int(count) >= expected_days and min_date <= _parse_date(start) and max_date >= _parse_date(end)
+    except (psycopg.Error, OSError, ValueError):
+        return False
+
+
+def _default_psycopg_connection():
+    import psycopg
+
+    env = read_env_file(ENV_FILE)
+    return psycopg.connect(
+        host=env.get("QUESTDB_HOST", os.getenv("QUESTDB_HOST", "localhost")),
+        port=int(env.get("QUESTDB_PG_PORT", os.getenv("QUESTDB_PG_PORT", "8812"))),
+        user=env.get("QUESTDB_USER", os.getenv("QUESTDB_USER", "admin")),
+        password=env.get("QUESTDB_PASSWORD", os.getenv("QUESTDB_PASSWORD", "quest")),
+        dbname=env.get("QUESTDB_DATABASE", os.getenv("QUESTDB_DATABASE", "qdb")),
+        autocommit=True,
+    )
+
+
+def _parse_date(value: str) -> date:
+    return date.fromisoformat(value)
+
+
+def _to_date(value) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return datetime.fromisoformat(str(value)).date()
 
 
 def read_env_file(path: Path) -> dict[str, str]:

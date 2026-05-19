@@ -51,7 +51,8 @@ make smoke
 
 `make bootstrap` creates a local `.env` from `.env.example` when needed, starts
 QuestDB plus the maintenance daemon, applies the hourly and daily research
-schemas, and prints database/data readiness. Generated outputs remain under
+schemas, ensures the 1926-2025 core daily astro dataset is built and ingested,
+and prints database/data readiness. Generated outputs remain under
 `astro_research/output/`, and real local research CSVs remain under
 `astro_research/data/local/`; both are intentionally git-ignored.
 
@@ -59,6 +60,9 @@ For manual maintenance, `make maintain-now` tolerates partial transient upstream
 failures while preserving the failed-task summary. Use
 `uv run python scripts/astro_abm_ops.py maintain-now` directly when you need a
 strict non-zero exit code.
+
+`make astro-daily` can be run directly to ensure the deterministic 100-year
+daily astro data exists without running the hourly/daily market maintenance.
 
 Current test status:
 

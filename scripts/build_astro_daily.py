@@ -25,6 +25,11 @@ def main() -> int:
     parser.add_argument("--write-parquet", default="astro_research/output/parquet/astro_daily")
     parser.add_argument("--no-parquet", action="store_true", help="Only write CSV files.")
     parser.add_argument("--dry-run", action="store_true", help="Build and validate, but do not ingest QuestDB.")
+    parser.add_argument(
+        "--skip-exact-aspects",
+        action="store_true",
+        help="Build the core daily dataset without expensive exact aspect events/windows.",
+    )
     parser.add_argument("--aspect-profile", choices=tuple(ASPECT_PROFILES), default=None)
     parser.add_argument("--aspect-bodies", default=None, help="Comma-separated bodies for optimized aspect-only builds.")
     parser.add_argument("--aspect-pairs", default=None, help="Comma-separated pairs, e.g. Mars-Saturn,Jupiter/Saturn.")
@@ -80,12 +85,13 @@ def main() -> int:
         print(f"output_dir={ROOT / args.write_parquet / 'aspects'}")
         return 0
 
-    dataset = build_astro_daily_dataset(config, start=start, end=end)
+    dataset = build_astro_daily_dataset(config, start=start, end=end, include_exact_aspects=not args.skip_exact_aspects)
     warnings = validate_dataset(dataset, start=start, end=end, position_bodies=config.position_bodies)
     paths = export_dataset(dataset, ROOT / args.write_parquet, write_parquet=not args.no_parquet)
 
     print("Astro daily build complete")
     print(f"dataset_id={config.dataset.dataset_id} range={start}->{end} dry_run={args.dry_run}")
+    print(f"include_exact_aspects={not args.skip_exact_aspects}")
     for key, value in dataset.summary.items():
         print(f"{key}={value}")
     for warning in warnings:

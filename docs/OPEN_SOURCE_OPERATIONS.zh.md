@@ -16,7 +16,8 @@ make bootstrap
 2. 啟動 QuestDB 與 maintenance daemon（維護常駐服務）。
 3. 等待 QuestDB 可連線。
 4. 套用小時級與日線研究層 schema（資料庫表結構）。
-5. 印出環境、資料、研究快照、Docker、QuestDB 狀態。
+5. 確保 1926-2025 的 100 年日線核心天體資料已生成並寫入 QuestDB。
+6. 印出環境、資料、研究快照、Docker、QuestDB 狀態。
 
 ## 新人 10 分鐘路徑
 
@@ -34,6 +35,8 @@ make test
 
 `make test` 會自動使用 `uv run --extra dev pytest`，所以乾淨 clone 後不需要手動安裝 pytest。
 
+`make bootstrap` 會建立/補齊 100 年日線核心天體資料。這批資料是 deterministic（可重算）的 Swiss Ephemeris 天體資料，不依賴 API key；第一次跑會花比較久，之後 `make maintain-now` 只會檢查 QuestDB 是否已有完整 1926-2025 daily features，完整時會快速跳過。
+
 ## 常用命令
 
 | 命令 | 中文說明 |
@@ -45,6 +48,7 @@ make test
 | `make down` | 停止 Docker 服務，但不刪資料庫 volume |
 | `make migrate` | 套用 QuestDB schema / migrations |
 | `make maintain-now` | 立即跑一次 hourly + daily 維護；手動入口會容忍單一上游暫時失敗並保留摘要 |
+| `make astro-daily` | 確保 1926-2025 的 100 年日線核心天體資料已生成並寫入 QuestDB |
 | `make smoke` | 跑小型公開 smoke build |
 | `make checkpoint` | 重建研究 workflow checkpoint |
 | `make checkpoint-check` | 只檢查現有 checkpoint，不重建 |
@@ -62,10 +66,13 @@ uv run python scripts/astro_abm_ops.py <command>
 uv run python scripts/astro_abm_ops.py status
 uv run python scripts/astro_abm_ops.py bootstrap --db-only
 uv run python scripts/astro_abm_ops.py maintain-now
+uv run python scripts/astro_abm_ops.py astro-daily
 uv run python scripts/astro_abm_ops.py checkpoint --check-only
 ```
 
 `make maintain-now` 會使用 `--allow-partial`，適合人工維護：例如 NOAA / GOES 這類上游偶發 timeout 時，其他資料源仍會完成，輸出裡會清楚標出 failed task。若要在排程或 CI 裡使用嚴格失敗碼，可直接跑不帶 `--allow-partial` 的 `uv run python scripts/astro_abm_ops.py maintain-now`。
+
+`make astro-daily` 的預設是核心日線資料：positions（行星位置）、retrograde cycles（逆行週期）、moon phase（月相）、daily features / facts（日線特徵/長表 facts）。它預設跳過 all-body exact aspects（全部星體精確相位），因為那是比較重的批次資料；需要完整 exact aspects 時可手動跑 `scripts/build_astro_daily.py --include-exact-aspects` 或 aspect chunk profiles。
 
 ## 三種資料完整度
 

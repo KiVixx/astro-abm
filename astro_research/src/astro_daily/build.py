@@ -73,6 +73,7 @@ def build_astro_daily_dataset(
     start: date | None = None,
     end: date | None = None,
     backend: EphemerisBackend | None = None,
+    include_exact_aspects: bool = True,
 ) -> AstroDailyDataset:
     target_start = start or config.dataset.target_start
     target_end = end or config.dataset.target_end
@@ -103,14 +104,18 @@ def build_astro_daily_dataset(
         step_hours=12,
         tolerance_seconds=120,
     )
-    aspect_events = scan_aspect_events(
-        backend=backend,
-        bodies=config.aspect_bodies,
-        major_aspects=config.major_aspects,
-        start_ts=calc_start_ts,
-        end_ts=calc_end_ts,
-        step_hours=12,
-        tolerance_seconds=120,
+    aspect_events = (
+        scan_aspect_events(
+            backend=backend,
+            bodies=config.aspect_bodies,
+            major_aspects=config.major_aspects,
+            start_ts=calc_start_ts,
+            end_ts=calc_end_ts,
+            step_hours=12,
+            tolerance_seconds=120,
+        )
+        if include_exact_aspects
+        else []
     )
 
     timestamps = tuple(daily_datetimes(target_start, target_end))
@@ -192,7 +197,7 @@ def export_dataset(dataset: AstroDailyDataset, output_dir: str | Path, *, write_
     }
     paths: dict[str, Path] = {}
     for table, rows in tables.items():
-        frame = pd.DataFrame(rows)
+        frame = pd.DataFrame(rows, columns=EXPORT_COLUMNS.get(table))
         csv_path = output / f"{table}.csv"
         frame.to_csv(csv_path, index=False)
         paths[f"{table}.csv"] = csv_path
@@ -204,6 +209,153 @@ def export_dataset(dataset: AstroDailyDataset, output_dir: str | Path, *, write_
                 continue
             paths[f"{table}.parquet"] = parquet_path
     return paths
+
+
+EXPORT_COLUMNS = {
+    "astro_daily_positions": [
+        "ts",
+        "dataset_id",
+        "body",
+        "lon_deg",
+        "lat_deg",
+        "distance_au",
+        "lon_speed_deg_day",
+        "lat_speed_deg_day",
+        "distance_speed_au_day",
+        "right_ascension_deg",
+        "declination_deg",
+        "zodiac_sign",
+        "zodiac_degree",
+        "is_retrograde",
+        "is_oob",
+        "ephemeris_backend",
+        "calc_version",
+        "source_note",
+    ],
+    "astro_retrograde_cycles": [
+        "station_in_ts",
+        "dataset_id",
+        "cycle_id",
+        "body",
+        "station_in_date_ts",
+        "station_out_ts",
+        "station_out_date_ts",
+        "retrograde_start_ts",
+        "retrograde_end_ts",
+        "pre_window_start_ts",
+        "post_window_end_ts",
+        "retrograde_days",
+        "pre_post_window_days",
+        "station_phase_days",
+        "station_in_type",
+        "station_out_type",
+        "calc_version",
+        "source_note",
+    ],
+    "astro_aspect_events": [
+        "exact_ts",
+        "dataset_id",
+        "event_id",
+        "body_a",
+        "body_b",
+        "aspect_name",
+        "aspect_deg",
+        "exact_delta_deg",
+        "relative_speed_deg_day",
+        "applying_before",
+        "calc_version",
+        "source_note",
+    ],
+    "astro_moon_phase_events": [
+        "exact_ts",
+        "dataset_id",
+        "event_id",
+        "phase_name",
+        "elongation_deg",
+        "calc_version",
+        "source_note",
+    ],
+    "astro_event_windows": [
+        "ts",
+        "dataset_id",
+        "event_id",
+        "event_type",
+        "body",
+        "body_a",
+        "body_b",
+        "aspect_name",
+        "phase_name",
+        "exact_ts",
+        "exact_date_ts",
+        "rel_day",
+        "window_name",
+        "window_days",
+        "weight",
+        "calc_version",
+    ],
+    "astro_daily_features": [
+        "ts",
+        "dataset_id",
+        "mercury_phase",
+        "mercury_is_retrograde",
+        "mercury_days_since_station",
+        "mercury_days_until_station",
+        "mercury_cycle_id",
+        "venus_phase",
+        "venus_is_retrograde",
+        "venus_days_since_station",
+        "venus_days_until_station",
+        "venus_cycle_id",
+        "mars_phase",
+        "mars_is_retrograde",
+        "mars_days_since_station",
+        "mars_days_until_station",
+        "mars_cycle_id",
+        "jupiter_phase",
+        "jupiter_is_retrograde",
+        "jupiter_days_since_station",
+        "jupiter_days_until_station",
+        "jupiter_cycle_id",
+        "saturn_phase",
+        "saturn_is_retrograde",
+        "saturn_days_since_station",
+        "saturn_days_until_station",
+        "saturn_cycle_id",
+        "active_retrograde_count",
+        "active_retrograde_bodies",
+        "station_cluster_count_3d",
+        "station_cluster_count_7d",
+        "station_cluster_count_14d",
+        "major_aspect_active_count",
+        "major_aspect_cluster_count_3d",
+        "major_aspect_cluster_count_7d",
+        "major_aspect_cluster_count_14d",
+        "moon_phase_name",
+        "moon_phase_angle_deg",
+        "moon_illumination_pct",
+        "jupiter_saturn_angle_deg",
+        "jupiter_saturn_regime",
+        "mars_saturn_angle_deg",
+        "mars_saturn_regime",
+        "calc_version",
+    ],
+    "astro_daily_facts": [
+        "ts",
+        "dataset_id",
+        "body",
+        "metric",
+        "metric_group",
+        "value_double",
+        "value_long",
+        "value_bool",
+        "value_symbol",
+        "value_text",
+        "unit",
+        "ephemeris_backend",
+        "calc_version",
+        "source_note",
+    ],
+}
 
 
 def validate_dataset(dataset: AstroDailyDataset, *, start: date, end: date, position_bodies: Iterable[str]) -> tuple[str, ...]:

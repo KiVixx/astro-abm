@@ -101,11 +101,56 @@ def test_maintain_now_allow_partial_returns_success(monkeypatch, capsys):
 
     monkeypatch.setattr(ops, "run", fake_run)
 
-    strict_code = ops.command_maintain_now(hourly=True, daily=True, allow_partial=False)
-    partial_code = ops.command_maintain_now(hourly=True, daily=True, allow_partial=True)
+    strict_code = ops.command_maintain_now(hourly=True, daily=True, allow_partial=False, ensure_astro_daily=False)
+    partial_code = ops.command_maintain_now(hourly=True, daily=True, allow_partial=True, ensure_astro_daily=False)
 
     assert strict_code == 1
     assert partial_code == 0
     assert calls.count(["uv", "run", "astro-abm-maintain-hourly"]) == 2
     assert calls.count(["uv", "run", "astro-abm-maintain-daily"]) == 2
     assert "partial upstream failures" in capsys.readouterr().out
+
+
+def test_astro_daily_snapshot_ready_requires_core_csvs(tmp_path):
+    ops = load_ops_module()
+    snapshot = tmp_path / "astro_research/output/parquet/astro_daily_1926_2025"
+    snapshot.mkdir(parents=True)
+
+    assert ops.astro_daily_snapshot_ready(root=tmp_path) is False
+
+    for name in (
+        "astro_daily_positions.csv",
+        "astro_retrograde_cycles.csv",
+        "astro_moon_phase_events.csv",
+        "astro_event_windows.csv",
+        "astro_daily_features.csv",
+        "astro_daily_facts.csv",
+    ):
+        (snapshot / name).write_text("header\n")
+
+    assert ops.astro_daily_snapshot_ready(root=tmp_path) is True
+
+
+def test_command_ensure_astro_daily_builds_snapshot_then_ingests(monkeypatch):
+    ops = load_ops_module()
+
+    class Result:
+        returncode = 0
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(list(cmd))
+        return Result()
+
+    ready_values = iter([False, True])
+    monkeypatch.setattr(ops, "astro_daily_questdb_ready", lambda: next(ready_values))
+    monkeypatch.setattr(ops, "astro_daily_snapshot_ready", lambda: False)
+    monkeypatch.setattr(ops, "run", fake_run)
+
+    code = ops.command_ensure_astro_daily()
+
+    assert code == 0
+    assert any("scripts/build_astro_daily.py" in call for call in calls)
+    assert any("--skip-exact-aspects" in call for call in calls)
+    assert any("scripts/ingest_astro_daily.py" in call for call in calls)
