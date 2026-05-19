@@ -27,9 +27,12 @@ uv sync
 make bootstrap
 make status
 make smoke
+make test
 ```
 
 `make smoke` 是小型公開 smoke build（煙霧測試），不需要本機長歷史 CSV，也不需要私有資料。它只驗證本機 Python、Swiss Ephemeris、研究層 build path 是否能跑通。
+
+`make test` 會自動使用 `uv run --extra dev pytest`，所以乾淨 clone 後不需要手動安裝 pytest。
 
 ## 常用命令
 
@@ -45,7 +48,7 @@ make smoke
 | `make smoke` | 跑小型公開 smoke build |
 | `make checkpoint` | 重建研究 workflow checkpoint |
 | `make checkpoint-check` | 只檢查現有 checkpoint，不重建 |
-| `make test` | 跑完整測試 |
+| `make test` | 跑完整測試，會自動帶入 dev dependencies（開發測試依賴） |
 
 底層入口是：
 

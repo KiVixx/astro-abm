@@ -58,7 +58,8 @@ schemas, and prints database/data readiness. Generated outputs remain under
 Current test status:
 
 ```bash
-uv run pytest -q
+make test
+# or: uv run --extra dev pytest -q
 ```
 
 Not yet implemented:

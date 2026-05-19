@@ -46,4 +46,4 @@ checkpoint-check:
 	uv run python scripts/astro_abm_ops.py checkpoint --check-only
 
 test:
-	uv run pytest
+	uv run --extra dev pytest
