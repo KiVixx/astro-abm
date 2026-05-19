@@ -35,6 +35,11 @@ def test_parse_xray_feed_filters_to_primary_channel():
             "energy": "0.1-0.8nm",
             "flux": 2.2e-08,
         },
+        {
+            "time_tag": "2026-04-15T12:11:00Z",
+            "energy": "0.1-0.8nm",
+            "flux": None,
+        },
     ]
 
     rows = parse_xray_flux_feed(payload)
@@ -53,6 +58,7 @@ def test_expand_kp_to_hourly_repeats_each_three_hour_value_across_bucket_hours()
 
     payload = [
         {"time_tag": "2026-04-15T00:00:00Z", "kp_index": 2.33},
+        {"time_tag": "2026-04-15T01:00:00Z", "kp_index": None},
         {"time_tag": "2026-04-15T03:00:00Z", "kp_index": 4.67},
     ]
 

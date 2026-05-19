@@ -87,3 +87,39 @@ def test_run_noaa_swpc_recent_backfill_writes_provisional_rows_and_run_log():
     assert rows[0]["quality_flag"] == "provisional"
     assert rows[0]["ingest_run_id"] == "swpc-recent-test"
     assert run_writer.records[0].provider == "noaa_swpc_recent"
+
+
+def test_run_noaa_swpc_recent_backfill_uses_latest_valid_rows_when_live_feed_has_nulls():
+    from astro_abm.etl.backfill_noaa_swpc_recent import run_noaa_swpc_recent_backfill
+
+    class NullLatestClient:
+        def fetch_plasma(self):
+            return [
+                {"time_tag": datetime(2026, 4, 15, 12, tzinfo=UTC), "speed": 421.4},
+                {"time_tag": datetime(2026, 4, 15, 12, 30, tzinfo=UTC), "speed": None},
+            ]
+
+        def fetch_magnetometer(self):
+            return [{"time_tag": datetime(2026, 4, 15, 12, tzinfo=UTC), "bz_gsm": -3.2}]
+
+        def fetch_xray_flux(self):
+            return [{"time_tag": datetime(2026, 4, 15, 12, tzinfo=UTC), "flux": 2.2e-08}]
+
+        def fetch_hourly_kp(self):
+            return [{"ts": datetime(2026, 4, 15, 12, tzinfo=UTC), "kp_index": 4.67}]
+
+    fact_writer = RecordingFactWriter()
+    result = run_noaa_swpc_recent_backfill(
+        start_utc=datetime(2026, 4, 15, 13, tzinfo=UTC),
+        end_utc=datetime(2026, 4, 15, 14, tzinfo=UTC),
+        client=NullLatestClient(),
+        writer=fact_writer,
+        run_writer=RecordingRunWriter(),
+        connection_factory=lambda: FakeConnection(),
+        run_id="swpc-recent-null-test",
+    )
+
+    assert result.errors == ()
+    assert result.written == 4
+    speed_row = next(row for row in fact_writer.batches[0] if row["metric_name"] == "solar_wind_speed")
+    assert speed_row["metric_value"] == 421.4

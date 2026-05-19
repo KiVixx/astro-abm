@@ -54,11 +54,14 @@ def parse_xray_flux_feed(payload: list[dict[str, Any]], energy_channel: str = "0
     for item in payload:
         if item.get("energy") != energy_channel:
             continue
+        flux = _try_float(item.get("flux"))
+        if flux is None:
+            continue
         rows.append(
             {
                 "time_tag": _parse_noaa_time(item["time_tag"]),
                 "energy": item["energy"],
-                "flux": float(item["flux"]),
+                "flux": flux,
             }
         )
     return rows
@@ -68,10 +71,19 @@ def expand_kp_index_to_hourly(payload: list[dict[str, Any]]) -> list[dict[str, A
     rows: list[dict[str, Any]] = []
     for item in payload:
         start = _parse_noaa_time(item["time_tag"])
-        kp_value = float(item["kp_index"])
+        kp_value = _try_float(item.get("kp_index"))
+        if kp_value is None:
+            continue
         for offset in range(3):
             rows.append({"ts": start + timedelta(hours=offset), "kp_index": kp_value})
     return rows
+
+
+def _try_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def build_space_weather_feature_rows(

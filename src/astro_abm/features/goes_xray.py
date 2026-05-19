@@ -15,20 +15,46 @@ GOES_XRS_EPOCH = datetime(2000, 1, 1, 12, tzinfo=UTC)
 
 
 class GoesXrayClient:
-    def __init__(self, base_url: str = NOAA_GOES_XRS_BASE_URL, session: requests.Session | None = None):
+    def __init__(
+        self,
+        base_url: str = NOAA_GOES_XRS_BASE_URL,
+        session: requests.Session | None = None,
+        request_timeout: float | tuple[float, float] = (15, 120),
+        healthcheck_timeout: float = 8,
+    ):
         self.base_url = base_url.rstrip("/")
         self.session = session or requests.Session()
+        self.request_timeout = request_timeout
+        self.healthcheck_timeout = healthcheck_timeout
+
+    def year_path(self, *, year: int, satellite: str, cache_dir: Path) -> Path:
+        filename = f"sci_xrsf-l2-avg1m_{satellite}_y{year}_v2-2-1.nc"
+        return cache_dir / filename
+
+    def is_year_cached(self, *, year: int, satellite: str, cache_dir: Path) -> bool:
+        path = self.year_path(year=year, satellite=satellite, cache_dir=cache_dir)
+        return path.exists() and path.stat().st_size > 0
+
+    def archive_healthcheck(self) -> tuple[bool, str]:
+        try:
+            with self.session.get(f"{self.base_url}/", stream=True, timeout=self.healthcheck_timeout) as response:
+                response.close()
+                if response.status_code >= 500:
+                    return False, f"http_{response.status_code}"
+                return True, f"http_{response.status_code}"
+        except requests.RequestException as exc:
+            return False, f"{type(exc).__name__}:{exc}"
 
     def download_year(self, *, year: int, satellite: str, cache_dir: Path) -> Path:
         cache_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"sci_xrsf-l2-avg1m_{satellite}_y{year}_v2-2-1.nc"
-        path = cache_dir / filename
+        path = self.year_path(year=year, satellite=satellite, cache_dir=cache_dir)
         if path.exists() and path.stat().st_size > 0:
             return path
 
+        filename = path.name
         goes_dir = satellite.replace("g", "goes")
         url = f"{self.base_url}/{goes_dir}/l2/data/xrsf-l2-avg1m_science/{filename}"
-        with self.session.get(url, stream=True, timeout=120) as response:
+        with self.session.get(url, stream=True, timeout=self.request_timeout) as response:
             response.raise_for_status()
             tmp_path = path.with_suffix(path.suffix + ".tmp")
             with tmp_path.open("wb") as handle:

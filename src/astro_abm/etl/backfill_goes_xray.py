@@ -63,6 +63,7 @@ def run_goes_xray_backfill(
     written = 0
     skipped = 0
     errors: list[str] = []
+    archive_unavailable_detail: str | None = None
 
     for year in range(start_utc.year, end_utc.year + 1):
         window_start = max(start_utc, datetime(year, 1, 1, tzinfo=UTC))
@@ -72,6 +73,15 @@ def run_goes_xray_backfill(
         years_seen += 1
         satellite = select_goes_xray_satellite(year)
         try:
+            cached = _client_year_cached(client, year=year, satellite=satellite, cache_dir=cache_dir)
+            if not cached:
+                if archive_unavailable_detail is None:
+                    ok, detail = _client_archive_healthcheck(client)
+                    if not ok:
+                        archive_unavailable_detail = detail
+                if archive_unavailable_detail:
+                    errors.append(f"{year}:{satellite}:SourceUnavailable:{archive_unavailable_detail}")
+                    continue
             path = client.download_year(year=year, satellite=satellite, cache_dir=cache_dir)
             records = read_goes_xray_hourly_records(path, start_utc=window_start, end_utc=window_end, satellite=satellite)
             records_seen += len(records)
@@ -118,6 +128,20 @@ def run_goes_xray_backfill(
             )
         )
     return summary
+
+
+def _client_year_cached(client: Any, *, year: int, satellite: str, cache_dir: Path) -> bool:
+    checker = getattr(client, "is_year_cached", None)
+    if checker is None:
+        return False
+    return bool(checker(year=year, satellite=satellite, cache_dir=cache_dir))
+
+
+def _client_archive_healthcheck(client: Any) -> tuple[bool, str]:
+    checker = getattr(client, "archive_healthcheck", None)
+    if checker is None:
+        return True, "unsupported"
+    return checker()
 
 
 def _parse_utc(value: str) -> datetime:

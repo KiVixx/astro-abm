@@ -112,10 +112,10 @@ def _build_hourly_snapshot(
     xray_rows: Iterable[dict[str, Any]],
     kp_rows: Iterable[dict[str, Any]],
 ) -> list[dict[str, Any]] | None:
-    plasma = _latest_before(plasma_rows, "time_tag", bucket_ts)
-    mag = _latest_before(mag_rows, "time_tag", bucket_ts)
-    xray = _latest_before(xray_rows, "time_tag", bucket_ts)
-    kp = _latest_before(kp_rows, "ts", bucket_ts)
+    plasma = _latest_valid_before(plasma_rows, "time_tag", bucket_ts, required_numeric_keys=("speed",))
+    mag = _latest_valid_before(mag_rows, "time_tag", bucket_ts, required_numeric_keys=("bz_gsm",))
+    xray = _latest_valid_before(xray_rows, "time_tag", bucket_ts, required_numeric_keys=("flux",))
+    kp = _latest_valid_before(kp_rows, "ts", bucket_ts, required_numeric_keys=("kp_index",))
     if not all([plasma, mag, xray, kp]):
         return None
 
@@ -153,11 +153,32 @@ def _filter_existing(rows, *, connection_factory, start_utc: datetime, end_utc: 
     return new_rows, len(rows) - len(new_rows)
 
 
-def _latest_before(rows: Iterable[dict[str, Any]], timestamp_key: str, bucket_ts: datetime) -> dict[str, Any] | None:
-    candidates = [row for row in rows if row.get(timestamp_key) is not None and row[timestamp_key] <= bucket_ts]
+def _latest_valid_before(
+    rows: Iterable[dict[str, Any]],
+    timestamp_key: str,
+    bucket_ts: datetime,
+    *,
+    required_numeric_keys: Sequence[str],
+) -> dict[str, Any] | None:
+    candidates = [
+        row
+        for row in rows
+        if row.get(timestamp_key) is not None
+        and row[timestamp_key] <= bucket_ts
+        and _has_numeric_values(row, required_numeric_keys)
+    ]
     if not candidates:
         return None
     return max(candidates, key=lambda row: row[timestamp_key])
+
+
+def _has_numeric_values(row: dict[str, Any], keys: Sequence[str]) -> bool:
+    for key in keys:
+        try:
+            float(row[key])
+        except (KeyError, TypeError, ValueError):
+            return False
+    return True
 
 
 def _hourly_range(start_utc: datetime, end_utc: datetime):
