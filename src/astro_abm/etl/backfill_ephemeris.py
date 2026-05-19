@@ -62,11 +62,15 @@ def run_ephemeris_backfill(
             start_ts=chunk_start,
             end_ts=chunk_end,
         )
+        existing_by_ts: dict[datetime, set[str]] = {}
+        for existing_ts, metric_name in existing:
+            existing_by_ts.setdefault(existing_ts, set()).add(metric_name)
+
         rows = []
         expected_metrics = set(EPHEMERIS_FEATURE_METRICS)
         for ts in _hourly_range(chunk_start, chunk_end):
             hours_seen += 1
-            existing_metrics = {metric_name for existing_ts, metric_name in existing if existing_ts == ts}
+            existing_metrics = existing_by_ts.get(ts, set())
             if expected_metrics.issubset(existing_metrics):
                 skipped += len(expected_metrics)
                 continue
@@ -79,7 +83,7 @@ def run_ephemeris_backfill(
                 {**row, "ingest_run_id": run_id}
                 for row in build_ephemeris_feature_rows(ts=ts, features=features)
             ]
-            new_rows = [row for row in feature_rows if (row["ts"], row["metric_name"]) not in existing]
+            new_rows = [row for row in feature_rows if row["metric_name"] not in existing_metrics]
             skipped += len(feature_rows) - len(new_rows)
             rows.extend(new_rows)
 
