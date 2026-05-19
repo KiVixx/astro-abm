@@ -39,6 +39,21 @@ Implemented and unit-tested:
 Chinese maintainer briefing:
 
 - [Astro ABM 項目維護者簡報](docs/research/project_maintenance_brief_zh.md)
+- [一鍵運行與資料維護指南](docs/OPEN_SOURCE_OPERATIONS.zh.md)
+
+One-command local operations:
+
+```bash
+make bootstrap
+make status
+make smoke
+```
+
+`make bootstrap` creates a local `.env` from `.env.example` when needed, starts
+QuestDB plus the maintenance daemon, applies the hourly and daily research
+schemas, and prints database/data readiness. Generated outputs remain under
+`astro_research/output/`, and real local research CSVs remain under
+`astro_research/data/local/`; both are intentionally git-ignored.
 
 Current test status:
 
