@@ -4,7 +4,7 @@ from typing import Callable
 
 import pandas as pd
 
-from astro_daily.ingest_questdb import _null_to_none
+from astro_daily.ingest_questdb import _filter_min_timestamp, _null_to_none
 from astro_abm.storage.questdb import QuestDBMarketBarWriter
 from market_daily.features import FEATURE_COLUMNS
 from market_daily.normalize import BAR_COLUMNS
@@ -22,6 +22,7 @@ def ingest_market_frames(
     features: pd.DataFrame,
     connection_factory: Callable | None = None,
     batch_size: int = 1000,
+    min_ts: str | None = "1970-01-01T00:00:00Z",
 ) -> dict[str, int]:
     connection_factory = connection_factory or QuestDBMarketBarWriter._build_default_connection
     frames = {
@@ -34,6 +35,7 @@ def ingest_market_frames(
             for table, frame in frames.items():
                 columns = TABLE_COLUMNS[table]
                 selected = frame.reindex(columns=columns)
+                selected = _filter_min_timestamp(selected, table=table, min_ts=min_ts)
                 rows = [tuple(_null_to_none(value) for value in row) for row in selected.itertuples(index=False, name=None)]
                 if not rows:
                     counts[table] = 0

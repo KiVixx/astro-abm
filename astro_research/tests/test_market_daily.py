@@ -5,6 +5,7 @@ import math
 import pandas as pd
 
 from market_daily.features import build_market_daily_features
+from market_daily.ingest_questdb import ingest_market_frames
 from market_daily.normalize import normalize_market_bars
 
 
@@ -56,3 +57,58 @@ def test_realized_volatility_and_drawdown():
 
     assert features["realized_vol_5d"].notna().sum() > 0
     assert features.loc[2, "drawdown_5d"] < 0
+
+
+def test_market_daily_ingest_filters_pre_1970_rows():
+    inserted: dict[str, list[tuple]] = {}
+
+    class FakeCursor:
+        def executemany(self, sql, rows):
+            table = sql.split("INSERT INTO ", 1)[1].split(" ", 1)[0]
+            inserted.setdefault(table, []).extend(rows)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    bars = normalize_market_bars(
+        pd.DataFrame(
+            {
+                "date": ["1962-01-02", "1970-01-01", "2020-01-01"],
+                "close": [4.0, 7.0, 10.0],
+            }
+        ),
+        asset="US10Y",
+        source="fred",
+        currency="PCT",
+        market_timezone="UTC",
+        data_version="v1",
+        source_note="test",
+    )
+    features = build_market_daily_features(bars, data_version="v1")
+
+    counts = ingest_market_frames(
+        bars=bars,
+        features=features,
+        connection_factory=lambda: FakeConnection(),
+        min_ts="1970-01-01T00:00:00Z",
+    )
+
+    assert counts == {"market_daily_bars": 2, "market_daily_features": 2}
+    assert [row[0].year for row in inserted["market_daily_bars"]] == [1970, 2020]
+    assert [row[0].year for row in inserted["market_daily_features"]] == [1970, 2020]

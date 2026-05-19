@@ -28,6 +28,12 @@ def main() -> int:
     parser.add_argument("--no-parquet", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Build/export only; do not ingest.")
     parser.add_argument("--ingest", action="store_true", help="Apply migrations and ingest into QuestDB.")
+    parser.add_argument(
+        "--min-ts",
+        default="1970-01-01T00:00:00Z",
+        help="Filter designated timestamps before this value during QuestDB ingest.",
+    )
+    parser.add_argument("--include-pre-1970", action="store_true", help="Attempt to ingest pre-1970 timestamps.")
     args = parser.parse_args()
 
     config = load_market_daily_config(ROOT / args.config)
@@ -55,10 +61,13 @@ def main() -> int:
     print(f"files={len(paths)}")
     if args.ingest and not args.dry_run:
         apply_migrations()
-        counts = ingest_market_frames(bars=bars, features=features)
+        min_ts = None if args.include_pre_1970 else args.min_ts
+        counts = ingest_market_frames(bars=bars, features=features, min_ts=min_ts)
         from astro_daily.ingest_questdb import ingest_csv_snapshot
 
-        counts.update(ingest_csv_snapshot(ROOT / args.write_parquet, tables=("market_asset_coverage",)))
+        counts.update(ingest_csv_snapshot(ROOT / args.write_parquet, tables=("market_asset_coverage",), min_ts=min_ts))
+        if min_ts:
+            print(f"min_ts={min_ts}")
         print(f"ingested={counts}")
     else:
         print(f"ingest_skipped={not args.ingest or args.dry_run}")

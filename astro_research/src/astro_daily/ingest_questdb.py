@@ -414,6 +414,18 @@ TIMESTAMP_COLUMNS = {
     "astro_retrograde_cycles": "station_in_ts",
     "astro_event_windows": "ts",
     "astro_daily_features": "ts",
+    "market_daily_bars": "ts",
+    "market_daily_features": "ts",
+    "market_asset_coverage": "ts",
+    "macro_daily_observations": "ts",
+    "financial_stress_daily": "ts",
+    "research_events": "event_ts",
+    "research_hypotheses": "ts",
+    "event_study_runs": "ts",
+    "event_study_results": "ts",
+    "event_study_results_v2": "ts",
+    "data_source_registry": "ts",
+    "world_event_catalog": "start_ts",
 }
 
 
