@@ -23,6 +23,7 @@ ASTRO_DAILY_START = "1926-01-01"
 ASTRO_DAILY_QUESTDB_START = "1970-01-01"
 ASTRO_DAILY_END = "2025-12-31"
 ASTRO_DAILY_SNAPSHOT = OUTPUT_ROOT / "parquet/astro_daily_1926_2025"
+RESEARCH_DUCKDB = OUTPUT_ROOT / "duckdb/astro_research_full_history.duckdb"
 
 LOCAL_DATA_FILES = {
     "SPX": ROOT / "astro_research/data/local/equity/spx_daily.csv",
@@ -39,6 +40,7 @@ RESEARCH_INPUT_FILES = {
     "financial_stress_daily": OUTPUT_ROOT / "parquet/financial_stress/financial_stress_daily.parquet",
     "research_events": OUTPUT_ROOT / "parquet/research_events/research_events.parquet",
     "research_hypotheses": OUTPUT_ROOT / "parquet/research_hypotheses/research_hypotheses.parquet",
+    "duckdb_full_history": RESEARCH_DUCKDB,
 }
 
 
@@ -85,6 +87,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     astro_daily.add_argument("--skip-ingest", action="store_true", help="Only build/refresh the local snapshot; do not ingest QuestDB.")
     astro_daily.add_argument("--include-exact-aspects", action="store_true", help="Include expensive exact all-body aspect events in the core snapshot.")
 
+    research_store = sub.add_parser("research-store", help="Build the full-history DuckDB research store from ignored snapshots.")
+    research_store.add_argument("--skip-aspect-chunks", action="store_true", help="Do not scan partitioned exact-aspect chunk outputs.")
+    research_store.add_argument("--dry-run", action="store_true", help="Only list discovered snapshot inputs.")
+
     smoke = sub.add_parser("smoke", help="Run a small public smoke build that does not require private local CSVs.")
     smoke.add_argument("--start", default="2020-01-01")
     smoke.add_argument("--end", default="2020-01-07")
@@ -103,6 +109,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args.db_only:
             if not args.skip_astro_daily:
                 command_ensure_astro_daily()
+                command_research_store()
             command_up(db_only=False, build=not args.no_build)
         return command_status()
     if args.command == "up":
@@ -124,6 +131,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             ingest=not args.skip_ingest,
             include_exact_aspects=args.include_exact_aspects,
         )
+    if args.command == "research-store":
+        return command_research_store(skip_aspect_chunks=args.skip_aspect_chunks, dry_run=args.dry_run)
     if args.command == "smoke":
         return command_smoke(start=args.start, end=args.end)
     if args.command == "checkpoint":
@@ -276,6 +285,24 @@ def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, incl
     if code:
         return code
     return 0 if wait_for_astro_daily_questdb(timeout=30) else 1
+
+
+def command_research_store(*, skip_aspect_chunks: bool = False, dry_run: bool = False) -> int:
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "scripts/build_research_duckdb.py",
+        "--snapshot-root",
+        "astro_research/output/parquet",
+        "--output",
+        str(RESEARCH_DUCKDB.relative_to(ROOT)),
+    ]
+    if skip_aspect_chunks:
+        cmd.append("--skip-aspect-chunks")
+    if dry_run:
+        cmd.append("--dry-run")
+    return run(cmd, check=False).returncode
 
 
 def command_smoke(*, start: str, end: str) -> int:

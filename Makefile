@@ -1,4 +1,4 @@
-.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily smoke checkpoint checkpoint-check test
+.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store smoke checkpoint checkpoint-check test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -11,6 +11,7 @@ help:
 	@echo "  make migrate          Apply hourly and daily QuestDB schemas"
 	@echo "  make maintain-now     Run one local hourly+daily maintenance pass"
 	@echo "  make astro-daily      Ensure 100-year core daily astro data exists"
+	@echo "  make research-store   Build ignored DuckDB full-history research store"
 	@echo "  make smoke            Run small public smoke build"
 	@echo "  make checkpoint       Regenerate research workflow checkpoint"
 	@echo "  make checkpoint-check Validate existing checkpoint outputs only"
@@ -39,6 +40,9 @@ maintain-now:
 
 astro-daily:
 	uv run python scripts/astro_abm_ops.py astro-daily
+
+research-store:
+	uv run python scripts/astro_abm_ops.py research-store
 
 smoke:
 	uv run python scripts/astro_abm_ops.py smoke

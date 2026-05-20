@@ -46,13 +46,15 @@ One-command local operations:
 ```bash
 make bootstrap
 make status
+make research-store
 make smoke
 ```
 
 `make bootstrap` creates a local `.env` from `.env.example` when needed, starts
 QuestDB plus the maintenance daemon, applies the hourly and daily research
 schemas, ensures the 1926-2025 core daily astro dataset is built and ingested,
-and prints database/data readiness. Generated outputs remain under
+builds the DuckDB full-history research store, and prints database/data
+readiness. Generated outputs remain under
 `astro_research/output/`, and real local research CSVs remain under
 `astro_research/data/local/`; both are intentionally git-ignored.
 
@@ -66,6 +68,17 @@ daily astro data exists without running the hourly/daily market maintenance.
 Because QuestDB WAL/partitioned designated timestamp tables reject pre-1970
 timestamps, this command keeps the full 1926-2025 CSV snapshot locally and
 ingests the QuestDB-queryable 1970-2025 slice.
+
+`make research-store` builds the ignored DuckDB full-history research store at
+`astro_research/output/duckdb/astro_research_full_history.duckdb`. This is the
+canonical local analysis layer for 1926-2025 daily research, including pre-1970
+rows that QuestDB cannot store in designated time-series tables. The generated
+`research_store_manifest` table records each imported table, source file,
+row count, time range, and whether it includes pre-1970 rows.
+
+中文維護說明：QuestDB 主要負責 1970 年之後的可維護時間序列查詢；
+1926-2025 全歷史研究資料以 DuckDB / Parquet snapshot 為準，避免為了
+寫入 QuestDB 而扭曲日期或污染研究邏輯。
 
 Current test status:
 
@@ -849,6 +862,28 @@ python scripts/build_astro_daily.py \
   --no-parquet \
   --dry-run
 ```
+
+Build the DuckDB full-history store from generated snapshots:
+
+```bash
+python scripts/build_research_duckdb.py \
+  --snapshot-root astro_research/output/parquet \
+  --output astro_research/output/duckdb/astro_research_full_history.duckdb
+```
+
+Inspect the manifest:
+
+```sql
+SELECT table_name, row_count, min_ts, max_ts, pre_1970_rows
+FROM research_store_manifest
+ORDER BY table_name;
+```
+
+Design rule:
+
+- QuestDB = live/maintenance query layer, 1970+ designated timestamp tables.
+- DuckDB/Parquet = full-history research layer, including 1926-1969.
+- Do not date-shift pre-1970 data to fit QuestDB; preserve real timestamps.
 
 MVP3 also writes:
 
