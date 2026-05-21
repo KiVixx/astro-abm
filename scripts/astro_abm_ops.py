@@ -91,6 +91,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     research_store.add_argument("--skip-aspect-chunks", action="store_true", help="Do not scan partitioned exact-aspect chunk outputs.")
     research_store.add_argument("--dry-run", action="store_true", help="Only list discovered snapshot inputs.")
 
+    research_prepare = sub.add_parser("research-prepare", help="Run selectable public/local/formal research data preparation.")
+    research_prepare.add_argument("--mode", choices=("public", "local-full", "formal"), default="public")
+    research_prepare.add_argument("--start", default="1926-01-01")
+    research_prepare.add_argument("--end", default=None)
+    research_prepare.add_argument("--aspect-profile", default="macro_core")
+    research_prepare.add_argument("--workers", type=int, default=1)
+    research_prepare.add_argument("--ingest", action="store_true")
+    research_prepare.add_argument("--run-batch", action="store_true", help="In formal mode, run the exploratory formal batch.")
+    research_prepare.add_argument("--dry-run", action="store_true", help="Write the plan report without executing commands.")
+    research_prepare.add_argument("--strict-local-data", action="store_true", help="Fail local-full/formal mode if local CSV files are missing.")
+
+    fetch_local = sub.add_parser("fetch-local-data", help="Fetch ignored long-history local research CSV files.")
+    fetch_local.add_argument("--asset", action="append", choices=("SPX", "DXY", "Gold", "CreditProxy"))
+    fetch_local.add_argument("--all", action="store_true")
+    fetch_local.add_argument("--start", default="1926-01-01")
+    fetch_local.add_argument("--end", default=None)
+    fetch_local.add_argument("--fred-api-key-env", default="FRED_API_KEY")
+    fetch_local.add_argument("--dry-run", action="store_true")
+    fetch_local.add_argument("--accept-research-local-terms", action="store_true")
+
     smoke = sub.add_parser("smoke", help="Run a small public smoke build that does not require private local CSVs.")
     smoke.add_argument("--start", default="2020-01-01")
     smoke.add_argument("--end", default="2020-01-07")
@@ -133,6 +153,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.command == "research-store":
         return command_research_store(skip_aspect_chunks=args.skip_aspect_chunks, dry_run=args.dry_run)
+    if args.command == "research-prepare":
+        return command_research_prepare(
+            mode=args.mode,
+            start=args.start,
+            end=args.end,
+            aspect_profile=args.aspect_profile,
+            workers=args.workers,
+            ingest=args.ingest,
+            run_batch=args.run_batch,
+            dry_run=args.dry_run,
+            strict_local_data=args.strict_local_data,
+        )
+    if args.command == "fetch-local-data":
+        return command_fetch_local_data(
+            assets=tuple(args.asset) if args.asset else (),
+            all_assets=args.all,
+            start=args.start,
+            end=args.end,
+            fred_api_key_env=args.fred_api_key_env,
+            dry_run=args.dry_run,
+            accept_terms=args.accept_research_local_terms,
+        )
     if args.command == "smoke":
         return command_smoke(start=args.start, end=args.end)
     if args.command == "checkpoint":
@@ -302,6 +344,78 @@ def command_research_store(*, skip_aspect_chunks: bool = False, dry_run: bool = 
         cmd.append("--skip-aspect-chunks")
     if dry_run:
         cmd.append("--dry-run")
+    return run(cmd, check=False).returncode
+
+
+def command_research_prepare(
+    *,
+    mode: str,
+    start: str,
+    end: str | None,
+    aspect_profile: str,
+    workers: int,
+    ingest: bool,
+    run_batch: bool,
+    dry_run: bool,
+    strict_local_data: bool,
+) -> int:
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "scripts/research_prepare.py",
+        "--mode",
+        mode,
+        "--start",
+        start,
+        "--aspect-profile",
+        aspect_profile,
+        "--workers",
+        str(workers),
+    ]
+    if end:
+        cmd.extend(["--end", end])
+    if ingest:
+        cmd.append("--ingest")
+    if run_batch:
+        cmd.append("--run-batch")
+    if dry_run:
+        cmd.append("--dry-run")
+    if strict_local_data:
+        cmd.append("--strict-local-data")
+    return run(cmd, check=False).returncode
+
+
+def command_fetch_local_data(
+    *,
+    assets: tuple[str, ...],
+    all_assets: bool,
+    start: str,
+    end: str | None,
+    fred_api_key_env: str,
+    dry_run: bool,
+    accept_terms: bool,
+) -> int:
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "scripts/fetch_local_research_data.py",
+        "--start",
+        start,
+        "--fred-api-key-env",
+        fred_api_key_env,
+    ]
+    if all_assets or not assets:
+        cmd.append("--all")
+    for asset in assets:
+        cmd.extend(["--asset", asset])
+    if end:
+        cmd.extend(["--end", end])
+    if dry_run:
+        cmd.append("--dry-run")
+    if accept_terms:
+        cmd.append("--accept-research-local-terms")
     return run(cmd, check=False).returncode
 
 

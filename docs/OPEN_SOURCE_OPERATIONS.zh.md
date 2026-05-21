@@ -28,6 +28,7 @@ uv sync
 make bootstrap
 make status
 make smoke
+make research-prepare
 make test
 ```
 
@@ -52,6 +53,8 @@ make test
 | `make maintain-now` | 立即跑一次 hourly + daily 維護；手動入口會容忍單一上游暫時失敗並保留摘要 |
 | `make astro-daily` | 確保 1926-2025 的 100 年日線核心天體 snapshot 已生成，並寫入 QuestDB 1970-2025 切片 |
 | `make smoke` | 跑小型公開 smoke build |
+| `make research-prepare` | 跑公開研究準備流程；可切換到本機完整或正式探索模式 |
+| `make fetch-local-data` | 拉取 SPX / Gold / DXY / CreditProxy 本機長歷史 CSV，資料檔仍不進 git |
 | `make checkpoint` | 重建研究 workflow checkpoint |
 | `make checkpoint-check` | 只檢查現有 checkpoint，不重建 |
 | `make test` | 跑完整測試，會自動帶入 dev dependencies（開發測試依賴） |
@@ -69,6 +72,8 @@ uv run python scripts/astro_abm_ops.py status
 uv run python scripts/astro_abm_ops.py bootstrap --db-only
 uv run python scripts/astro_abm_ops.py maintain-now
 uv run python scripts/astro_abm_ops.py astro-daily
+uv run python scripts/astro_abm_ops.py research-prepare --mode public
+uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
 uv run python scripts/astro_abm_ops.py checkpoint --check-only
 ```
 
@@ -84,7 +89,70 @@ uv run python scripts/astro_abm_ops.py checkpoint --check-only
 |---|---|---|---|
 | `smoke` | 小型煙霧測試 | 可以 | 不需要私有 CSV，用短日期範圍驗證程式能跑 |
 | `public` | 公開資料模式 | 大多可以 | 依賴 FRED API key、Binance、NOAA/NASA、Swiss Ephemeris |
-| `local_full` | 本機完整研究模式 | 不一定 | 需要 `astro_research/data/local/` 內的 SPX/Gold/DXY/Credit CSV |
+| `local-full` | 本機完整研究模式 | 不一定 | 需要 `astro_research/data/local/` 內的 SPX/Gold/DXY/Credit CSV |
+
+## 研究準備入口
+
+`make research-prepare` 預設等同於：
+
+```bash
+uv run python scripts/astro_abm_ops.py research-prepare --mode public
+```
+
+它會建立/刷新 source registry（資料來源註冊表）、market daily（市場日線）、
+macro daily（宏觀日線）、financial stress daily（金融壓力日線）、
+formal readiness（正式研究就緒檢查）、DuckDB full-history store（全歷史研究庫），
+最後跑 research layer validation（研究層驗證）。輸出報告在：
+
+```text
+astro_research/output/reports/research_prepare_public.md
+astro_research/output/reports/research_prepare_public.json
+```
+
+可選模式：
+
+```bash
+uv run python scripts/astro_abm_ops.py research-prepare --mode public
+uv run python scripts/astro_abm_ops.py research-prepare --mode local-full
+uv run python scripts/astro_abm_ops.py research-prepare --mode formal --workers 4
+uv run python scripts/astro_abm_ops.py research-prepare --mode formal --workers 4 --run-batch
+```
+
+| 模式 | 中文說明 | 適合誰 |
+|---|---|---|
+| `public` | 公開/API 資料準備，不要求本機私有 CSV | 新人 clone 後第一步 |
+| `local-full` | 盡量使用本機長歷史 CSV；缺檔只警告 | 已放入 SPX/Gold/DXY/Credit CSV 的維護者 |
+| `formal` | 額外建立昂貴的 macro_core aspect chunks（宏觀核心相位切片）、research_events（研究事件）、research_hypotheses（研究假設） | 要跑探索性正式研究批次的人 |
+
+`formal` 模式預設不跑完整 exploratory batch（探索性正式批次），因為耗時與輸出量較大；需要時加 `--run-batch`。若你希望本機 CSV 缺失時直接失敗，加 `--strict-local-data`。
+
+## 長歷史本機資料拉取
+
+這四個資料檔不進 git，但新人可以自己拉取生成：
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
+```
+
+或只拉其中一個：
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset SPX --accept-research-local-terms
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset Gold --accept-research-local-terms
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset DXY --accept-research-local-terms
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset CreditProxy --accept-research-local-terms
+```
+
+來源與中文解釋：
+
+| 資料 | 英文欄位/來源 | 中文說明 |
+|---|---|---|
+| SPX | Yahoo Finance chart endpoint `^GSPC` | S&P 500 指數日線 OHLCV |
+| DXY | Yahoo Finance chart endpoint `DX-Y.NYB` | 美元指數日線 OHLCV |
+| Gold | LBMA `gold_pm.json` + `gold_am.json` fallback | 倫敦金銀市場協會黃金美元定盤價；PM 優先，缺 PM 用 AM 補 |
+| CreditProxy | FRED `BAA - AAA` | 信用壓力代理值；用 Baa 公司債收益率減 Aaa 公司債收益率，再轉 business-daily |
+
+注意：Yahoo / LBMA 生成的 CSV 只作本機研究，不應從 repo 再分發；`CreditProxy` 不是 ICE/BofA HY OAS，只是長歷史信用壓力代理。
 
 ## 本機資料邊界
 

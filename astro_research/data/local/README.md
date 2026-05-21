@@ -44,7 +44,10 @@ Expected columns:
 - `date` or `ts`
 - `value`
 
-The value should be the daily high-yield option-adjusted spread in percent.
+The value should be either the daily high-yield option-adjusted spread in
+percent, or a clearly documented credit-spread proxy. The current fallback
+script generates a `BAA_MINUS_AAA` proxy and records that caveat in
+`LOCAL_DATA_PROVENANCE.json`.
 
 ## Price CSV Schema
 
@@ -72,3 +75,49 @@ Required columns:
 
 - `date` or `ts`
 - `value`
+
+## How to refresh these files
+
+The raw CSV files in this directory are not committed, but the repo includes a
+best-effort fetch helper for maintainers:
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
+```
+
+The command writes the ignored CSV files and refreshes this commit-safe
+manifest:
+
+```text
+astro_research/data/local/LOCAL_DATA_PROVENANCE.json
+```
+
+You can fetch a single series:
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset SPX --accept-research-local-terms
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset Gold --accept-research-local-terms
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset DXY --accept-research-local-terms
+uv run python scripts/astro_abm_ops.py fetch-local-data --asset CreditProxy --accept-research-local-terms
+```
+
+`CreditProxy` requires `FRED_API_KEY` in `.env`.
+
+## Source methods used by this project
+
+| Local file | Series | Method |
+|---|---|---|
+| `equity/spx_daily.csv` | SPX / S&P 500 | Yahoo Finance chart endpoint, symbol `^GSPC`, daily OHLCV |
+| `fx/dxy_daily.csv` | DXY / US Dollar Index | Yahoo Finance chart endpoint, symbol `DX-Y.NYB`, daily OHLCV |
+| `commodities/gold_daily.csv` | Gold USD | LBMA `gold_pm.json` as primary, `gold_am.json` as fallback when PM is missing |
+| `credit/hy_oas_daily.csv` | CreditProxy | FRED `BAA - AAA`, monthly observations expanded to business-daily by forward fill |
+
+Important caveats:
+
+- Yahoo-derived SPX/DXY files are local research inputs. Do not redistribute
+  the generated CSV from this repo without reviewing Yahoo licensing.
+- LBMA/ICE gold benchmark data needs licensing review before publication or
+  redistribution.
+- `CreditProxy` is **not** true ICE/BofA High Yield OAS. It is a transparent
+  BAA-minus-AAA corporate yield spread proxy used when long HY OAS history is
+  unavailable.

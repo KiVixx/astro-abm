@@ -153,3 +153,73 @@ def test_command_ensure_astro_daily_builds_snapshot_then_ingests(monkeypatch):
     assert any("scripts/build_astro_daily.py" in call for call in calls)
     assert any("--skip-exact-aspects" in call for call in calls)
     assert any("scripts/ingest_astro_daily.py" in call for call in calls)
+
+
+def test_command_research_prepare_builds_selectable_mode_command(monkeypatch):
+    ops = load_ops_module()
+
+    class Result:
+        returncode = 0
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(list(cmd))
+        return Result()
+
+    monkeypatch.setattr(ops, "run", fake_run)
+
+    code = ops.command_research_prepare(
+        mode="formal",
+        start="1926-01-01",
+        end="2025-12-31",
+        aspect_profile="macro_core",
+        workers=4,
+        ingest=True,
+        run_batch=True,
+        dry_run=False,
+        strict_local_data=True,
+    )
+
+    assert code == 0
+    command = calls[0]
+    assert command[:4] == ["uv", "run", "python", "scripts/research_prepare.py"]
+    assert command[command.index("--mode") + 1] == "formal"
+    assert command[command.index("--workers") + 1] == "4"
+    assert "--ingest" in command
+    assert "--run-batch" in command
+    assert "--strict-local-data" in command
+
+
+def test_command_fetch_local_data_builds_safe_fetch_command(monkeypatch):
+    ops = load_ops_module()
+
+    class Result:
+        returncode = 0
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(list(cmd))
+        return Result()
+
+    monkeypatch.setattr(ops, "run", fake_run)
+
+    code = ops.command_fetch_local_data(
+        assets=("SPX", "Gold"),
+        all_assets=False,
+        start="1926-01-01",
+        end="2025-12-31",
+        fred_api_key_env="FRED_API_KEY",
+        dry_run=True,
+        accept_terms=True,
+    )
+
+    assert code == 0
+    command = calls[0]
+    assert command[:4] == ["uv", "run", "python", "scripts/fetch_local_research_data.py"]
+    assert command.count("--asset") == 2
+    assert "SPX" in command
+    assert "Gold" in command
+    assert "--dry-run" in command
+    assert "--accept-research-local-terms" in command

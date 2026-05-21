@@ -1,4 +1,4 @@
-.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store smoke checkpoint checkpoint-check test
+.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare fetch-local-data smoke checkpoint checkpoint-check test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -12,6 +12,8 @@ help:
 	@echo "  make maintain-now     Run one local hourly+daily maintenance pass"
 	@echo "  make astro-daily      Ensure 100-year core daily astro data exists"
 	@echo "  make research-store   Build ignored DuckDB full-history research store"
+	@echo "  make research-prepare Run selectable public/local/formal research preparation"
+	@echo "  make fetch-local-data Fetch ignored SPX/Gold/DXY/Credit local research CSVs"
 	@echo "  make smoke            Run small public smoke build"
 	@echo "  make checkpoint       Regenerate research workflow checkpoint"
 	@echo "  make checkpoint-check Validate existing checkpoint outputs only"
@@ -43,6 +45,12 @@ astro-daily:
 
 research-store:
 	uv run python scripts/astro_abm_ops.py research-store
+
+research-prepare:
+	uv run python scripts/astro_abm_ops.py research-prepare
+
+fetch-local-data:
+	uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
 
 smoke:
 	uv run python scripts/astro_abm_ops.py smoke

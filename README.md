@@ -47,6 +47,8 @@ One-command local operations:
 make bootstrap
 make status
 make research-store
+make research-prepare
+make fetch-local-data
 make smoke
 ```
 
@@ -75,6 +77,18 @@ canonical local analysis layer for 1926-2025 daily research, including pre-1970
 rows that QuestDB cannot store in designated time-series tables. The generated
 `research_store_manifest` table records each imported table, source file,
 row count, time range, and whether it includes pre-1970 rows.
+
+`make research-prepare` runs the default public research-preparation path. It
+refreshes the source registry, market/macro daily snapshots, financial-stress
+features, formal-readiness checks, the DuckDB full-history store, and research
+layer validation without requiring private local CSV files. Generated reports
+stay under `astro_research/output/reports/`.
+
+`make fetch-local-data` pulls the optional long-history local research CSVs for
+SPX, Gold, DXY, and CreditProxy into `astro_research/data/local/`. The command
+updates `LOCAL_DATA_PROVENANCE.json`, but the generated CSV files remain
+git-ignored and must not be redistributed from this repository without
+licensing review.
 
 中文維護說明：QuestDB 主要負責 1970 年之後的可維護時間序列查詢；
 1926-2025 全歷史研究資料以 DuckDB / Parquet snapshot 為準，避免為了
@@ -903,6 +917,20 @@ Repository hygiene tests enforce this boundary: generated
 by git. Commit only the local data README, example schemas, and
 `LOCAL_DATA_PROVENANCE.json` manifest.
 
+Optional local long-history inputs can be refreshed with:
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
+```
+
+Source methods:
+
+- SPX: Yahoo Finance chart endpoint, symbol `^GSPC`.
+- DXY: Yahoo Finance chart endpoint, symbol `DX-Y.NYB`.
+- Gold: LBMA `gold_pm.json` primary, `gold_am.json` fallback.
+- CreditProxy: FRED `BAA - AAA`, monthly observations forward-filled to
+  business-daily. This is not true ICE/BofA HY OAS.
+
 For maintainable 100-year exact aspect builds, use the optimized chunk mode.
 It writes one pair/year snapshot per directory:
 
@@ -1179,6 +1207,23 @@ and H003/H004 aspect traceability when `event_traceability.csv` is available.
 It also warns when timing-sensitive daily research tables lack `available_ts`
 or `observed_ts`; those warnings mean the current output should be interpreted
 as historical association/event-study context, not as a point-in-time backtest.
+
+Selectable research preparation:
+
+```bash
+uv run python scripts/astro_abm_ops.py research-prepare --mode public
+uv run python scripts/astro_abm_ops.py research-prepare --mode local-full
+uv run python scripts/astro_abm_ops.py research-prepare --mode formal --workers 4
+uv run python scripts/astro_abm_ops.py research-prepare --mode formal --workers 4 --run-batch
+```
+
+Mode notes:
+
+- `public` = public/API data path; no private local CSV requirement.
+- `local-full` = uses optional SPX/Gold/DXY/Credit local CSV files when present.
+- `formal` = additionally builds macro-core aspect chunks, normalized
+  `research_events`, and `research_hypotheses`. The exploratory batch remains
+  opt-in via `--run-batch`.
 
 ### 11. Simulation layer
 After the live hourly pipeline is stable, the project can move into:
