@@ -39,6 +39,23 @@ def test_local_full_missing_local_data_warns_but_continues(tmp_path: Path):
     assert "--source" not in market_call
 
 
+def test_local_full_readiness_uses_ignored_local_provenance_when_present(tmp_path: Path):
+    local_provenance = tmp_path / "astro_research/data/local/LOCAL_DATA_PROVENANCE.local.json"
+    local_provenance.parent.mkdir(parents=True)
+    local_provenance.write_text("{}")
+    calls: list[list[str]] = []
+
+    def runner(command):
+        calls.append(list(command))
+        return 0
+
+    prepare_research(root=tmp_path, mode="local-full", end="2021-12-31", runner=runner)
+
+    readiness_call = next(call for call in calls if "scripts/build_formal_research_readiness.py" in call)
+    assert "--provenance" in readiness_call
+    assert readiness_call[readiness_call.index("--provenance") + 1] == "astro_research/data/local/LOCAL_DATA_PROVENANCE.local.json"
+
+
 def test_local_full_strict_missing_local_data_fails_without_commands(tmp_path: Path):
     calls: list[list[str]] = []
 

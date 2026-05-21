@@ -134,6 +134,18 @@ uv run python scripts/astro_abm_ops.py research-prepare --mode formal --workers 
 uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
 ```
 
+預設情況下，這條命令會把最新 provenance（來源記錄）寫到 ignored 的：
+
+```text
+astro_research/data/local/LOCAL_DATA_PROVENANCE.local.json
+```
+
+這樣新人補完本機資料後，`git status` 仍然可以保持乾淨。只有維護者想更新 repo 內 commit-safe canonical manifest（可提交的標準來源清單）時，才使用：
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms --provenance-mode tracked
+```
+
 或只拉其中一個：
 
 ```bash
@@ -153,6 +165,27 @@ uv run python scripts/astro_abm_ops.py fetch-local-data --asset CreditProxy --ac
 | CreditProxy | FRED `BAA - AAA` | 信用壓力代理值；用 Baa 公司債收益率減 Aaa 公司債收益率，再轉 business-daily |
 
 注意：Yahoo / LBMA 生成的 CSV 只作本機研究，不應從 repo 再分發；`CreditProxy` 不是 ICE/BofA HY OAS，只是長歷史信用壓力代理。
+
+### 為什麼分成兩條命令？
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
+uv run python scripts/astro_abm_ops.py research-prepare --mode local-full
+```
+
+兩條命令分工不同：
+
+| 命令 | 中文職責 | 產物 |
+|---|---|---|
+| `fetch-local-data` | 只負責「把外部長歷史資料抓回本機」 | ignored CSV + ignored local provenance |
+| `research-prepare --mode local-full` | 只負責「用已存在資料重建研究層」 | market/macro/stress snapshots、DuckDB、readiness report |
+
+這樣設計的原因：
+
+- 資料抓取有授權與網路風險：Yahoo / LBMA / FRED 可能失敗，也有 redistribution（再分發）限制；不應和研究 pipeline 綁死。
+- 研究準備應可重跑：資料已存在時，可以反覆跑 `research-prepare`，不用每次重新打外部 API。
+- 新人容易定位問題：第一條失敗代表來源/API/授權問題；第二條失敗代表本機資料 schema、coverage 或研究建置問題。
+- 未來可以替換資料來源：若有人手動放入合法授權 CSV，只需跑第二條命令，不需要使用內建抓取器。
 
 ## 本機資料邊界
 

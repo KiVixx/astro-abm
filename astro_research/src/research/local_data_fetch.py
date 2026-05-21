@@ -25,6 +25,9 @@ ASSET_OUTPUTS = {
     "CreditProxy": Path("astro_research/data/local/credit/hy_oas_daily.csv"),
 }
 
+TRACKED_PROVENANCE_PATH = Path("astro_research/data/local/LOCAL_DATA_PROVENANCE.json")
+LOCAL_PROVENANCE_PATH = Path("astro_research/data/local/LOCAL_DATA_PROVENANCE.local.json")
+
 YAHOO_SYMBOLS = {
     "SPX": "^GSPC",
     "DXY": "DX-Y.NYB",
@@ -49,10 +52,13 @@ def fetch_local_research_data(
     start: date,
     end: date,
     fred_api_key_env: str = "FRED_API_KEY",
+    provenance_mode: str = "local",
     dry_run: bool = False,
     session: requests.Session | None = None,
 ) -> tuple[LocalDataFetchResult, ...]:
     root_path = Path(root)
+    if provenance_mode not in {"local", "tracked", "none"}:
+        raise ValueError(f"Unsupported provenance mode: {provenance_mode}")
     session = session or requests.Session()
     results: list[LocalDataFetchResult] = []
     for asset in assets:
@@ -85,8 +91,8 @@ def fetch_local_research_data(
         frame.to_csv(output_path, index=False)
         results.append(_result(asset=asset, output_path=output_path, frame=frame))
 
-    if not dry_run:
-        update_local_data_provenance(root_path, results)
+    if not dry_run and provenance_mode != "none":
+        update_local_data_provenance(root_path, results, path=provenance_path_for_mode(provenance_mode))
     return tuple(results)
 
 
@@ -200,10 +206,25 @@ def credit_proxy_from_observations(*, aaa: pd.DataFrame, baa: pd.DataFrame, star
     return pd.DataFrame({"date": daily["ts"].dt.date.astype(str), "value": daily["value"].astype(float)})
 
 
-def update_local_data_provenance(root: Path, results: tuple[LocalDataFetchResult, ...]) -> Path:
-    path = root / "astro_research/data/local/LOCAL_DATA_PROVENANCE.json"
+def provenance_path_for_mode(mode: str) -> Path:
+    if mode == "local":
+        return LOCAL_PROVENANCE_PATH
+    if mode == "tracked":
+        return TRACKED_PROVENANCE_PATH
+    raise ValueError(f"Unsupported provenance mode: {mode}")
+
+
+def update_local_data_provenance(
+    root: Path,
+    results: tuple[LocalDataFetchResult, ...],
+    *,
+    path: str | Path = TRACKED_PROVENANCE_PATH,
+) -> Path:
+    path = root / Path(path)
     if path.exists():
         payload = json.loads(path.read_text())
+    elif (root / TRACKED_PROVENANCE_PATH).exists():
+        payload = json.loads((root / TRACKED_PROVENANCE_PATH).read_text())
     else:
         payload = {
             "schema_version": "local_data_provenance_v1",

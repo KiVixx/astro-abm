@@ -86,9 +86,12 @@ stay under `astro_research/output/reports/`.
 
 `make fetch-local-data` pulls the optional long-history local research CSVs for
 SPX, Gold, DXY, and CreditProxy into `astro_research/data/local/`. The command
-updates `LOCAL_DATA_PROVENANCE.json`, but the generated CSV files remain
+writes refreshed provenance to ignored
+`astro_research/data/local/LOCAL_DATA_PROVENANCE.local.json` by default, so a
+new clone can fetch data without dirtying git. The generated CSV files remain
 git-ignored and must not be redistributed from this repository without
-licensing review.
+licensing review. Maintainers can intentionally update the tracked provenance
+manifest with `--provenance-mode tracked`.
 
 中文維護說明：QuestDB 主要負責 1970 年之後的可維護時間序列查詢；
 1926-2025 全歷史研究資料以 DuckDB / Parquet snapshot 為準，避免為了
@@ -922,6 +925,10 @@ Optional local long-history inputs can be refreshed with:
 ```bash
 uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
 ```
+
+By default this writes ignored `LOCAL_DATA_PROVENANCE.local.json`. Use
+`--provenance-mode tracked` only when you deliberately want to refresh the
+commit-safe canonical manifest.
 
 Source methods:
 

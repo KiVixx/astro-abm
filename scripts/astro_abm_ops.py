@@ -108,6 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     fetch_local.add_argument("--start", default="1926-01-01")
     fetch_local.add_argument("--end", default=None)
     fetch_local.add_argument("--fred-api-key-env", default="FRED_API_KEY")
+    fetch_local.add_argument("--provenance-mode", choices=("local", "tracked", "none"), default="local")
     fetch_local.add_argument("--dry-run", action="store_true")
     fetch_local.add_argument("--accept-research-local-terms", action="store_true")
 
@@ -172,6 +173,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             start=args.start,
             end=args.end,
             fred_api_key_env=args.fred_api_key_env,
+            provenance_mode=args.provenance_mode,
             dry_run=args.dry_run,
             accept_terms=args.accept_research_local_terms,
         )
@@ -393,6 +395,7 @@ def command_fetch_local_data(
     start: str,
     end: str | None,
     fred_api_key_env: str,
+    provenance_mode: str,
     dry_run: bool,
     accept_terms: bool,
 ) -> int:
@@ -405,6 +408,8 @@ def command_fetch_local_data(
         start,
         "--fred-api-key-env",
         fred_api_key_env,
+        "--provenance-mode",
+        provenance_mode,
     ]
     if all_assets or not assets:
         cmd.append("--all")

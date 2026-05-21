@@ -211,6 +211,7 @@ def test_command_fetch_local_data_builds_safe_fetch_command(monkeypatch):
         start="1926-01-01",
         end="2025-12-31",
         fred_api_key_env="FRED_API_KEY",
+        provenance_mode="local",
         dry_run=True,
         accept_terms=True,
     )
@@ -221,5 +222,6 @@ def test_command_fetch_local_data_builds_safe_fetch_command(monkeypatch):
     assert command.count("--asset") == 2
     assert "SPX" in command
     assert "Gold" in command
+    assert command[command.index("--provenance-mode") + 1] == "local"
     assert "--dry-run" in command
     assert "--accept-research-local-terms" in command

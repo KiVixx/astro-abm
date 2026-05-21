@@ -7,7 +7,9 @@ from pathlib import Path
 import pandas as pd
 
 from research.local_data_fetch import (
+    LOCAL_PROVENANCE_PATH,
     credit_proxy_from_observations,
+    fetch_local_research_data,
     lbma_gold_to_price_frame,
     update_local_data_provenance,
     yahoo_chart_to_price_frame,
@@ -97,3 +99,39 @@ def test_update_local_data_provenance_records_generated_outputs(tmp_path: Path):
     assert credit["proxy_type"] == "BAA_MINUS_AAA"
     assert credit["not_equivalent_to"] == "ICE_BofA_HY_OAS"
     assert credit["rows"] == 2
+
+
+def test_fetch_local_data_defaults_to_ignored_local_provenance(tmp_path: Path, monkeypatch):
+    from research import local_data_fetch
+
+    tracked = tmp_path / "astro_research/data/local/LOCAL_DATA_PROVENANCE.json"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text(json.dumps({"schema_version": "local_data_provenance_v1", "series": []}))
+
+    monkeypatch.setattr(
+        local_data_fetch,
+        "fetch_yahoo_chart",
+        lambda symbol, start, end, session=None: pd.DataFrame(
+            {
+                "date": ["2020-01-02"],
+                "open": [100.0],
+                "high": [101.0],
+                "low": [99.0],
+                "close": [100.0],
+                "adj_close": [100.0],
+                "volume": [0],
+            }
+        ),
+    )
+
+    fetch_local_research_data(
+        root=tmp_path,
+        assets=("SPX",),
+        start=date(2020, 1, 1),
+        end=date(2020, 1, 3),
+    )
+
+    assert json.loads(tracked.read_text())["series"] == []
+    local = tmp_path / LOCAL_PROVENANCE_PATH
+    assert local.exists()
+    assert json.loads(local.read_text())["series"][0]["asset"] == "SPX"

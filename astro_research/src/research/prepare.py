@@ -15,6 +15,8 @@ LOCAL_DATA_FILES = {
     "CreditProxy": Path("astro_research/data/local/credit/hy_oas_daily.csv"),
 }
 
+LOCAL_PROVENANCE_PATH = Path("astro_research/data/local/LOCAL_DATA_PROVENANCE.local.json")
+
 DEFAULT_PUBLIC_RUN_ID = "research_prepare_public"
 DEFAULT_FORMAL_RUN_ID = "exploratory_formal_batch_v1_1926_2025"
 
@@ -79,6 +81,7 @@ def prepare_research(
         return result
 
     for command_step in _command_plan(
+        root_path=root_path,
         mode=mode,
         start=start,
         end=end,
@@ -110,6 +113,7 @@ def prepare_research(
 
 def _command_plan(
     *,
+    root_path: Path,
     mode: str,
     start: str,
     end: str,
@@ -189,12 +193,7 @@ def _command_plan(
             ),
             _command(
                 "formal_readiness",
-                [
-                    "uv",
-                    "run",
-                    "python",
-                    "scripts/build_formal_research_readiness.py",
-                ],
+                _formal_readiness_command(root_path=root_path, mode=mode),
             ),
         )
     )
@@ -318,6 +317,13 @@ def _validation_command(*, run_batch: bool) -> ResearchPrepareStep:
             ]
         )
     return _command("research_layer_validation", command)
+
+
+def _formal_readiness_command(*, root_path: Path, mode: str) -> list[str]:
+    command = ["uv", "run", "python", "scripts/build_formal_research_readiness.py"]
+    if mode in {"local-full", "formal"} and (root_path / LOCAL_PROVENANCE_PATH).exists():
+        command.extend(["--provenance", str(LOCAL_PROVENANCE_PATH)])
+    return command
 
 
 def _command(name: str, command: Sequence[str]) -> ResearchPrepareStep:

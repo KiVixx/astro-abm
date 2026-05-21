@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "astro_research" / "src"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from astro_daily.calendar import parse_date
-from research.local_data_fetch import ASSET_OUTPUTS, fetch_local_research_data
+from research.local_data_fetch import ASSET_OUTPUTS, fetch_local_research_data, provenance_path_for_mode
 
 
 def main() -> int:
@@ -22,6 +22,12 @@ def main() -> int:
     parser.add_argument("--start", default="1926-01-01")
     parser.add_argument("--end", default=date.today().isoformat())
     parser.add_argument("--fred-api-key-env", default="FRED_API_KEY")
+    parser.add_argument(
+        "--provenance-mode",
+        choices=("local", "tracked", "none"),
+        default="local",
+        help="Where to write refreshed provenance. local writes ignored LOCAL_DATA_PROVENANCE.local.json.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--accept-research-local-terms",
@@ -45,6 +51,7 @@ def main() -> int:
         start=parse_date(args.start),
         end=parse_date(args.end),
         fred_api_key_env=args.fred_api_key_env,
+        provenance_mode=args.provenance_mode,
         dry_run=args.dry_run,
     )
     for result in results:
@@ -54,7 +61,10 @@ def main() -> int:
         )
         if result.warning:
             print(f"warning={result.warning}")
-    print("provenance=astro_research/data/local/LOCAL_DATA_PROVENANCE.json")
+    if args.provenance_mode == "none":
+        print("provenance=skipped")
+    else:
+        print(f"provenance={provenance_path_for_mode(args.provenance_mode)}")
     return 0
 
 

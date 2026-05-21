@@ -85,11 +85,18 @@ best-effort fetch helper for maintainers:
 uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
 ```
 
-The command writes the ignored CSV files and refreshes this commit-safe
-manifest:
+The command writes the ignored CSV files and refreshes an ignored local
+provenance manifest by default:
 
 ```text
-astro_research/data/local/LOCAL_DATA_PROVENANCE.json
+astro_research/data/local/LOCAL_DATA_PROVENANCE.local.json
+```
+
+This keeps `git status` clean for a fresh clone. Maintainers can deliberately
+refresh the tracked commit-safe manifest with:
+
+```bash
+uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms --provenance-mode tracked
 ```
 
 You can fetch a single series:
