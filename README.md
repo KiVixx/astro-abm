@@ -52,6 +52,22 @@ make fetch-local-data
 make smoke
 ```
 
+Optional product MVP commands:
+
+```bash
+make api
+make scenario-demo
+make product-smoke
+```
+
+The product MVP adds a local-first scenario API under `apps/api/`. It creates
+mock AI scenario rehearsals from daily-context placeholders and saves JSON plus
+Markdown reports under `astro_research/output/scenarios/`. These generated
+reports are intentionally git-ignored. The default LLM provider is `mock`;
+`openai_compatible` is only a typed interface in this PR and does not make
+external calls during tests. Reports are association only, scenario rehearsal
+only, not financial advice, and not a trading signal.
+
 `make bootstrap` creates a local `.env` from `.env.example` when needed, starts
 QuestDB plus the maintenance daemon, applies the hourly and daily research
 schemas, ensures the 1926-2025 core daily astro dataset is built and ingested,

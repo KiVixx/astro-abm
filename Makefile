@@ -1,4 +1,4 @@
-.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare fetch-local-data smoke checkpoint checkpoint-check test
+.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare fetch-local-data smoke checkpoint checkpoint-check api product-smoke scenario-demo test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -17,6 +17,9 @@ help:
 	@echo "  make smoke            Run small public smoke build"
 	@echo "  make checkpoint       Regenerate research workflow checkpoint"
 	@echo "  make checkpoint-check Validate existing checkpoint outputs only"
+	@echo "  make api              Run the local Astro ABM product API"
+	@echo "  make product-smoke    Run API tests and create a mock demo scenario"
+	@echo "  make scenario-demo    Create one deterministic local scenario report"
 	@echo "  make test             Run the full test suite"
 
 status:
@@ -60,6 +63,16 @@ checkpoint:
 
 checkpoint-check:
 	uv run python scripts/astro_abm_ops.py checkpoint --check-only
+
+api:
+	uv run uvicorn astro_abm_api.main:app --app-dir apps/api --reload
+
+product-smoke:
+	uv run --extra dev pytest apps/api/tests
+	$(MAKE) scenario-demo
+
+scenario-demo:
+	uv run python scripts/create_demo_scenario.py
 
 test:
 	uv run --extra dev pytest
