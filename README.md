@@ -56,6 +56,7 @@ Optional product MVP commands:
 
 ```bash
 make api
+make web
 make scenario-demo
 make product-smoke
 ```
@@ -65,8 +66,11 @@ mock AI scenario rehearsals from daily-context placeholders and saves JSON plus
 Markdown reports under `astro_research/output/scenarios/`. These generated
 reports are intentionally git-ignored. The default LLM provider is `mock`;
 `openai_compatible` is only a typed interface in this PR and does not make
-external calls during tests. Reports are association only, scenario rehearsal
-only, not financial advice, and not a trading signal.
+external calls during tests. The optional web UI under `apps/web/` calls the API
+through `NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL`, defaulting to
+`http://localhost:8000`; it never reads generated scenario files directly.
+Reports are association only, scenario rehearsal only, not financial advice, and
+not a trading signal.
 
 `make bootstrap` creates a local `.env` from `.env.example` when needed, starts
 QuestDB plus the maintenance daemon, applies the hourly and daily research

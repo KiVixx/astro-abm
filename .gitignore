@@ -6,6 +6,11 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+node_modules/
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/tsconfig.tsbuildinfo
 
 # Local env/config
 .env
