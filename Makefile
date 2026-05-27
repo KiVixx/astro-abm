@@ -1,3 +1,10 @@
+API_HOST ?= 127.0.0.1
+API_PORT ?= 8000
+WEB_HOST ?= 127.0.0.1
+WEB_PORT ?= 3000
+NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL ?= http://$(API_HOST):$(API_PORT)
+export NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL
+
 .PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare fetch-local-data smoke checkpoint checkpoint-check api web product-smoke scenario-demo test
 
 help:
@@ -17,8 +24,8 @@ help:
 	@echo "  make smoke            Run small public smoke build"
 	@echo "  make checkpoint       Regenerate research workflow checkpoint"
 	@echo "  make checkpoint-check Validate existing checkpoint outputs only"
-	@echo "  make api              Run the local Astro ABM product API"
-	@echo "  make web              Run the local Astro ABM product web UI"
+	@echo "  make api              Run the local Astro ABM product API on API_HOST:API_PORT"
+	@echo "  make web              Run the local Astro ABM product web UI on WEB_HOST:WEB_PORT"
 	@echo "  make product-smoke    Run API tests and create a mock demo scenario"
 	@echo "  make scenario-demo    Create one deterministic local scenario report"
 	@echo "  make test             Run the full test suite"
@@ -66,10 +73,10 @@ checkpoint-check:
 	uv run python scripts/astro_abm_ops.py checkpoint --check-only
 
 api:
-	uv run uvicorn astro_abm_api.main:app --app-dir apps/api --reload
+	uv run uvicorn astro_abm_api.main:app --app-dir apps/api --host $(API_HOST) --port $(API_PORT) --reload
 
 web:
-	cd apps/web && npm run dev
+	cd apps/web && npm run dev -- --hostname $(WEB_HOST) --port $(WEB_PORT)
 
 product-smoke:
 	uv run --extra dev pytest apps/api/tests

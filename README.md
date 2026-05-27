@@ -61,6 +61,18 @@ make scenario-demo
 make product-smoke
 ```
 
+Defaults:
+
+- API: `http://127.0.0.1:8000`
+- Web: `http://127.0.0.1:3000`
+
+If a port is already occupied, override it explicitly:
+
+```bash
+make api API_PORT=18000
+make web WEB_PORT=13000 API_PORT=18000
+```
+
 The product MVP adds a local-first scenario API under `apps/api/`. It creates
 mock AI scenario rehearsals from daily-context placeholders and saves JSON plus
 Markdown reports under `astro_research/output/scenarios/`. These generated
