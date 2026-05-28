@@ -26,6 +26,43 @@ export interface AgentOutput {
   caveats: string[];
 }
 
+export interface DailyAstroContext {
+  summary: string;
+  event_tags: string[];
+  intensity: string;
+}
+
+export interface DailyMarketContext {
+  summary: string;
+  stress_regime: string;
+  volatility_regime: string;
+  liquidity_regime: string;
+}
+
+export interface DailyAgentState {
+  agent_id: string;
+  agent_name: string;
+  mood: string;
+  risk_appetite: string;
+  likely_reaction: string;
+  attention_triggers: string[];
+  caveats: string[];
+}
+
+export interface DailyScenarioSnapshot {
+  date: string;
+  day_index: number;
+  assets: string[];
+  astro_context: DailyAstroContext;
+  market_context: DailyMarketContext;
+  agent_states: DailyAgentState[];
+  daily_risk_themes: string[];
+  daily_summary: string;
+  confidence: string;
+  caveats: string[];
+  disclaimer: string;
+}
+
 export interface ScenarioCreateRequest {
   title: string;
   description?: string | null;
@@ -65,8 +102,11 @@ export interface ScenarioReport {
   agents: AgentProfile[];
   daily_context: Record<string, unknown>;
   simulation_summary: string;
+  scenario_summary?: string | null;
   agent_outputs: AgentOutput[];
   risks: string[];
+  risk_themes?: string[];
+  daily_timeline?: DailyScenarioSnapshot[];
   caveats: string[];
   provenance: Record<string, unknown>;
   visibility: Visibility;

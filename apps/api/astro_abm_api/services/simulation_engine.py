@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from astro_abm_api.models.agent import AgentOutput, AgentProfile
-from astro_abm_api.models.report import ScenarioReport
+from astro_abm_api.models.report import DailyAgentState, DailyScenarioSnapshot, ScenarioReport
 from astro_abm_api.models.scenario import ScenarioCreateRequest
+from astro_abm_api.services.daily_context import build_placeholder_daily_contexts
 from astro_abm_api.services.llm_client import build_llm_config, provenance_for_llm
 
 
@@ -75,6 +76,75 @@ def build_agent_output(agent: AgentProfile) -> AgentOutput:
     )
 
 
+def build_daily_agent_state(
+    agent: AgentProfile,
+    snapshot_context: dict[str, object],
+) -> DailyAgentState:
+    market_context = snapshot_context["market_context"]
+    astro_context = snapshot_context["astro_context"]
+    stress_regime = market_context.stress_regime
+    volatility_regime = market_context.volatility_regime
+    liquidity_regime = market_context.liquidity_regime
+    astro_tags = ", ".join(astro_context.event_tags)
+
+    mood = "watchful"
+    if agent.category == "retail":
+        mood = "narrative-sensitive"
+    elif agent.category == "trading":
+        mood = "exposure-aware"
+    elif agent.category == "institutional":
+        mood = "portfolio-aware"
+    elif agent.category == "company_type":
+        mood = "planning-focused"
+
+    return DailyAgentState(
+        agent_id=agent.agent_id,
+        agent_name=agent.name,
+        mood=mood,
+        risk_appetite=agent.risk_tolerance,
+        likely_reaction=(
+            f"Reviews {stress_regime} stress, {volatility_regime} volatility, "
+            f"{liquidity_regime} liquidity, and astro narrative tags ({astro_tags}) "
+            "as scenario context for risk discussion only."
+        ),
+        attention_triggers=[
+            f"stress_regime:{stress_regime}",
+            f"volatility_regime:{volatility_regime}",
+            f"liquidity_regime:{liquidity_regime}",
+            f"astro_intensity:{astro_context.intensity}",
+        ],
+        caveats=[
+            "Daily agent state is deterministic mock output.",
+            "This is not a directional market call and not a trading signal.",
+        ],
+    )
+
+
+def build_daily_timeline(
+    request: ScenarioCreateRequest,
+    agents: list[AgentProfile],
+) -> list[DailyScenarioSnapshot]:
+    snapshots: list[DailyScenarioSnapshot] = []
+    for context in build_placeholder_daily_contexts(request):
+        agent_states = [build_daily_agent_state(agent, context) for agent in agents]
+        snapshots.append(
+            DailyScenarioSnapshot(
+                date=context["date"],
+                day_index=context["day_index"],
+                assets=request.assets,
+                astro_context=context["astro_context"],
+                market_context=context["market_context"],
+                agent_states=agent_states,
+                daily_risk_themes=context["daily_risk_themes"],
+                daily_summary=context["daily_summary"],
+                confidence=context["confidence"],
+                caveats=context["caveats"],
+                disclaimer=DISCLAIMER,
+            )
+        )
+    return snapshots
+
+
 def render_markdown(report: ScenarioReport) -> str:
     agent_lines = "\n".join(
         [
@@ -88,7 +158,8 @@ def render_markdown(report: ScenarioReport) -> str:
             for output in report.agent_outputs
         ]
     )
-    risk_lines = "\n".join(f"- {risk}" for risk in report.risks)
+    risk_themes = report.risk_themes or report.risks
+    risk_lines = "\n".join(f"- {risk}" for risk in risk_themes)
     caveat_lines = "\n".join(f"- {caveat}" for caveat in report.caveats)
     inputs = (
         f"- Date range: {report.start_date.isoformat()} to {report.end_date.isoformat()}\n"
@@ -100,22 +171,50 @@ def render_markdown(report: ScenarioReport) -> str:
     context_lines = "\n".join(
         f"- {key}: {value}" for key, value in report.daily_context.items()
     )
+    timeline_lines = "\n\n".join(
+        [
+            (
+                f"## {snapshot.date.isoformat()}\n"
+                f"- Astro: {snapshot.astro_context.summary} "
+                f"(intensity: {snapshot.astro_context.intensity}; "
+                f"tags: {', '.join(snapshot.astro_context.event_tags)})\n"
+                f"- Market: {snapshot.market_context.summary}\n"
+                f"- Agent states:\n"
+                + "\n".join(
+                    [
+                        (
+                            f"  - {state.agent_name}: {state.mood}; "
+                            f"{state.likely_reaction}"
+                        )
+                        for state in snapshot.agent_states
+                    ]
+                )
+                + "\n"
+                f"- Daily risk themes: {', '.join(snapshot.daily_risk_themes)}\n"
+                f"- Caveats: {'; '.join(snapshot.caveats)}"
+            )
+            for snapshot in report.daily_timeline
+        ]
+    )
 
     return f"""# {report.title}
 
 ## Executive Summary
-{report.simulation_summary}
+{report.scenario_summary or report.simulation_summary}
 
 ## Scenario Inputs
 {inputs}
 
-## Daily Context
+## Daily Context Summary
 {context_lines}
 
-## Agent Behavior Outputs
+## Daily Timeline
+{timeline_lines}
+
+## Agent Overview
 {agent_lines}
 
-## Main Risk Themes
+## Risk Themes
 {risk_lines}
 
 ## Caveats
@@ -145,12 +244,13 @@ def generate_scenario_report(
     created_at = datetime.now(UTC)
     report_id = scenario_id or create_scenario_id(request.title, created_at)
     agent_outputs = [build_agent_output(agent) for agent in agents]
+    daily_timeline = build_daily_timeline(request, agents)
     summary = (
         "This local-first scenario report rehearses how selected agent archetypes may "
         "discuss daily market, macro, stress, and astro context. It is association only, "
         "scenario rehearsal only, not financial advice, and not a trading signal."
     )
-    risks = [
+    risk_themes = [
         "Narrative amplification may make participants overreact to uncertain context.",
         "Liquidity and volatility can change the meaning of the same daily signal across regimes.",
         "Mock outputs may miss details that a real analyst or later LLM layer would surface.",
@@ -172,8 +272,11 @@ def generate_scenario_report(
         agents=agents,
         daily_context=daily_context,
         simulation_summary=summary,
+        scenario_summary=summary,
         agent_outputs=agent_outputs,
-        risks=risks,
+        risks=risk_themes,
+        risk_themes=risk_themes,
+        daily_timeline=daily_timeline,
         caveats=SAFETY_CAVEATS,
         provenance=provenance,
         visibility=request.visibility,

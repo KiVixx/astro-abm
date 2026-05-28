@@ -5,6 +5,10 @@ function JsonBlock({ value }: { value: unknown }) {
 }
 
 export function ReportViewer({ report }: { report: ScenarioReport }) {
+  const scenarioSummary = report.scenario_summary || report.simulation_summary;
+  const riskThemes = report.risk_themes?.length ? report.risk_themes : report.risks;
+  const dailyTimeline = report.daily_timeline || [];
+
   return (
     <article className="stack">
       <section className="card">
@@ -24,8 +28,106 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
       </section>
 
       <section className="card">
-        <h2>Simulation summary</h2>
-        <p>{report.simulation_summary}</p>
+        <h2>Summary</h2>
+        <p>{scenarioSummary}</p>
+      </section>
+
+      <section className="card">
+        <h2>Daily Timeline</h2>
+        {dailyTimeline.length ? (
+          <div className="timeline-list">
+            {dailyTimeline.map((snapshot) => (
+              <details className="timeline-detail" key={snapshot.date}>
+                <summary className="timeline-summary">
+                  <span>
+                    <strong>{snapshot.date}</strong>
+                    <br />
+                    <span className="muted">Day {snapshot.day_index}</span>
+                  </span>
+                  <span>{snapshot.astro_context.intensity}</span>
+                  <span>{snapshot.market_context.stress_regime}</span>
+                  <span>{snapshot.market_context.volatility_regime}</span>
+                  <span>{snapshot.market_context.liquidity_regime}</span>
+                  <span>{snapshot.daily_risk_themes.slice(0, 2).join(", ")}</span>
+                  <span>{snapshot.confidence}</span>
+                </summary>
+                <div className="timeline-detail-body">
+                  <p>{snapshot.daily_summary}</p>
+                  <div className="grid">
+                    <div>
+                      <h3>Astro context</h3>
+                      <p>{snapshot.astro_context.summary}</p>
+                      <div className="tag-row">
+                        {snapshot.astro_context.event_tags.map((tag) => (
+                          <span className="tag" key={tag}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h3>Market context</h3>
+                      <p>{snapshot.market_context.summary}</p>
+                      <div className="tag-row">
+                        <span className="tag">
+                          stress: {snapshot.market_context.stress_regime}
+                        </span>
+                        <span className="tag">
+                          volatility: {snapshot.market_context.volatility_regime}
+                        </span>
+                        <span className="tag">
+                          liquidity: {snapshot.market_context.liquidity_regime}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <h3>Agent states</h3>
+                  <div className="stack">
+                    {snapshot.agent_states.map((state) => (
+                      <div className="nested-panel" key={state.agent_id}>
+                        <strong>{state.agent_name}</strong>
+                        <p>{state.likely_reaction}</p>
+                        <div className="tag-row">
+                          <span className="tag">{state.mood}</span>
+                          <span className="tag">{state.risk_appetite}</span>
+                          {state.attention_triggers.map((trigger) => (
+                            <span className="tag" key={trigger}>
+                              {trigger}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid section">
+                    <div>
+                      <h3>Daily risk themes</h3>
+                      <ul>
+                        {snapshot.daily_risk_themes.map((theme) => (
+                          <li key={theme}>{theme}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h3>Caveats</h3>
+                      <ul>
+                        {snapshot.caveats.map((caveat) => (
+                          <li key={caveat}>{caveat}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  <p className="notice">{snapshot.disclaimer}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+        ) : (
+          <div className="notice">
+            This saved report does not include a daily timeline yet. Open a newly
+            generated scenario to inspect individual days.
+          </div>
+        )}
       </section>
 
       <section className="card">
@@ -70,9 +172,9 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
 
       <section className="grid">
         <div className="card">
-          <h2>Risks</h2>
+          <h2>Risk Themes</h2>
           <ul>
-            {report.risks.map((risk) => (
+            {riskThemes.map((risk) => (
               <li key={risk}>{risk}</li>
             ))}
           </ul>
