@@ -278,7 +278,44 @@ pre {
 
 .timeline-list {
   display: grid;
+  gap: 18px;
+}
+
+.timeline-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(120px, 1fr));
+}
+
+.timeline-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.timeline-month {
+  display: grid;
   gap: 10px;
+}
+
+.timeline-month h3 {
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding-bottom: 8px;
+}
+
+.timeline-table {
+  display: grid;
+  gap: 8px;
 }
 
 .timeline-detail {
@@ -289,20 +326,30 @@ pre {
 
 .timeline-summary {
   align-items: center;
+  background: var(--surface);
+  border: 0;
+  color: var(--text);
   cursor: pointer;
   display: grid;
+  font-weight: 500;
   gap: 12px;
   grid-template-columns: 150px 90px 110px 120px 110px minmax(180px, 1fr) 160px;
+  justify-content: stretch;
   list-style: none;
+  min-height: unset;
   padding: 14px;
+  text-align: left;
+  width: 100%;
 }
 
 .timeline-summary::-webkit-details-marker {
   display: none;
 }
 
-.timeline-summary:hover {
+.timeline-summary:hover,
+.timeline-summary:focus-visible {
   background: var(--surface-muted);
+  color: var(--text);
 }
 
 .timeline-detail-body {
@@ -329,6 +376,15 @@ pre {
   .hero,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .timeline-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-actions {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .timeline-summary {
