@@ -1,13 +1,36 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { DailyScenarioSnapshot, ScenarioReport } from "@/lib/types";
+import type {
+  DailyDataCoverage,
+  DailyResearchSignals,
+  DailyScenarioSnapshot,
+  ScenarioReport,
+} from "@/lib/types";
 
 const LONG_TIMELINE_WARNING_DAYS = 120;
 const TIMELINE_VISIBLE_DAY_LIMIT = 366;
 
 function JsonBlock({ value }: { value: unknown }) {
   return <pre>{JSON.stringify(value, null, 2)}</pre>;
+}
+
+function MarkdownReportBlock({ markdown }: { markdown: string }) {
+  const [showMarkdown, setShowMarkdown] = useState(false);
+
+  return (
+    <div className="stack">
+      <p className="muted">
+        Raw Markdown is hidden by default because the interactive timeline above is
+        the primary reading view. Open it only when you need the generated text for
+        export or debugging.
+      </p>
+      <button onClick={() => setShowMarkdown((current) => !current)} type="button">
+        {showMarkdown ? "Hide full Markdown" : "Show full Markdown"}
+      </button>
+      {showMarkdown ? <pre>{markdown}</pre> : null}
+    </div>
+  );
 }
 
 function uniqueSorted(values: string[]) {
@@ -18,7 +41,34 @@ function getMonthKey(dateValue: string) {
   return dateValue.slice(0, 7);
 }
 
+function dataCoverageFor(snapshot: DailyScenarioSnapshot): DailyDataCoverage {
+  return (
+    snapshot.data_coverage || {
+      astro_daily: "unknown",
+      financial_stress_daily: "unknown",
+      market_daily: "unknown",
+      macro_daily: "unknown",
+      source: "legacy_report",
+      notes: ["This saved report does not include PR5 data coverage fields."],
+    }
+  );
+}
+
+function researchSignalsFor(snapshot: DailyScenarioSnapshot): DailyResearchSignals {
+  return (
+    snapshot.research_signals || {
+      stress_regime: snapshot.market_context.stress_regime || "unknown",
+      volatility_regime: snapshot.market_context.volatility_regime || "unknown",
+      liquidity_regime: snapshot.market_context.liquidity_regime || "unknown",
+      astro_activity: snapshot.astro_context.intensity || "unknown",
+      data_quality: "legacy_report",
+    }
+  );
+}
+
 function snapshotSearchText(snapshot: DailyScenarioSnapshot) {
+  const dataCoverage = dataCoverageFor(snapshot);
+  const researchSignals = researchSignalsFor(snapshot);
   return [
     snapshot.date,
     snapshot.astro_context.intensity,
@@ -30,6 +80,10 @@ function snapshotSearchText(snapshot: DailyScenarioSnapshot) {
     snapshot.market_context.summary,
     snapshot.daily_risk_themes.join(" "),
     snapshot.confidence,
+    dataCoverage.source,
+    dataCoverage.notes.join(" "),
+    researchSignals.data_quality,
+    researchSignals.astro_activity,
     snapshot.agent_states
       .map((state) =>
         [
@@ -47,6 +101,9 @@ function snapshotSearchText(snapshot: DailyScenarioSnapshot) {
 }
 
 function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) {
+  const dataCoverage = dataCoverageFor(snapshot);
+  const researchSignals = researchSignalsFor(snapshot);
+
   return (
     <div className="timeline-detail-body">
       <p>{snapshot.daily_summary}</p>
@@ -96,6 +153,37 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
       </div>
       <div className="grid section">
         <div>
+          <h3>Data coverage</h3>
+          <div className="tag-row">
+            <span className="tag">source: {dataCoverage.source}</span>
+            <span className="tag">astro: {dataCoverage.astro_daily}</span>
+            <span className="tag">
+              stress: {dataCoverage.financial_stress_daily}
+            </span>
+            <span className="tag">market: {dataCoverage.market_daily}</span>
+            <span className="tag">macro: {dataCoverage.macro_daily}</span>
+          </div>
+          <ul>
+            {dataCoverage.notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3>Research signals</h3>
+          <div className="tag-row">
+            <span className="tag">stress: {researchSignals.stress_regime}</span>
+            <span className="tag">
+              volatility: {researchSignals.volatility_regime}
+            </span>
+            <span className="tag">liquidity: {researchSignals.liquidity_regime}</span>
+            <span className="tag">astro: {researchSignals.astro_activity}</span>
+            <span className="tag">quality: {researchSignals.data_quality}</span>
+          </div>
+        </div>
+      </div>
+      <div className="grid section">
+        <div>
           <h3>Daily risk themes</h3>
           <ul>
             {snapshot.daily_risk_themes.map((theme) => (
@@ -127,6 +215,8 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
   const [stressFilter, setStressFilter] = useState("all");
   const [volatilityFilter, setVolatilityFilter] = useState("all");
   const [liquidityFilter, setLiquidityFilter] = useState("all");
+  const [dataSourceFilter, setDataSourceFilter] = useState("all");
+  const [dataQualityFilter, setDataQualityFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const timelineFilters = useMemo(() => {
@@ -143,6 +233,12 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
       ),
       liquidityRegimes: uniqueSorted(
         dailyTimeline.map((snapshot) => snapshot.market_context.liquidity_regime),
+      ),
+      dataSources: uniqueSorted(
+        dailyTimeline.map((snapshot) => dataCoverageFor(snapshot).source),
+      ),
+      dataQualities: uniqueSorted(
+        dailyTimeline.map((snapshot) => researchSignalsFor(snapshot).data_quality),
       ),
     };
   }, [dailyTimeline]);
@@ -174,6 +270,15 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
       ) {
         return false;
       }
+      if (dataSourceFilter !== "all" && dataCoverageFor(snapshot).source !== dataSourceFilter) {
+        return false;
+      }
+      if (
+        dataQualityFilter !== "all" &&
+        researchSignalsFor(snapshot).data_quality !== dataQualityFilter
+      ) {
+        return false;
+      }
       if (!normalizedSearch) {
         return true;
       }
@@ -182,6 +287,8 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
   }, [
     astroFilter,
     dailyTimeline,
+    dataQualityFilter,
+    dataSourceFilter,
     liquidityFilter,
     monthFilter,
     stressFilter,
@@ -212,6 +319,8 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
     setStressFilter("all");
     setVolatilityFilter("all");
     setLiquidityFilter("all");
+    setDataSourceFilter("all");
+    setDataQualityFilter("all");
   };
 
   const expandSelectedOrFirstVisible = () => {
@@ -339,6 +448,34 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                   ))}
                 </select>
               </label>
+              <label className="form-field">
+                Data source
+                <select
+                  onChange={(event) => setDataSourceFilter(event.target.value)}
+                  value={dataSourceFilter}
+                >
+                  <option value="all">All sources</option>
+                  {timelineFilters.dataSources.map((source) => (
+                    <option key={source} value={source}>
+                      {source}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-field">
+                Data quality
+                <select
+                  onChange={(event) => setDataQualityFilter(event.target.value)}
+                  value={dataQualityFilter}
+                >
+                  <option value="all">All quality</option>
+                  {timelineFilters.dataQualities.map((quality) => (
+                    <option key={quality} value={quality}>
+                      {quality}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="timeline-actions">
               <span className="muted">
@@ -371,6 +508,7 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                     <div className="timeline-table">
                       {snapshots.map((snapshot) => {
                         const isSelected = snapshot.date === selectedDate;
+                        const researchSignals = researchSignalsFor(snapshot);
                         return (
                           <div className="timeline-detail" key={snapshot.date}>
                             <button
@@ -392,7 +530,11 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                               <span>
                                 {snapshot.daily_risk_themes.slice(0, 2).join(", ")}
                               </span>
-                              <span>{snapshot.confidence}</span>
+                              <span>
+                                {researchSignals.data_quality}
+                                <br />
+                                <span className="muted">{snapshot.confidence}</span>
+                              </span>
                             </button>
                             {isSelected ? <DailySnapshotDetail snapshot={snapshot} /> : null}
                           </div>
@@ -491,7 +633,7 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
 
       <section className="card">
         <h2>Markdown report</h2>
-        <pre>{report.markdown_report}</pre>
+        <MarkdownReportBlock markdown={report.markdown_report} />
       </section>
     </article>
   );

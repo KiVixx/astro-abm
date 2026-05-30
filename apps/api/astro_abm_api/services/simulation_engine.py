@@ -82,6 +82,7 @@ def build_daily_agent_state(
 ) -> DailyAgentState:
     market_context = snapshot_context["market_context"]
     astro_context = snapshot_context["astro_context"]
+    research_signals = snapshot_context["research_signals"]
     stress_regime = market_context.stress_regime
     volatility_regime = market_context.volatility_regime
     liquidity_regime = market_context.liquidity_regime
@@ -103,15 +104,17 @@ def build_daily_agent_state(
         mood=mood,
         risk_appetite=agent.risk_tolerance,
         likely_reaction=(
-            f"Reviews {stress_regime} stress, {volatility_regime} volatility, "
-            f"{liquidity_regime} liquidity, and astro narrative tags ({astro_tags}) "
-            "as scenario context for risk discussion only."
+            f"Reviews stress regime: {stress_regime}, volatility regime: {volatility_regime}, "
+            f"liquidity regime: {liquidity_regime}, and astro narrative tags ({astro_tags}) "
+            f"with {research_signals.data_quality} data quality as scenario context "
+            "for risk discussion only."
         ),
         attention_triggers=[
             f"stress_regime:{stress_regime}",
             f"volatility_regime:{volatility_regime}",
             f"liquidity_regime:{liquidity_regime}",
             f"astro_intensity:{astro_context.intensity}",
+            f"data_quality:{research_signals.data_quality}",
         ],
         caveats=[
             "Daily agent state is deterministic mock output.",
@@ -134,6 +137,8 @@ def build_daily_timeline(
                 assets=request.assets,
                 astro_context=context["astro_context"],
                 market_context=context["market_context"],
+                data_coverage=context["data_coverage"],
+                research_signals=context["research_signals"],
                 agent_states=agent_states,
                 daily_risk_themes=context["daily_risk_themes"],
                 daily_summary=context["daily_summary"],
@@ -179,6 +184,16 @@ def render_markdown(report: ScenarioReport) -> str:
                 f"(intensity: {snapshot.astro_context.intensity}; "
                 f"tags: {', '.join(snapshot.astro_context.event_tags)})\n"
                 f"- Market: {snapshot.market_context.summary}\n"
+                f"- Data coverage: astro_daily={snapshot.data_coverage.astro_daily}; "
+                f"financial_stress_daily={snapshot.data_coverage.financial_stress_daily}; "
+                f"market_daily={snapshot.data_coverage.market_daily}; "
+                f"macro_daily={snapshot.data_coverage.macro_daily}; "
+                f"source={snapshot.data_coverage.source}\n"
+                f"- Research signals: stress={snapshot.research_signals.stress_regime}; "
+                f"volatility={snapshot.research_signals.volatility_regime}; "
+                f"liquidity={snapshot.research_signals.liquidity_regime}; "
+                f"astro_activity={snapshot.research_signals.astro_activity}; "
+                f"data_quality={snapshot.research_signals.data_quality}\n"
                 f"- Agent states:\n"
                 + "\n".join(
                     [
@@ -191,6 +206,7 @@ def render_markdown(report: ScenarioReport) -> str:
                 )
                 + "\n"
                 f"- Daily risk themes: {', '.join(snapshot.daily_risk_themes)}\n"
+                f"- Source/fallback notes: {'; '.join(snapshot.data_coverage.notes)}\n"
                 f"- Caveats: {'; '.join(snapshot.caveats)}"
             )
             for snapshot in report.daily_timeline
@@ -257,7 +273,7 @@ def generate_scenario_report(
     ]
     provenance = {
         "engine": "mock_deterministic_simulation_v1",
-        "data_context": "daily_context_placeholder_v0",
+        "data_context": "read_only_daily_research_context_v1_with_placeholder_fallback",
         "llm": provenance_for_llm(llm_config),
         "created_by": "astro-abm-api",
     }

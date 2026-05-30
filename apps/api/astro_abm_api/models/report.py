@@ -26,6 +26,27 @@ class DailyMarketContext(BaseModel):
     liquidity_regime: str
 
 
+class DailyDataCoverage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    astro_daily: str = "unknown"
+    financial_stress_daily: str = "unknown"
+    market_daily: str = "unknown"
+    macro_daily: str = "unknown"
+    source: str = "legacy_report"
+    notes: list[str] = Field(default_factory=list)
+
+
+class DailyResearchSignals(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stress_regime: str = "unknown"
+    volatility_regime: str = "unknown"
+    liquidity_regime: str = "unknown"
+    astro_activity: str = "unknown"
+    data_quality: str = "unknown"
+
+
 class DailyAgentState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -46,6 +67,8 @@ class DailyScenarioSnapshot(BaseModel):
     assets: list[str]
     astro_context: DailyAstroContext
     market_context: DailyMarketContext
+    data_coverage: DailyDataCoverage = Field(default_factory=DailyDataCoverage)
+    research_signals: DailyResearchSignals = Field(default_factory=DailyResearchSignals)
     agent_states: list[DailyAgentState]
     daily_risk_themes: list[str]
     daily_summary: str

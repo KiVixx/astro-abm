@@ -285,7 +285,7 @@ pre {
   align-items: end;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(120px, 1fr));
+  grid-template-columns: minmax(220px, 2fr) repeat(7, minmax(120px, 1fr));
 }
 
 .timeline-actions {

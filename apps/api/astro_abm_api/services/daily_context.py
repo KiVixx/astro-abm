@@ -5,6 +5,7 @@ from typing import Any
 
 from astro_abm_api.models.report import DailyAstroContext, DailyMarketContext
 from astro_abm_api.models.scenario import ScenarioCreateRequest
+from astro_abm_api.services.daily_research_context import DailyResearchContextProvider
 
 
 def build_daily_context(request: ScenarioCreateRequest) -> dict[str, Any]:
@@ -42,8 +43,43 @@ def iter_calendar_days(start_date: date, end_date: date) -> list[date]:
     return days
 
 
-def build_placeholder_daily_contexts(request: ScenarioCreateRequest) -> list[dict[str, Any]]:
-    """Build deterministic daily placeholders for the requested date range."""
+def stress_risk_theme(stress_regime: str) -> str:
+    if stress_regime == "stress":
+        return "elevated_stress_review"
+    return f"{stress_regime}_stress_review"
+
+
+def snapshot_kind(source: str) -> str:
+    if source == "local_research_snapshot":
+        return "read-only daily research context snapshot"
+    return "placeholder daily association snapshot"
+
+
+def confidence_label(data_quality: str) -> str:
+    if data_quality == "local_research_available":
+        return "low_research_context_confidence"
+    if data_quality == "partial_local_research_available":
+        return "low_association_confidence"
+    return "low_placeholder_confidence"
+
+
+def astro_event_tags(
+    placeholder_tags: list[str],
+    *,
+    astro_daily_status: str,
+    astro_activity: str,
+) -> list[str]:
+    if astro_daily_status == "available":
+        return ["local_astro_daily", f"astro_activity:{astro_activity}"]
+    return placeholder_tags
+
+
+def build_placeholder_daily_contexts(
+    request: ScenarioCreateRequest,
+    provider: DailyResearchContextProvider | None = None,
+) -> list[dict[str, Any]]:
+    """Build deterministic daily contexts with optional local research tags."""
+    research_provider = provider or DailyResearchContextProvider()
     stress_regimes = ["calm", "watchful", "elevated"]
     volatility_regimes = ["compressed", "normal", "expanded"]
     liquidity_regimes = ["orderly", "selective", "thin"]
@@ -64,42 +100,66 @@ def build_placeholder_daily_contexts(request: ScenarioCreateRequest) -> list[dic
         liquidity_regime = liquidity_regimes[(day_index + 2) % 3]
         intensity = astro_intensities[selector]
         tags = astro_tags[selector]
+        research_context = research_provider.context_for_date(
+            current_date,
+            assets=request.assets,
+            fallback_stress_regime=stress_regime,
+            fallback_volatility_regime=volatility_regime,
+            fallback_liquidity_regime=liquidity_regime,
+            fallback_astro_activity=intensity,
+        )
+        stress_regime = research_context.signals.stress_regime
+        volatility_regime = research_context.signals.volatility_regime
+        liquidity_regime = research_context.signals.liquidity_regime
+        intensity = research_context.signals.astro_activity
+        tags = astro_event_tags(
+            tags,
+            astro_daily_status=research_context.coverage.astro_daily,
+            astro_activity=intensity,
+        )
+        kind = snapshot_kind(research_context.coverage.source)
+        confidence = confidence_label(research_context.signals.data_quality)
         contexts.append(
             {
                 "date": current_date,
                 "day_index": day_index,
                 "astro_context": DailyAstroContext(
                     summary=(
-                        f"Placeholder daily astro context for {current_date.isoformat()} "
-                        f"using deterministic {intensity} intensity tags."
+                        f"Daily astro context for {current_date.isoformat()} uses "
+                        f"{intensity} activity tags from local research when available, "
+                        "otherwise deterministic placeholder tags."
                     ),
                     event_tags=tags,
                     intensity=intensity,
                 ),
                 "market_context": DailyMarketContext(
                     summary=(
-                        f"Placeholder market context marks stress as {stress_regime}, "
-                        f"volatility as {volatility_regime}, and liquidity as {liquidity_regime}."
+                        f"Daily market context marks stress regime: {stress_regime}, "
+                        f"volatility regime: {volatility_regime}, and liquidity regime: {liquidity_regime}; "
+                        "tags are read-only local research context when available."
                     ),
                     stress_regime=stress_regime,
                     volatility_regime=volatility_regime,
                     liquidity_regime=liquidity_regime,
                 ),
                 "daily_risk_themes": [
-                    f"{stress_regime}_stress_review",
+                    stress_risk_theme(stress_regime),
                     f"{volatility_regime}_volatility_awareness",
                     f"{liquidity_regime}_liquidity_planning",
                 ],
                 "daily_summary": (
-                    f"Day {day_index} is a placeholder daily association snapshot for "
+                    f"Day {day_index} is a {kind} for "
                     f"{', '.join(request.assets)}. It rehearses narrative, stress, "
                     "volatility, and liquidity context without making a directional call."
                 ),
-                "confidence": "low_placeholder_confidence",
+                "confidence": confidence,
                 "caveats": [
-                    "Daily context is placeholder data until real daily research data is connected.",
-                    "This snapshot does not read DuckDB, Parquet, or external APIs.",
+                    "Daily context is read-only association context; it is not point-in-time backtesting.",
+                    "If local research data is unavailable, deterministic placeholder tags are retained.",
+                    "This snapshot never fetches external APIs or mutates research stores.",
                 ],
+                "data_coverage": research_context.coverage,
+                "research_signals": research_context.signals,
             }
         )
     return contexts

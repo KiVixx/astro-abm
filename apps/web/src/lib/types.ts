@@ -39,6 +39,23 @@ export interface DailyMarketContext {
   liquidity_regime: string;
 }
 
+export interface DailyDataCoverage {
+  astro_daily: string;
+  financial_stress_daily: string;
+  market_daily: string;
+  macro_daily: string;
+  source: string;
+  notes: string[];
+}
+
+export interface DailyResearchSignals {
+  stress_regime: string;
+  volatility_regime: string;
+  liquidity_regime: string;
+  astro_activity: string;
+  data_quality: string;
+}
+
 export interface DailyAgentState {
   agent_id: string;
   agent_name: string;
@@ -55,6 +72,8 @@ export interface DailyScenarioSnapshot {
   assets: string[];
   astro_context: DailyAstroContext;
   market_context: DailyMarketContext;
+  data_coverage?: DailyDataCoverage;
+  research_signals?: DailyResearchSignals;
   agent_states: DailyAgentState[];
   daily_risk_themes: string[];
   daily_summary: string;
