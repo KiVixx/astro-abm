@@ -4,7 +4,7 @@ import { ApiError, getScenario } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export default async function ScenarioDetailPage({
+export default async function ScenarioWorkbenchPage({
   params,
   searchParams,
 }: {
@@ -32,3 +32,4 @@ export default async function ScenarioDetailPage({
     );
   }
 }
+

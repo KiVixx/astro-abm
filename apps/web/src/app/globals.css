@@ -365,6 +365,266 @@ pre {
   padding: 14px;
 }
 
+.workbench-page {
+  margin: 0 auto;
+  max-width: 1480px;
+  padding: 28px 24px 44px;
+}
+
+.workbench-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.workbench-header h1 {
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 1.05;
+  margin: 4px 0 10px;
+}
+
+.workbench-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.workbench-card-header,
+.workbench-rail-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.workbench-card h2,
+.workbench-card h3 {
+  margin: 0 0 8px;
+}
+
+.workbench-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.55fr);
+  margin-top: 16px;
+}
+
+.workbench-graph-card {
+  min-width: 0;
+}
+
+.workbench-panel {
+  align-self: start;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  position: sticky;
+  top: 78px;
+}
+
+.workbench-disclaimer {
+  margin-top: 18px;
+}
+
+.workbench-legend {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.workbench-legend-item {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 6px;
+}
+
+.legend-dot {
+  border-radius: 999px;
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+
+.legend-dot-agent {
+  background: #176b87;
+}
+
+.legend-dot-astro {
+  background: #6d5a1f;
+}
+
+.legend-dot-market {
+  background: #6b5c93;
+}
+
+.legend-dot-asset {
+  background: #28704f;
+}
+
+.legend-dot-risk {
+  background: #9b4f35;
+}
+
+.legend-dot-data {
+  background: #5c6670;
+}
+
+.workbench-svg-frame {
+  background:
+    linear-gradient(rgba(23, 107, 135, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 107, 135, 0.06) 1px, transparent 1px),
+    #fbfcfd;
+  background-size: 28px 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.workbench-svg {
+  display: block;
+  min-height: 560px;
+  min-width: 880px;
+  width: 100%;
+}
+
+.workbench-edge {
+  fill: none;
+  opacity: 0.56;
+  stroke: #8aa0ad;
+  stroke-width: 1.35;
+}
+
+.workbench-edge-agent_attention {
+  stroke-dasharray: 4 5;
+}
+
+.workbench-edge-context_to_asset {
+  stroke: #6c9c86;
+}
+
+.workbench-edge-context_to_risk {
+  stroke: #b48572;
+}
+
+.workbench-arrow {
+  fill: #8aa0ad;
+}
+
+.workbench-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.workbench-node rect {
+  fill: #ffffff;
+  stroke: #9cafbd;
+  stroke-width: 1.5;
+}
+
+.workbench-node:hover rect,
+.workbench-node:focus-visible rect,
+.workbench-node.is-selected rect {
+  filter: drop-shadow(0 6px 12px rgba(29, 37, 45, 0.18));
+  stroke-width: 3;
+}
+
+.workbench-node-agent rect {
+  fill: #e8f4f8;
+  stroke: #176b87;
+}
+
+.workbench-node-astro rect {
+  fill: #f7f1dc;
+  stroke: #8a7130;
+}
+
+.workbench-node-stress rect,
+.workbench-node-volatility rect,
+.workbench-node-liquidity rect {
+  fill: #f0eef8;
+  stroke: #6b5c93;
+}
+
+.workbench-node-data_quality rect {
+  fill: #edf1f4;
+  stroke: #5c6670;
+}
+
+.workbench-node-asset rect {
+  fill: #eaf5ef;
+  stroke: #28704f;
+}
+
+.workbench-node-risk rect {
+  fill: #f8ece7;
+  stroke: #9b4f35;
+}
+
+.node-label {
+  fill: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.node-subtitle {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-anchor: middle;
+}
+
+.workbench-rail {
+  margin: 16px 0;
+}
+
+.workbench-day-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 8px;
+}
+
+.workbench-day-chip {
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: grid;
+  flex: 0 0 144px;
+  gap: 4px;
+  justify-items: start;
+  min-height: 112px;
+  padding: 10px;
+  text-align: left;
+}
+
+.workbench-day-chip:hover,
+.workbench-day-chip:focus-visible,
+.workbench-day-chip.is-selected {
+  background: #eef6f8;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.workbench-day-chip span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.workbench-day-month {
+  font-weight: 800;
+}
+
 @media (max-width: 760px) {
   .site-header {
     align-items: flex-start;
@@ -389,5 +649,25 @@ pre {
 
   .timeline-summary {
     grid-template-columns: 1fr;
+  }
+
+  .workbench-page {
+    padding: 22px 14px 36px;
+  }
+
+  .workbench-header,
+  .workbench-card-header,
+  .workbench-rail-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workbench-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workbench-panel {
+    max-height: none;
+    position: static;
   }
 }

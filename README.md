@@ -84,6 +84,19 @@ through `NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL`, defaulting to
 Reports are association only, scenario rehearsal only, not financial advice, and
 not a trading signal.
 
+Scenario Workbench:
+
+- Open a saved scenario at `/scenarios/{scenario_id}`, for example
+  `/scenarios/demo_2026q3_btc_eth` after `make scenario-demo`. This is the
+  default workbench view.
+- Open the full text report only when needed at
+  `/scenarios/{scenario_id}/report`.
+- Run the backend and frontend with `make api` and `make web`.
+- The workbench visualizes the existing scenario report: agent group nodes,
+  daily research/context nodes, asset nodes, and daily risk-theme nodes.
+- The graph is a scenario visualization only. It is not a causal graph, not a
+  forecast, and not a trading signal.
+
 `make bootstrap` creates a local `.env` from `.env.example` when needed, starts
 QuestDB plus the maintenance daemon, applies the hourly and daily research
 schemas, ensures the 1926-2025 core daily astro dataset is built and ingested,
