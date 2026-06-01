@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SiteHeader } from "@/components/SiteHeader";
+import { I18nProvider } from "@/i18n/I18nProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,19 +14,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <header className="site-header">
-          <Link className="brand" href="/">
-            Astro ABM
-          </Link>
-          <nav aria-label="Main navigation">
-            <Link href="/scenarios">Scenarios</Link>
-            <Link href="/scenarios/new">Create</Link>
-            <Link href="/agents">Agents</Link>
-          </nav>
-        </header>
-        <main>{children}</main>
+        <I18nProvider>
+          <SiteHeader />
+          <main>{children}</main>
+        </I18nProvider>
       </body>
     </html>
   );

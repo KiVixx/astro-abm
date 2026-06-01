@@ -1,21 +1,25 @@
+"use client";
+
 import Link from "next/link";
+import { useI18n } from "@/i18n/useI18n";
 
 export default function HomePage() {
+  const { t } = useI18n();
+
   return (
     <div className="page">
       <section className="hero home-hero">
         <div>
-          <h1>Astro ABM Scenario Platform</h1>
+          <h1>{t("home.title")}</h1>
           <p className="lead">
-            A local-first workspace for creating and reviewing AI market scenario
-            rehearsals from Astro ABM daily research context.
+            {t("home.lead")}
           </p>
           <div className="actions">
             <Link className="button" href="/scenarios">
-              Search scenarios
+              {t("home.searchScenarios")}
             </Link>
             <Link className="button secondary" href="/scenarios/new">
-              Create scenario
+              {t("home.createScenario")}
             </Link>
           </div>
         </div>
@@ -23,23 +27,21 @@ export default function HomePage() {
 
       <section className="disclaimer-grid">
         <div className="card">
-          <h2>Daily data first</h2>
+          <h2>{t("home.dailyDataTitle")}</h2>
           <p className="muted">
-            The MVP is shaped around daily association context and mock scenario
-            outputs. It does not run point-in-time trading research in the UI.
+            {t("home.dailyDataText")}
           </p>
         </div>
         <div className="card">
-          <h2>Agent groups</h2>
+          <h2>{t("home.agentGroupsTitle")}</h2>
           <p className="muted">
-            Retail, leveraged, macro, bank, company-type, and holder archetypes
-            review the same scenario through different risk lenses.
+            {t("home.agentGroupsText")}
           </p>
         </div>
         <div className="card">
-          <h2>Local reports</h2>
+          <h2>{t("home.localReportsTitle")}</h2>
           <p className="muted">
-            Generated JSON and Markdown reports stay local and are ignored by git.
+            {t("home.localReportsText")}
           </p>
         </div>
       </section>

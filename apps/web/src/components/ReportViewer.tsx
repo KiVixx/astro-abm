@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SafetyPhrases } from "./SafetyPhrases";
 import type {
   DailyDataCoverage,
   DailyResearchSignals,
   DailyScenarioSnapshot,
   ScenarioReport,
 } from "@/lib/types";
+import { formatAgentName, formatAgentProfileName, formatEnumLabel } from "@/i18n/labels";
+import { interpolate, useI18n } from "@/i18n/useI18n";
 
 const LONG_TIMELINE_WARNING_DAYS = 120;
 const TIMELINE_VISIBLE_DAY_LIMIT = 366;
@@ -16,17 +19,16 @@ function JsonBlock({ value }: { value: unknown }) {
 }
 
 function MarkdownReportBlock({ markdown }: { markdown: string }) {
+  const { t } = useI18n();
   const [showMarkdown, setShowMarkdown] = useState(false);
 
   return (
     <div className="stack">
       <p className="muted">
-        Raw Markdown is hidden by default because the interactive timeline above is
-        the primary reading view. Open it only when you need the generated text for
-        export or debugging.
+        {t("report.rawMarkdownHelp")}
       </p>
       <button onClick={() => setShowMarkdown((current) => !current)} type="button">
-        {showMarkdown ? "Hide full Markdown" : "Show full Markdown"}
+        {showMarkdown ? t("report.hideMarkdown") : t("report.showMarkdown")}
       </button>
       {showMarkdown ? <pre>{markdown}</pre> : null}
     </div>
@@ -101,6 +103,7 @@ function snapshotSearchText(snapshot: DailyScenarioSnapshot) {
 }
 
 function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) {
+  const { t } = useI18n();
   const dataCoverage = dataCoverageFor(snapshot);
   const researchSignals = researchSignalsFor(snapshot);
 
@@ -109,7 +112,7 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
       <p>{snapshot.daily_summary}</p>
       <div className="grid">
         <div>
-          <h3>Astro context</h3>
+          <h3>{t("report.astroContext")}</h3>
           <p>{snapshot.astro_context.summary}</p>
           <div className="tag-row">
             {snapshot.astro_context.event_tags.map((tag) => (
@@ -120,24 +123,37 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
           </div>
         </div>
         <div>
-          <h3>Market context</h3>
+          <h3>{t("report.marketContext")}</h3>
           <p>{snapshot.market_context.summary}</p>
           <div className="tag-row">
-            <span className="tag">stress: {snapshot.market_context.stress_regime}</span>
             <span className="tag">
-              volatility: {snapshot.market_context.volatility_regime}
+              {t("common.stress")}:{" "}
+              {formatEnumLabel(t, "stress_regime", snapshot.market_context.stress_regime)}
             </span>
             <span className="tag">
-              liquidity: {snapshot.market_context.liquidity_regime}
+              {t("common.volatility")}:{" "}
+              {formatEnumLabel(
+                t,
+                "volatility_regime",
+                snapshot.market_context.volatility_regime,
+              )}
+            </span>
+            <span className="tag">
+              {t("common.liquidity")}:{" "}
+              {formatEnumLabel(
+                t,
+                "liquidity_regime",
+                snapshot.market_context.liquidity_regime,
+              )}
             </span>
           </div>
         </div>
       </div>
-      <h3>Agent states</h3>
+      <h3>{t("report.agentStates")}</h3>
       <div className="stack">
         {snapshot.agent_states.map((state) => (
           <div className="nested-panel" key={state.agent_id}>
-            <strong>{state.agent_name}</strong>
+            <strong>{formatAgentName(t, state.agent_id, state.agent_name)}</strong>
             <p>{state.likely_reaction}</p>
             <div className="tag-row">
               <span className="tag">{state.mood}</span>
@@ -153,15 +169,32 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
       </div>
       <div className="grid section">
         <div>
-          <h3>Data coverage</h3>
+          <h3>{t("report.dataCoverage")}</h3>
           <div className="tag-row">
-            <span className="tag">source: {dataCoverage.source}</span>
-            <span className="tag">astro: {dataCoverage.astro_daily}</span>
             <span className="tag">
-              stress: {dataCoverage.financial_stress_daily}
+              {t("common.source")}:{" "}
+              {formatEnumLabel(t, "data_source", dataCoverage.source)}
             </span>
-            <span className="tag">market: {dataCoverage.market_daily}</span>
-            <span className="tag">macro: {dataCoverage.macro_daily}</span>
+            <span className="tag">
+              {t("common.astro")}:{" "}
+              {formatEnumLabel(t, "coverage_status", dataCoverage.astro_daily)}
+            </span>
+            <span className="tag">
+              {t("common.stress")}:{" "}
+              {formatEnumLabel(
+                t,
+                "coverage_status",
+                dataCoverage.financial_stress_daily,
+              )}
+            </span>
+            <span className="tag">
+              {t("common.market")}:{" "}
+              {formatEnumLabel(t, "coverage_status", dataCoverage.market_daily)}
+            </span>
+            <span className="tag">
+              {t("common.macro")}:{" "}
+              {formatEnumLabel(t, "coverage_status", dataCoverage.macro_daily)}
+            </span>
           </div>
           <ul>
             {dataCoverage.notes.map((note) => (
@@ -170,21 +203,31 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
           </ul>
         </div>
         <div>
-          <h3>Research signals</h3>
+          <h3>{t("report.researchSignals")}</h3>
           <div className="tag-row">
-            <span className="tag">stress: {researchSignals.stress_regime}</span>
             <span className="tag">
-              volatility: {researchSignals.volatility_regime}
+              {t("common.stress")}:{" "}
+              {formatEnumLabel(t, "stress_regime", researchSignals.stress_regime)}
             </span>
-            <span className="tag">liquidity: {researchSignals.liquidity_regime}</span>
-            <span className="tag">astro: {researchSignals.astro_activity}</span>
-            <span className="tag">quality: {researchSignals.data_quality}</span>
+            <span className="tag">
+              {t("common.volatility")}:{" "}
+              {formatEnumLabel(t, "volatility_regime", researchSignals.volatility_regime)}
+            </span>
+            <span className="tag">
+              {t("common.liquidity")}:{" "}
+              {formatEnumLabel(t, "liquidity_regime", researchSignals.liquidity_regime)}
+            </span>
+            <span className="tag">{t("common.astro")}: {researchSignals.astro_activity}</span>
+            <span className="tag">
+              {t("common.quality")}:{" "}
+              {formatEnumLabel(t, "data_quality", researchSignals.data_quality)}
+            </span>
           </div>
         </div>
       </div>
       <div className="grid section">
         <div>
-          <h3>Daily risk themes</h3>
+          <h3>{t("report.dailyRiskThemes")}</h3>
           <ul>
             {snapshot.daily_risk_themes.map((theme) => (
               <li key={theme}>{theme}</li>
@@ -192,7 +235,7 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
           </ul>
         </div>
         <div>
-          <h3>Caveats</h3>
+          <h3>{t("report.caveats")}</h3>
           <ul>
             {snapshot.caveats.map((caveat) => (
               <li key={caveat}>{caveat}</li>
@@ -206,6 +249,7 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
 }
 
 export function ReportViewer({ report }: { report: ScenarioReport }) {
+  const { t } = useI18n();
   const scenarioSummary = report.scenario_summary || report.simulation_summary;
   const riskThemes = report.risk_themes?.length ? report.risk_themes : report.risks;
   const dailyTimeline = report.daily_timeline || [];
@@ -340,51 +384,53 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
         {report.description ? <p className="lead">{report.description}</p> : null}
         <div className="tag-row">
           <span className="tag">
-            {report.start_date} to {report.end_date}
+            {report.start_date} {t("common.to")} {report.end_date}
           </span>
           {report.assets.map((asset) => (
             <span className="tag" key={asset}>
               {asset}
             </span>
           ))}
-          <span className="tag">{report.visibility}</span>
+          <span className="tag">
+            {formatEnumLabel(t, "visibility", report.visibility)}
+          </span>
         </div>
       </section>
 
       <section className="card">
-        <h2>Summary</h2>
+        <h2>{t("report.summary")}</h2>
         <p>{scenarioSummary}</p>
       </section>
 
       <section className="card">
-        <h2>Daily Timeline</h2>
+        <h2>{t("report.dailyTimeline")}</h2>
         {dailyTimeline.length ? (
           <div className="stack">
             {dailyTimeline.length > LONG_TIMELINE_WARNING_DAYS ? (
               <div className="notice">
-                This scenario contains {dailyTimeline.length} daily snapshots. Use
-                search, month grouping, and filters to keep review focused. If a
-                filter still returns more than {TIMELINE_VISIBLE_DAY_LIMIT} days,
-                only the first {TIMELINE_VISIBLE_DAY_LIMIT} are shown.
+                {interpolate(t("report.longTimelineWarning"), {
+                  count: dailyTimeline.length,
+                  limit: TIMELINE_VISIBLE_DAY_LIMIT,
+                })}
               </div>
             ) : null}
             <div className="timeline-toolbar">
               <label className="form-field">
-                Search timeline
+                {t("report.searchTimeline")}
                 <input
                   onChange={(event) => setTimelineSearch(event.target.value)}
-                  placeholder="Search date, agent, regime, risk theme..."
+                  placeholder={t("report.searchPlaceholder")}
                   type="search"
                   value={timelineSearch}
                 />
               </label>
               <label className="form-field">
-                Month
+                {t("report.month")}
                 <select
                   onChange={(event) => setMonthFilter(event.target.value)}
                   value={monthFilter}
                 >
-                  <option value="all">All months</option>
+                  <option value="all">{t("report.allMonths")}</option>
                   {timelineFilters.months.map((month) => (
                     <option key={month} value={month}>
                       {month}
@@ -393,85 +439,85 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                 </select>
               </label>
               <label className="form-field">
-                Astro
+                {t("common.astro")}
                 <select
                   onChange={(event) => setAstroFilter(event.target.value)}
                   value={astroFilter}
                 >
-                  <option value="all">All intensity</option>
+                  <option value="all">{t("report.allIntensity")}</option>
                   {timelineFilters.astroIntensities.map((intensity) => (
                     <option key={intensity} value={intensity}>
-                      {intensity}
+                      {formatEnumLabel(t, "astro_intensity", intensity)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="form-field">
-                Stress
+                {t("common.stress")}
                 <select
                   onChange={(event) => setStressFilter(event.target.value)}
                   value={stressFilter}
                 >
-                  <option value="all">All stress</option>
+                  <option value="all">{t("report.allStress")}</option>
                   {timelineFilters.stressRegimes.map((regime) => (
                     <option key={regime} value={regime}>
-                      {regime}
+                      {formatEnumLabel(t, "stress_regime", regime)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="form-field">
-                Volatility
+                {t("common.volatility")}
                 <select
                   onChange={(event) => setVolatilityFilter(event.target.value)}
                   value={volatilityFilter}
                 >
-                  <option value="all">All volatility</option>
+                  <option value="all">{t("report.allVolatility")}</option>
                   {timelineFilters.volatilityRegimes.map((regime) => (
                     <option key={regime} value={regime}>
-                      {regime}
+                      {formatEnumLabel(t, "volatility_regime", regime)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="form-field">
-                Liquidity
+                {t("common.liquidity")}
                 <select
                   onChange={(event) => setLiquidityFilter(event.target.value)}
                   value={liquidityFilter}
                 >
-                  <option value="all">All liquidity</option>
+                  <option value="all">{t("report.allLiquidity")}</option>
                   {timelineFilters.liquidityRegimes.map((regime) => (
                     <option key={regime} value={regime}>
-                      {regime}
+                      {formatEnumLabel(t, "liquidity_regime", regime)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="form-field">
-                Data source
+                {t("report.dataSource")}
                 <select
                   onChange={(event) => setDataSourceFilter(event.target.value)}
                   value={dataSourceFilter}
                 >
-                  <option value="all">All sources</option>
+                  <option value="all">{t("report.allSources")}</option>
                   {timelineFilters.dataSources.map((source) => (
                     <option key={source} value={source}>
-                      {source}
+                      {formatEnumLabel(t, "data_source", source)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="form-field">
-                Data quality
+                {t("report.dataQuality")}
                 <select
                   onChange={(event) => setDataQualityFilter(event.target.value)}
                   value={dataQualityFilter}
                 >
-                  <option value="all">All quality</option>
+                  <option value="all">{t("report.allQuality")}</option>
                   {timelineFilters.dataQualities.map((quality) => (
                     <option key={quality} value={quality}>
-                      {quality}
+                      {formatEnumLabel(t, "data_quality", quality)}
                     </option>
                   ))}
                 </select>
@@ -479,25 +525,25 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
             </div>
             <div className="timeline-actions">
               <span className="muted">
-                Showing {displayedTimeline.length} of {filteredTimeline.length} filtered
-                days from {dailyTimeline.length} total.
+                {t("report.showing")} {displayedTimeline.length} {t("common.of")}{" "}
+                {filteredTimeline.length} {t("report.filteredDays")}{" "}
+                {dailyTimeline.length} {t("report.total")}.
               </span>
               <div className="button-row">
                 <button onClick={expandSelectedOrFirstVisible} type="button">
-                  Expand selected
+                  {t("report.expandSelected")}
                 </button>
                 <button onClick={() => setSelectedDate(null)} type="button">
-                  Collapse all
+                  {t("report.collapseAll")}
                 </button>
                 <button onClick={resetTimelineFilters} type="button">
-                  Reset filters
+                  {t("report.resetFilters")}
                 </button>
               </div>
             </div>
             {filteredTimeline.length > TIMELINE_VISIBLE_DAY_LIMIT ? (
               <div className="notice">
-                Filter result is still long. Narrow the search or pick a month to inspect
-                later dates beyond the visible limit.
+                {t("report.filterLongWarning")}
               </div>
             ) : null}
             {groupedTimeline.length ? (
@@ -521,17 +567,47 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                               <span>
                                 <strong>{snapshot.date}</strong>
                                 <br />
-                                <span className="muted">Day {snapshot.day_index}</span>
+                                <span className="muted">
+                                  {t("common.day")} {snapshot.day_index}
+                                </span>
                               </span>
-                              <span>{snapshot.astro_context.intensity}</span>
-                              <span>{snapshot.market_context.stress_regime}</span>
-                              <span>{snapshot.market_context.volatility_regime}</span>
-                              <span>{snapshot.market_context.liquidity_regime}</span>
+                              <span>
+                                {formatEnumLabel(
+                                  t,
+                                  "astro_intensity",
+                                  snapshot.astro_context.intensity,
+                                )}
+                              </span>
+                              <span>
+                                {formatEnumLabel(
+                                  t,
+                                  "stress_regime",
+                                  snapshot.market_context.stress_regime,
+                                )}
+                              </span>
+                              <span>
+                                {formatEnumLabel(
+                                  t,
+                                  "volatility_regime",
+                                  snapshot.market_context.volatility_regime,
+                                )}
+                              </span>
+                              <span>
+                                {formatEnumLabel(
+                                  t,
+                                  "liquidity_regime",
+                                  snapshot.market_context.liquidity_regime,
+                                )}
+                              </span>
                               <span>
                                 {snapshot.daily_risk_themes.slice(0, 2).join(", ")}
                               </span>
                               <span>
-                                {researchSignals.data_quality}
+                                {formatEnumLabel(
+                                  t,
+                                  "data_quality",
+                                  researchSignals.data_quality,
+                                )}
                                 <br />
                                 <span className="muted">{snapshot.confidence}</span>
                               </span>
@@ -545,32 +621,32 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                 ))}
               </div>
             ) : (
-              <div className="notice">No daily snapshots match the current filters.</div>
+              <div className="notice">{t("report.noDailyMatches")}</div>
             )}
             {selectedSnapshot ? (
               <div className="notice">
-                Selected day: {selectedSnapshot.date}. Only one daily snapshot is
-                expanded at a time.
+                {interpolate(t("report.selectedDay"), { date: selectedSnapshot.date })}
               </div>
             ) : null}
           </div>
         ) : (
           <div className="notice">
-            This saved report does not include a daily timeline yet. Open a newly
-            generated scenario to inspect individual days.
+            {t("report.noTimeline")}
           </div>
         )}
       </section>
 
       <section className="card">
-        <h2>Agents</h2>
+        <h2>{t("report.agents")}</h2>
         <div className="grid">
           {report.agents.map((agent) => (
             <div key={agent.agent_id}>
-              <h3>{agent.name}</h3>
+              <h3>{formatAgentProfileName(t, agent)}</h3>
               <p className="muted">{agent.description}</p>
               <div className="tag-row">
-                <span className="tag">{agent.category}</span>
+                <span className="tag">
+                  {formatEnumLabel(t, "agent_category", agent.category)}
+                </span>
                 <span className="tag">{agent.risk_tolerance}</span>
                 <span className="tag">{agent.time_horizon}</span>
               </div>
@@ -580,16 +656,16 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
       </section>
 
       <section className="card">
-        <h2>Daily context</h2>
+        <h2>{t("report.dailyContext")}</h2>
         <JsonBlock value={report.daily_context} />
       </section>
 
       <section className="card">
-        <h2>Agent outputs</h2>
+        <h2>{t("report.agentOutputs")}</h2>
         <div className="stack">
           {report.agent_outputs.map((output) => (
             <div key={output.agent_id}>
-              <h3>{output.agent_name}</h3>
+              <h3>{formatAgentName(t, output.agent_id, output.agent_name)}</h3>
               <p>{output.behavior_summary}</p>
               <p>{output.likely_reaction}</p>
               <div className="tag-row">
@@ -604,7 +680,7 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
 
       <section className="grid">
         <div className="card">
-          <h2>Risk Themes</h2>
+          <h2>{t("report.riskThemes")}</h2>
           <ul>
             {riskThemes.map((risk) => (
               <li key={risk}>{risk}</li>
@@ -612,7 +688,7 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
           </ul>
         </div>
         <div className="card">
-          <h2>Caveats</h2>
+          <h2>{t("report.caveats")}</h2>
           <ul>
             {report.caveats.map((caveat) => (
               <li key={caveat}>{caveat}</li>
@@ -622,17 +698,18 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
       </section>
 
       <section className="card">
-        <h2>Provenance</h2>
+        <h2>{t("report.provenance")}</h2>
         <JsonBlock value={report.provenance} />
       </section>
 
       <section className="notice">
-        <h2>Disclaimer</h2>
+        <h2>{t("report.disclaimer")}</h2>
+        <SafetyPhrases />
         <p>{report.disclaimer}</p>
       </section>
 
       <section className="card">
-        <h2>Markdown report</h2>
+        <h2>{t("report.markdownReport")}</h2>
         <MarkdownReportBlock markdown={report.markdown_report} />
       </section>
     </article>

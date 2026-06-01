@@ -7,6 +7,8 @@ import { DailyTimelineRail } from "./DailyTimelineRail";
 import { WorkbenchPanel } from "./WorkbenchPanel";
 import type { DailyScenarioSnapshot, ScenarioReport } from "@/lib/types";
 import { buildWorkbenchGraph } from "@/lib/workbenchGraph";
+import { formatEnumLabel } from "@/i18n/labels";
+import { useI18n } from "@/i18n/useI18n";
 
 interface ScenarioWorkbenchProps {
   report: ScenarioReport;
@@ -27,6 +29,7 @@ function getInitialSnapshot(
 }
 
 export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProps) {
+  const { t } = useI18n();
   const timeline = report.daily_timeline || [];
   const initialSnapshot = getInitialSnapshot(timeline, initialDate);
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
@@ -53,14 +56,12 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
           className="button secondary"
           href={`/scenarios/${report.scenario_id}/report`}
         >
-          Open report
+          {t("workbench.openReport")}
         </Link>
         <section className="notice">
-          <h1>Scenario Workbench</h1>
+          <h1>{t("workbench.noTimelineTitle")}</h1>
           <p>
-            This saved report does not include a daily timeline, so the graph
-            workbench cannot be built for it. Open the report view for the saved
-            summary.
+            {t("workbench.noTimeline")}
           </p>
         </section>
       </div>
@@ -71,14 +72,16 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
     <div className="workbench-page">
       <header className="workbench-header">
         <div>
-          <p className="muted">Astro ABM Scenario Workbench</p>
+          <p className="muted">{t("workbench.productName")}</p>
           <h1>{report.title}</h1>
           <div className="tag-row">
             <span className="tag">{selectedSnapshot.date}</span>
             <span className="tag">
-              {report.start_date} to {report.end_date}
+              {report.start_date} {t("common.to")} {report.end_date}
             </span>
-            <span className="tag">{report.mode}</span>
+            <span className="tag">
+              {formatEnumLabel(t, "scenario_mode", report.mode)}
+            </span>
           </div>
         </div>
         <div className="button-row">
@@ -86,10 +89,10 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
             className="button secondary"
             href={`/scenarios/${report.scenario_id}/report`}
           >
-            Open report
+            {t("workbench.openReport")}
           </Link>
           <Link className="button secondary" href="/scenarios">
-            Scenario list
+            {t("common.scenarioList")}
           </Link>
         </div>
       </header>

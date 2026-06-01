@@ -2,6 +2,8 @@
 
 import { GraphLegend } from "./GraphLegend";
 import type { WorkbenchGraph, WorkbenchNode } from "@/lib/workbenchGraph";
+import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
+import { useI18n } from "@/i18n/useI18n";
 
 interface DailyGraphCanvasProps {
   graph: WorkbenchGraph;
@@ -31,16 +33,60 @@ export function DailyGraphCanvas({
   selectedNodeId,
   onSelectNode,
 }: DailyGraphCanvasProps) {
+  const { t } = useI18n();
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+
+  const displayNodeLabel = (node: WorkbenchNode) => {
+    const contextKeys: Partial<Record<WorkbenchNode["type"], string>> = {
+      astro: "legend.astro",
+      stress: "workbench.contextStress",
+      volatility: "workbench.contextVolatility",
+      liquidity: "workbench.contextLiquidity",
+      data_quality: "legend.data",
+    };
+    if (node.type === "agent") {
+      const agentId = node.id.replace(/^agent_/, "");
+      return formatAgentName(t, agentId, node.label);
+    }
+    const labelKey = contextKeys[node.type];
+    return labelKey ? t(labelKey) : node.label;
+  };
+
+  const displayNodeSubtitle = (node: WorkbenchNode) => {
+    if (!node.subtitle) {
+      return "";
+    }
+    if (node.type === "stress") {
+      return formatEnumLabel(t, "stress_regime", node.subtitle);
+    }
+    if (node.type === "volatility") {
+      return formatEnumLabel(t, "volatility_regime", node.subtitle);
+    }
+    if (node.type === "liquidity") {
+      return formatEnumLabel(t, "liquidity_regime", node.subtitle);
+    }
+    if (node.type === "data_quality") {
+      return formatEnumLabel(t, "data_quality", node.subtitle);
+    }
+    if (node.type === "astro") {
+      return formatEnumLabel(t, "astro_intensity", node.subtitle);
+    }
+    if (node.type === "risk") {
+      return t("legend.risk");
+    }
+    if (node.type === "asset") {
+      return t("legend.asset");
+    }
+    return node.subtitle;
+  };
 
   return (
     <section className="workbench-card workbench-graph-card">
       <div className="workbench-card-header">
         <div>
-          <h2>Scenario Graph</h2>
+          <h2>{t("workbench.graphTitle")}</h2>
           <p className="muted">
-            Agent groups, daily context, assets, and risk themes for the selected
-            day.
+            {t("workbench.graphHelp")}
           </p>
         </div>
         <button
@@ -48,7 +94,7 @@ export function DailyGraphCanvas({
           onClick={() => onSelectNode(null)}
           type="button"
         >
-          Clear node
+          {t("workbench.clearNode")}
         </button>
       </div>
       <GraphLegend />
@@ -57,7 +103,7 @@ export function DailyGraphCanvas({
           className="workbench-svg"
           role="img"
           viewBox={`0 0 ${graph.width} ${graph.height}`}
-          aria-label="Scenario workbench graph"
+          aria-label={t("workbench.graphAria")}
         >
           <defs>
             <marker
@@ -112,16 +158,16 @@ export function DailyGraphCanvas({
               >
                 <rect height="68" rx="8" width="164" />
                 <text className="node-label" x="82" y="28">
-                  {shortLabel(node.label)}
+                  {shortLabel(displayNodeLabel(node))}
                 </text>
                 {node.subtitle ? (
                   <text className="node-subtitle" x="82" y="49">
-                    {shortLabel(node.subtitle, 24)}
+                    {shortLabel(displayNodeSubtitle(node), 24)}
                   </text>
                 ) : null}
                 <title>
-                  {node.label}
-                  {node.subtitle ? ` - ${node.subtitle}` : ""}
+                  {displayNodeLabel(node)}
+                  {node.subtitle ? ` - ${displayNodeSubtitle(node)}` : ""}
                   {node.detail ? `: ${node.detail}` : ""}
                 </title>
               </g>
@@ -132,4 +178,3 @@ export function DailyGraphCanvas({
     </section>
   );
 }
-

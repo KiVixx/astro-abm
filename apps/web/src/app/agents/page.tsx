@@ -1,3 +1,5 @@
+import { AgentGrid } from "@/components/AgentGrid";
+import { I18nText } from "@/i18n/useI18n";
 import { getAgents } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -8,45 +10,28 @@ export default async function AgentsPage() {
     return (
       <div className="page stack">
         <header>
-          <h1>Agents</h1>
+          <h1>
+            <I18nText tKey="agents.title" />
+          </h1>
           <p className="lead">
-            Default archetypes used by local scenario rehearsals.
+            <I18nText tKey="agents.lead" />
           </p>
         </header>
-        <section className="grid">
-          {agents.map((agent) => (
-            <article className="card" key={agent.agent_id}>
-              <h2>{agent.name}</h2>
-              <p className="muted">{agent.description}</p>
-              <div className="tag-row">
-                <span className="tag">{agent.category}</span>
-                <span className="tag">{agent.risk_tolerance}</span>
-                <span className="tag">{agent.time_horizon}</span>
-              </div>
-              <dl>
-                <dt>Macro sensitivity</dt>
-                <dd>{agent.macro_sensitivity}</dd>
-                <dt>Astro narrative sensitivity</dt>
-                <dd>{agent.astro_narrative_sensitivity}</dd>
-                <dt>Liquidity sensitivity</dt>
-                <dd>{agent.liquidity_sensitivity}</dd>
-                <dt>Decision style</dt>
-                <dd>{agent.decision_style}</dd>
-              </dl>
-            </article>
-          ))}
-        </section>
+        <AgentGrid agents={agents} />
       </div>
     );
   } catch (error) {
     return (
       <div className="page stack">
-        <h1>Agents</h1>
+        <h1>
+          <I18nText tKey="agents.title" />
+        </h1>
         <div className="notice">
-          The API is not reachable. Start it with <code>make api</code> and reload
-          this page.
+          <I18nText tKey="agents.apiUnavailable" />
         </div>
-        <p className="muted">{error instanceof Error ? error.message : "Unknown error"}</p>
+        <p className="muted">
+          {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
+        </p>
       </div>
     );
   }

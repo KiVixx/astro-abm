@@ -84,6 +84,12 @@ through `NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL`, defaulting to
 Reports are association only, scenario rehearsal only, not financial advice, and
 not a trading signal.
 
+The web UI supports English and Traditional Chinese. Use the `EN / 中文`
+toggle in the product header; the selected language is stored locally in the
+browser. This translates product UI labels and safety text only. Generated
+scenario content is saved in the language it was generated with, so historical
+scenario summaries and Markdown reports are not machine-translated by the UI.
+
 Scenario Workbench:
 
 - Open a saved scenario at `/scenarios/{scenario_id}`, for example

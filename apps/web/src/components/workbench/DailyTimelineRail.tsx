@@ -5,6 +5,8 @@ import {
   getDailyDataCoverage,
   getDailyResearchSignals,
 } from "@/lib/workbenchGraph";
+import { formatEnumLabel } from "@/i18n/labels";
+import { useI18n } from "@/i18n/useI18n";
 
 interface DailyTimelineRailProps {
   timeline: DailyScenarioSnapshot[];
@@ -21,6 +23,7 @@ export function DailyTimelineRail({
   selectedDate,
   onSelectDate,
 }: DailyTimelineRailProps) {
+  const { t } = useI18n();
   const selectedIndex = Math.max(
     0,
     timeline.findIndex((snapshot) => snapshot.date === selectedDate),
@@ -33,13 +36,13 @@ export function DailyTimelineRail({
     <section className="workbench-card workbench-rail">
       <div className="workbench-rail-header">
         <div>
-          <h2>Daily Timeline</h2>
+          <h2>{t("workbench.timelineTitle")}</h2>
           <p className="muted">
             {selectedSnapshot
-              ? `${monthLabel(selectedSnapshot.date)} - day ${
+              ? `${monthLabel(selectedSnapshot.date)} - ${t("common.day")} ${
                   selectedIndex + 1
-                } of ${timeline.length}`
-              : "No daily snapshots available"}
+                } ${t("common.of")} ${timeline.length}`
+              : t("workbench.noSnapshots")}
           </p>
         </div>
         <div className="button-row">
@@ -49,7 +52,7 @@ export function DailyTimelineRail({
             onClick={() => previousSnapshot && onSelectDate(previousSnapshot.date)}
             type="button"
           >
-            Previous
+            {t("workbench.previous")}
           </button>
           <button
             className="button secondary"
@@ -57,7 +60,7 @@ export function DailyTimelineRail({
             onClick={() => nextSnapshot && onSelectDate(nextSnapshot.date)}
             type="button"
           >
-            Next
+            {t("workbench.next")}
           </button>
         </div>
       </div>
@@ -75,8 +78,12 @@ export function DailyTimelineRail({
             >
               <span className="workbench-day-month">{monthLabel(snapshot.date)}</span>
               <strong>{snapshot.date.slice(5)}</strong>
-              <span>{signals.stress_regime}</span>
-              <span>{signals.data_quality || coverage.source}</span>
+              <span>{formatEnumLabel(t, "stress_regime", signals.stress_regime)}</span>
+              <span>
+                {signals.data_quality
+                  ? formatEnumLabel(t, "data_quality", signals.data_quality)
+                  : formatEnumLabel(t, "data_source", coverage.source)}
+              </span>
             </button>
           );
         })}
@@ -84,4 +91,3 @@ export function DailyTimelineRail({
     </section>
   );
 }
-

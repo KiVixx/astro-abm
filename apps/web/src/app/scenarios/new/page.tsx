@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ScenarioForm } from "@/components/ScenarioForm";
+import { I18nText } from "@/i18n/useI18n";
 import { getAgents } from "@/lib/api";
 import { createScenarioAction } from "./actions";
 
@@ -11,9 +12,11 @@ export default async function NewScenarioPage() {
     return (
       <div className="page stack">
         <header>
-          <h1>Create scenario</h1>
+          <h1>
+            <I18nText tKey="scenarioCreate.title" />
+          </h1>
           <p className="lead">
-            Generate a local mock scenario report through the FastAPI product API.
+            <I18nText tKey="scenarioCreate.lead" />
           </p>
         </header>
         <ScenarioForm agents={agents} action={createScenarioAction} />
@@ -22,14 +25,17 @@ export default async function NewScenarioPage() {
   } catch (error) {
     return (
       <div className="page stack">
-        <h1>Create scenario</h1>
+        <h1>
+          <I18nText tKey="scenarioCreate.title" />
+        </h1>
         <div className="notice">
-          The API is not reachable. Start it with <code>make api</code> before
-          creating a scenario.
+          <I18nText tKey="scenarioCreate.apiUnavailable" />
         </div>
-        <p className="muted">{error instanceof Error ? error.message : "Unknown error"}</p>
+        <p className="muted">
+          {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
+        </p>
         <Link className="button secondary" href="/">
-          Back home
+          <I18nText tKey="common.backHome" />
         </Link>
       </div>
     );

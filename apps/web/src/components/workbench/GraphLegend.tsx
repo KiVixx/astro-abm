@@ -1,25 +1,30 @@
+"use client";
+
+import { useI18n } from "@/i18n/useI18n";
+
 const legendItems = [
-  ["agent", "Agent group"],
-  ["astro", "Astro context"],
-  ["market", "Market context"],
-  ["asset", "Asset"],
-  ["risk", "Risk theme"],
-  ["data", "Data quality"],
+  ["agent", "legend.agent"],
+  ["astro", "legend.astro"],
+  ["market", "legend.market"],
+  ["asset", "legend.asset"],
+  ["risk", "legend.risk"],
+  ["data", "legend.data"],
 ];
 
 export function GraphLegend() {
+  const { t } = useI18n();
+
   return (
-    <div className="workbench-legend" aria-label="Graph legend">
-      {legendItems.map(([kind, label]) => (
+    <div className="workbench-legend" aria-label={t("legend.aria")}>
+      {legendItems.map(([kind, labelKey]) => (
         <span className="workbench-legend-item" key={kind}>
           <span className={`legend-dot legend-dot-${kind}`} />
-          {label}
+          {t(labelKey)}
         </span>
       ))}
       <span className="muted">
-        Scenario visualization only; not a causal graph or trading signal.
+        {t("legend.note")}
       </span>
     </div>
   );
 }
-

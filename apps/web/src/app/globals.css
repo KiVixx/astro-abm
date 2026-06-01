@@ -99,6 +99,12 @@ pre {
   text-decoration: none;
 }
 
+.site-header-actions {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+}
+
 .site-header nav {
   display: flex;
   gap: 18px;
@@ -109,6 +115,34 @@ pre {
   font-size: 14px;
   font-weight: 650;
   text-decoration: none;
+}
+
+.language-toggle {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.language-toggle button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 28px;
+  padding: 4px 9px;
+}
+
+.language-toggle button:hover,
+.language-toggle button:focus-visible,
+.language-toggle button.is-active {
+  background: var(--surface);
+  color: var(--accent-dark);
 }
 
 .page {
@@ -631,6 +665,11 @@ pre {
     flex-direction: column;
     gap: 10px;
     padding: 14px 18px;
+  }
+
+  .site-header-actions {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .hero,

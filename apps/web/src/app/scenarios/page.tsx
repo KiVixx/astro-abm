@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ScenarioSearch } from "@/components/ScenarioSearch";
+import { I18nText } from "@/i18n/useI18n";
 import { getScenarios } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -10,14 +11,15 @@ export default async function ScenariosPage() {
     return (
       <div className="page stack">
         <header>
-          <h1>Scenarios</h1>
+          <h1>
+            <I18nText tKey="scenarios.title" />
+          </h1>
           <p className="lead">
-            Search saved local scenario summaries without loading full Markdown
-            reports until a scenario is opened.
+            <I18nText tKey="scenarios.lead" />
           </p>
           <div className="actions">
             <Link className="button" href="/scenarios/new">
-              Create scenario
+              <I18nText tKey="scenarios.create" />
             </Link>
           </div>
         </header>
@@ -27,12 +29,15 @@ export default async function ScenariosPage() {
   } catch (error) {
     return (
       <div className="page stack">
-        <h1>Scenarios</h1>
+        <h1>
+          <I18nText tKey="scenarios.title" />
+        </h1>
         <div className="notice">
-          The API is not reachable. Start it with <code>make api</code> and reload
-          this page.
+          <I18nText tKey="scenarios.apiUnavailable" />
         </div>
-        <p className="muted">{error instanceof Error ? error.message : "Unknown error"}</p>
+        <p className="muted">
+          {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
+        </p>
       </div>
     );
   }

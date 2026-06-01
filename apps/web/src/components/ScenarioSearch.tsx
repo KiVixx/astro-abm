@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import { ScenarioCard } from "./ScenarioCard";
 import type { ScenarioSummary } from "@/lib/types";
+import { useI18n } from "@/i18n/useI18n";
 
 export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredScenarios = useMemo(() => {
@@ -28,11 +30,11 @@ export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) 
   return (
     <section className="stack">
       <label className="form-field">
-        <span>Search by title, asset, agent, or visibility</span>
+        <span>{t("scenarios.searchLabel")}</span>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="BTC, Macro Allocator, private..."
+          placeholder={t("scenarios.searchPlaceholder")}
         />
       </label>
       <div className="stack">
@@ -41,7 +43,7 @@ export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) 
             <ScenarioCard key={scenario.scenario_id} scenario={scenario} />
           ))
         ) : (
-          <div className="notice">No scenarios match the current search.</div>
+          <div className="notice">{t("scenarios.noMatches")}</div>
         )}
       </div>
     </section>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReportViewer } from "@/components/ReportViewer";
+import { I18nText } from "@/i18n/useI18n";
 import { ApiError, getScenario } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +18,10 @@ export default async function ScenarioReportPage({
       <div className="page stack">
         <div className="button-row">
           <Link className="button secondary" href={`/scenarios/${report.scenario_id}`}>
-            Back to Workbench
+            <I18nText tKey="common.backToWorkbench" />
           </Link>
           <Link className="button secondary" href="/scenarios">
-            Back to scenarios
+            <I18nText tKey="common.backToScenarios" />
           </Link>
         </div>
         <ReportViewer report={report} />
@@ -32,13 +33,16 @@ export default async function ScenarioReportPage({
     }
     return (
       <div className="page stack">
-        <h1>Scenario report</h1>
+        <h1>
+          <I18nText tKey="report.markdownReport" />
+        </h1>
         <div className="notice">
-          The scenario report could not be loaded. Check that the API is running.
+          <I18nText tKey="report.loadError" />
         </div>
-        <p className="muted">{error instanceof Error ? error.message : "Unknown error"}</p>
+        <p className="muted">
+          {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
+        </p>
       </div>
     );
   }
 }
-

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ScenarioWorkbench } from "@/components/workbench/ScenarioWorkbench";
+import { I18nText } from "@/i18n/useI18n";
 import { ApiError, getScenario } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -23,11 +24,15 @@ export default async function ScenarioDetailPage({
     }
     return (
       <div className="page stack">
-        <h1>Scenario workbench</h1>
+        <h1>
+          <I18nText tKey="workbench.noTimelineTitle" />
+        </h1>
         <div className="notice">
-          The scenario could not be loaded. Check that the API is running.
+          <I18nText tKey="workbench.loadError" />
         </div>
-        <p className="muted">{error instanceof Error ? error.message : "Unknown error"}</p>
+        <p className="muted">
+          {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
+        </p>
       </div>
     );
   }

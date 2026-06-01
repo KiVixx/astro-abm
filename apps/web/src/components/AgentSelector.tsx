@@ -1,6 +1,11 @@
+"use client";
+
 import type { AgentProfile } from "@/lib/types";
+import { formatAgentProfileName, formatEnumLabel } from "@/i18n/labels";
+import { useI18n } from "@/i18n/useI18n";
 
 export function AgentSelector({ agents }: { agents: AgentProfile[] }) {
+  const { t } = useI18n();
   const defaultAgentIds = new Set([
     "crypto_retail_fomo",
     "leveraged_trader",
@@ -18,10 +23,11 @@ export function AgentSelector({ agents }: { agents: AgentProfile[] }) {
             value={agent.agent_id}
           />
           <span>
-            <strong>{agent.name}</strong>
+            <strong>{formatAgentProfileName(t, agent)}</strong>
             <br />
             <span className="muted">
-              {agent.category} · {agent.time_horizon} · {agent.decision_style}
+              {formatEnumLabel(t, "agent_category", agent.category)} ·{" "}
+              {agent.time_horizon} · {agent.decision_style}
             </span>
           </span>
         </label>
