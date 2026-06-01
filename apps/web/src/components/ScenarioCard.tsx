@@ -31,6 +31,10 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioSummary }) {
         <span className="tag">
           {formatEnumLabel(t, "visibility", scenario.visibility)}
         </span>
+        <span className="tag">
+          {t("report.generatedLanguage")}:{" "}
+          {formatEnumLabel(t, "report_language", scenario.language || "legacy")}
+        </span>
       </div>
     </article>
   );

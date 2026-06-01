@@ -47,6 +47,7 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         agent_names=[agent.name for agent in report.agents],
         visibility=report.visibility,
         mode=report.mode,
+        language=report.language,
     )
 
 

@@ -1,6 +1,7 @@
 export type Visibility = "private" | "public";
 export type ScenarioMode = "daily_association_only";
 export type LlmProvider = "mock" | "openai_compatible";
+export type ReportLanguage = "en" | "zh-Hant";
 
 export interface AgentProfile {
   agent_id: string;
@@ -94,6 +95,7 @@ export interface ScenarioCreateRequest {
   llm_model?: string | null;
   visibility: Visibility;
   mode?: ScenarioMode;
+  language?: ReportLanguage;
 }
 
 export interface ScenarioSummary {
@@ -108,6 +110,7 @@ export interface ScenarioSummary {
   agent_names: string[];
   visibility: Visibility;
   mode: ScenarioMode;
+  language?: ReportLanguage | null;
 }
 
 export interface ScenarioReport {
@@ -130,6 +133,7 @@ export interface ScenarioReport {
   provenance: Record<string, unknown>;
   visibility: Visibility;
   mode: ScenarioMode;
+  language?: ReportLanguage | null;
   markdown_report: string;
   disclaimer: string;
 }

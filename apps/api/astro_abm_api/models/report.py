@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from astro_abm_api.models.agent import AgentOutput, AgentProfile
-from astro_abm_api.models.scenario import ScenarioMode, Visibility
+from astro_abm_api.models.scenario import ReportLanguage, ScenarioMode, Visibility
 
 
 class DailyAstroContext(BaseModel):
@@ -99,5 +99,6 @@ class ScenarioReport(BaseModel):
     provenance: dict[str, Any]
     visibility: Visibility
     mode: ScenarioMode
+    language: ReportLanguage | None = None
     markdown_report: str
     disclaimer: str

@@ -10,6 +10,7 @@ from astro_abm_api.models.llm import LLMProvider
 
 Visibility = Literal["private", "public"]
 ScenarioMode = Literal["daily_association_only"]
+ReportLanguage = Literal["en", "zh-Hant"]
 
 
 class ScenarioCreateRequest(BaseModel):
@@ -26,6 +27,7 @@ class ScenarioCreateRequest(BaseModel):
     llm_model: str | None = None
     visibility: Visibility = "private"
     mode: ScenarioMode = "daily_association_only"
+    language: ReportLanguage = "en"
 
     @field_validator("title")
     @classmethod
@@ -63,3 +65,4 @@ class ScenarioSummary(BaseModel):
     agent_names: list[str]
     visibility: Visibility
     mode: ScenarioMode
+    language: ReportLanguage | None = None

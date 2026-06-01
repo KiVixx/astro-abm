@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createScenario } from "@/lib/api";
-import type { LlmProvider, Visibility } from "@/lib/types";
+import type { LlmProvider, ReportLanguage, Visibility } from "@/lib/types";
 
 function getString(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -24,6 +24,7 @@ export async function createScenarioAction(formData: FormData): Promise<void> {
     .filter(Boolean);
   const llmProvider = getString(formData, "llm_provider") as LlmProvider;
   const visibility = getString(formData, "visibility") as Visibility;
+  const language = getString(formData, "language") as ReportLanguage;
 
   const report = await createScenario({
     title: getString(formData, "title"),
@@ -37,6 +38,7 @@ export async function createScenarioAction(formData: FormData): Promise<void> {
     llm_model: optionalString(getString(formData, "llm_model")),
     visibility: visibility || "private",
     mode: "daily_association_only",
+    language: language || "en",
   });
 
   redirect(`/scenarios/${report.scenario_id}`);

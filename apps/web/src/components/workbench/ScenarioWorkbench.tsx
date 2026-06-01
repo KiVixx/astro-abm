@@ -82,6 +82,10 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
             <span className="tag">
               {formatEnumLabel(t, "scenario_mode", report.mode)}
             </span>
+            <span className="tag">
+              {t("report.generatedLanguage")}:{" "}
+              {formatEnumLabel(t, "report_language", report.language || "legacy")}
+            </span>
           </div>
         </div>
         <div className="button-row">

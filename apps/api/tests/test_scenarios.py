@@ -57,6 +57,8 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     report = create_response.json()
     scenario_id = report["scenario_id"]
     assert report["title"] == "BTC ETH Daily Scenario"
+    assert report["language"] == "en"
+    assert report["provenance"]["language"] == "en"
     assert report["daily_context"]["data_layer"] == "daily"
     assert report["scenario_summary"] == report["simulation_summary"]
     assert report["risk_themes"] == report["risks"]
@@ -102,10 +104,52 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
         "Macro Allocator",
     ]
     assert "markdown_report" not in summaries[0]
+    assert summaries[0]["language"] == "en"
 
     get_response = client.get(f"/scenarios/{scenario_id}")
     assert get_response.status_code == 200
     assert get_response.json()["scenario_id"] == scenario_id
+
+
+def test_default_report_language_is_english(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+
+    response = client.post("/scenarios", json=scenario_payload())
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["language"] == "en"
+    assert "association only" in report["scenario_summary"]
+    assert "## Executive Summary" in report["markdown_report"]
+    assert "僅為相關性分析" not in report["scenario_summary"]
+
+
+def test_traditional_chinese_report_generation(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload["language"] = "zh-Hant"
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report = response.json()
+    first_day = report["daily_timeline"][0]
+    assert report["language"] == "zh-Hant"
+    assert report["provenance"]["language"] == "zh-Hant"
+    assert "僅為相關性分析" in report["scenario_summary"]
+    assert "僅為情境推演" in report["disclaimer"]
+    assert "不構成財務建議" in report["disclaimer"]
+    assert "不是交易訊號" in report["disclaimer"]
+    assert "情境報告" in report["simulation_summary"]
+    assert "第 1 天" in first_day["daily_summary"]
+    assert "可能反應" in report["agent_outputs"][0]["likely_reaction"]
+    assert "風險討論" in first_day["agent_states"][0]["likely_reaction"]
+    assert "僅為相關性分析" in report["caveats"][0]
+    assert "## 執行摘要" in report["markdown_report"]
+    assert "## 每日時間線" in report["markdown_report"]
+    assert "僅為相關性分析" in report["markdown_report"]
 
 
 def test_no_secret_is_saved_in_scenario_output(monkeypatch, tmp_path: Path) -> None:
@@ -149,6 +193,7 @@ def test_old_scenario_report_without_daily_timeline_loads(
     report.pop("daily_timeline")
     report.pop("scenario_summary")
     report.pop("risk_themes")
+    report.pop("language")
     (tmp_path / f"{scenario_id}.json").write_text(json.dumps(report), encoding="utf-8")
 
     get_response = client.get(f"/scenarios/{scenario_id}")
@@ -159,6 +204,7 @@ def test_old_scenario_report_without_daily_timeline_loads(
     assert loaded["daily_timeline"] == []
     assert loaded["scenario_summary"] is None
     assert loaded["risk_themes"] == []
+    assert loaded["language"] is None
 
 
 def test_old_daily_timeline_without_research_fields_loads(

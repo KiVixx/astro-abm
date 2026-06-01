@@ -15,6 +15,11 @@ const enumLabels: Record<string, LabelMap> = {
   scenario_mode: {
     daily_association_only: "value.mode.dailyAssociationOnly",
   },
+  report_language: {
+    en: "value.reportLanguage.en",
+    "zh-Hant": "value.reportLanguage.zhHant",
+    legacy: "value.reportLanguage.legacy",
+  },
   agent_category: {
     retail: "value.agentCategory.retail",
     trading: "value.agentCategory.trading",

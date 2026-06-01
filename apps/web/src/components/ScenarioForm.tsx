@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { AgentSelector } from "./AgentSelector";
-import type { AgentProfile } from "@/lib/types";
+import type { AgentProfile, ReportLanguage } from "@/lib/types";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
@@ -12,7 +13,15 @@ export function ScenarioForm({
   agents: AgentProfile[];
   action: (formData: FormData) => Promise<void>;
 }) {
-  const { t } = useI18n();
+  const { language: uiLanguage, t } = useI18n();
+  const [reportLanguage, setReportLanguage] = useState<ReportLanguage>(uiLanguage);
+  const [hasManualLanguageOverride, setHasManualLanguageOverride] = useState(false);
+
+  useEffect(() => {
+    if (!hasManualLanguageOverride) {
+      setReportLanguage(uiLanguage);
+    }
+  }, [hasManualLanguageOverride, uiLanguage]);
 
   return (
     <form action={action} className="stack">
@@ -60,6 +69,22 @@ export function ScenarioForm({
               {formatEnumLabel(t, "visibility", "private")}
             </option>
             <option value="public">{formatEnumLabel(t, "visibility", "public")}</option>
+          </select>
+        </label>
+        <label className="form-field">
+          <span>{t("scenarioCreate.reportLanguage")}</span>
+          <select
+            name="language"
+            onChange={(event) => {
+              setHasManualLanguageOverride(true);
+              setReportLanguage(event.target.value as ReportLanguage);
+            }}
+            value={reportLanguage}
+          >
+            <option value="en">{formatEnumLabel(t, "report_language", "en")}</option>
+            <option value="zh-Hant">
+              {formatEnumLabel(t, "report_language", "zh-Hant")}
+            </option>
           </select>
         </label>
         <label className="form-field">

@@ -394,6 +394,10 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
           <span className="tag">
             {formatEnumLabel(t, "visibility", report.visibility)}
           </span>
+          <span className="tag">
+            {t("report.generatedLanguage")}:{" "}
+            {formatEnumLabel(t, "report_language", report.language || "legacy")}
+          </span>
         </div>
       </section>
 
