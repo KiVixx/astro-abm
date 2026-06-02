@@ -206,6 +206,17 @@ function AssetNodePanel({ payload }: { payload: AssetNodePayload }) {
         <p className="muted">{t("workbench.assetContextFor")} {payload.date}</p>
       </div>
       <p>{payload.summary}</p>
+      <div className="tag-row">
+        <span className="tag">
+          {t("workbench.assetStressSentiment")}:{" "}
+          {payload.sentimentStressSupport.toFixed(1)}
+        </span>
+        <span className="tag">
+          {payload.sentimentStressSource === "mock_demo"
+            ? t("workbench.mockMetric")
+            : t("workbench.timelineMetric")}
+        </span>
+      </div>
       <p className="notice">
         {t("workbench.assetNotice")}
       </p>

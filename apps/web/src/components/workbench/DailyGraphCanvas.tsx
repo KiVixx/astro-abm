@@ -1,12 +1,14 @@
 "use client";
 
 import { GraphLegend } from "./GraphLegend";
+import type { AssetStressSeries } from "@/lib/assetStressSentiment";
 import type { WorkbenchGraph, WorkbenchNode } from "@/lib/workbenchGraph";
 import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
 interface DailyGraphCanvasProps {
   graph: WorkbenchGraph;
+  assetStressSeries: AssetStressSeries[];
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
 }
@@ -30,6 +32,7 @@ function nodeClassName(node: WorkbenchNode, selectedNodeId: string | null) {
 
 export function DailyGraphCanvas({
   graph,
+  assetStressSeries,
   selectedNodeId,
   onSelectNode,
 }: DailyGraphCanvasProps) {
@@ -97,7 +100,7 @@ export function DailyGraphCanvas({
           {t("workbench.clearNode")}
         </button>
       </div>
-      <GraphLegend />
+      <GraphLegend assetStressSeries={assetStressSeries} />
       <div className="workbench-svg-frame">
         <svg
           className="workbench-svg"
@@ -165,11 +168,9 @@ export function DailyGraphCanvas({
                     {shortLabel(displayNodeSubtitle(node), 24)}
                   </text>
                 ) : null}
-                <title>
-                  {displayNodeLabel(node)}
-                  {node.subtitle ? ` - ${displayNodeSubtitle(node)}` : ""}
-                  {node.detail ? `: ${node.detail}` : ""}
-                </title>
+                <title>{`${displayNodeLabel(node)}${
+                  node.subtitle ? ` - ${displayNodeSubtitle(node)}` : ""
+                }${node.detail ? `: ${node.detail}` : ""}`}</title>
               </g>
             ))}
           </g>
