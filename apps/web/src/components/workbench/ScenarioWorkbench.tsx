@@ -34,6 +34,7 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
   const initialSnapshot = getInitialSnapshot(timeline, initialDate);
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const selectedSnapshot =
     timeline.find((snapshot) => snapshot.date === selectedDate) || initialSnapshot;
 
@@ -43,10 +44,13 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
 
   const selectedNode =
     graph?.nodes.find((node) => node.id === selectedNodeId) || null;
+  const selectedEdge =
+    graph?.edges.find((edge) => edge.id === selectedEdgeId) || null;
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
     setSelectedNodeId(null);
+    setSelectedEdgeId(null);
   };
 
   if (!selectedSnapshot || !graph) {
@@ -110,10 +114,17 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
       <main className="workbench-layout">
         <DailyGraphCanvas
           graph={graph}
+          onSelectEdge={setSelectedEdgeId}
           onSelectNode={setSelectedNodeId}
+          selectedEdgeId={selectedEdgeId}
           selectedNodeId={selectedNodeId}
         />
-        <WorkbenchPanel selectedNode={selectedNode} snapshot={selectedSnapshot} />
+        <WorkbenchPanel
+          graph={graph}
+          selectedEdge={selectedEdge}
+          selectedNode={selectedNode}
+          snapshot={selectedSnapshot}
+        />
       </main>
     </div>
   );

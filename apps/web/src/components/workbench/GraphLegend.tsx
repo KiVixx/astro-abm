@@ -9,6 +9,7 @@ const legendItems = [
   ["asset", "legend.asset"],
   ["risk", "legend.risk"],
   ["data", "legend.data"],
+  ["relationship", "legend.relationship"],
 ];
 
 export function GraphLegend() {
