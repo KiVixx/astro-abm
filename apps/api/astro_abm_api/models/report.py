@@ -77,6 +77,37 @@ class DailyScenarioSnapshot(BaseModel):
     disclaimer: str
 
 
+class AssetCoverageSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset: str
+    available_days: int
+    missing_days: int
+    future_placeholder_days: int
+    coverage_status: str
+    notes: list[str] = Field(default_factory=list)
+
+
+class ScenarioCoverageSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total_days: int
+    local_research_days: int
+    placeholder_days: int
+    future_placeholder_days: int
+    mixed_context_days: int
+    astro_daily_available_days: int
+    financial_stress_available_days: int
+    market_daily_available_days: int
+    macro_daily_available_days: int
+    data_sources: list[str]
+    data_quality_counts: dict[str, int]
+    source_counts: dict[str, int]
+    asset_coverage: list[AssetCoverageSummary] = Field(default_factory=list)
+    date_range_mode: str
+    notes: list[str] = Field(default_factory=list)
+
+
 class ScenarioReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -95,6 +126,7 @@ class ScenarioReport(BaseModel):
     risks: list[str]
     risk_themes: list[str] = Field(default_factory=list)
     daily_timeline: list[DailyScenarioSnapshot] = Field(default_factory=list)
+    coverage_summary: ScenarioCoverageSummary | None = None
     caveats: list[str]
     provenance: dict[str, Any]
     visibility: Visibility

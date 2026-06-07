@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ContextCoverageSummaryCard } from "../ContextCoverageSummaryCard";
 import { DailyGraphCanvas } from "./DailyGraphCanvas";
 import { DailyTimelineRail } from "./DailyTimelineRail";
 import { WorkbenchPanel } from "./WorkbenchPanel";
@@ -109,6 +110,11 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
           </Link>
         </div>
       </header>
+
+      <ContextCoverageSummaryCard
+        compact
+        coverageSummary={report.coverage_summary}
+      />
 
       <DailyTimelineRail
         assetStressSeries={assetStressSeries}

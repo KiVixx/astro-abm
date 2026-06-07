@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from collections import Counter
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from astro_abm_api.models.agent import AgentOutput, AgentProfile
-from astro_abm_api.models.report import DailyAgentState, DailyScenarioSnapshot, ScenarioReport
+from astro_abm_api.models.report import (
+    AssetCoverageSummary,
+    DailyAgentState,
+    DailyScenarioSnapshot,
+    ScenarioCoverageSummary,
+    ScenarioReport,
+)
 from astro_abm_api.models.scenario import ReportLanguage, ScenarioCreateRequest
 from astro_abm_api.services.daily_context import build_placeholder_daily_contexts
 from astro_abm_api.services.llm_client import build_llm_config, provenance_for_llm
@@ -217,9 +224,231 @@ def build_daily_timeline(
     return snapshots
 
 
+def build_coverage_summary(
+    daily_timeline: list[DailyScenarioSnapshot],
+    assets: list[str],
+    *,
+    created_at: datetime,
+    language: ReportLanguage,
+) -> ScenarioCoverageSummary:
+    total_days = len(daily_timeline)
+    source_counts = Counter(snapshot.data_coverage.source for snapshot in daily_timeline)
+    data_quality_counts = Counter(
+        snapshot.research_signals.data_quality for snapshot in daily_timeline
+    )
+    component_keys = (
+        "astro_daily",
+        "financial_stress_daily",
+        "market_daily",
+        "macro_daily",
+    )
+
+    def status_values(snapshot: DailyScenarioSnapshot) -> list[str]:
+        coverage = snapshot.data_coverage
+        return [
+            coverage.astro_daily,
+            coverage.financial_stress_daily,
+            coverage.market_daily,
+            coverage.macro_daily,
+        ]
+
+    def is_future_placeholder(snapshot: DailyScenarioSnapshot) -> bool:
+        return (
+            snapshot.data_coverage.source == "future_placeholder"
+            or snapshot.research_signals.data_quality == "future_placeholder"
+            or "future_placeholder" in status_values(snapshot)
+        )
+
+    def is_placeholder(snapshot: DailyScenarioSnapshot) -> bool:
+        return (
+            snapshot.data_coverage.source in {"placeholder_fallback", "legacy_report"}
+            or snapshot.research_signals.data_quality
+            in {"placeholder_fallback", "low_placeholder_confidence", "legacy_report"}
+        )
+
+    def is_mixed(snapshot: DailyScenarioSnapshot) -> bool:
+        values = status_values(snapshot)
+        return "available" in values and any(value != "available" for value in values)
+
+    component_available_counts = {
+        key: sum(getattr(snapshot.data_coverage, key) == "available" for snapshot in daily_timeline)
+        for key in component_keys
+    }
+    all_assets = sorted({asset for snapshot in daily_timeline for asset in snapshot.assets} | set(assets))
+    asset_coverage = [
+        build_asset_coverage_summary(asset, daily_timeline, language=language)
+        for asset in all_assets
+    ]
+
+    notes = coverage_summary_notes(language)
+    return ScenarioCoverageSummary(
+        total_days=total_days,
+        local_research_days=source_counts.get("local_research_snapshot", 0),
+        placeholder_days=sum(is_placeholder(snapshot) for snapshot in daily_timeline),
+        future_placeholder_days=sum(is_future_placeholder(snapshot) for snapshot in daily_timeline),
+        mixed_context_days=sum(is_mixed(snapshot) for snapshot in daily_timeline),
+        astro_daily_available_days=component_available_counts["astro_daily"],
+        financial_stress_available_days=component_available_counts["financial_stress_daily"],
+        market_daily_available_days=component_available_counts["market_daily"],
+        macro_daily_available_days=component_available_counts["macro_daily"],
+        data_sources=sorted(source_counts),
+        data_quality_counts=dict(sorted(data_quality_counts.items())),
+        source_counts=dict(sorted(source_counts.items())),
+        asset_coverage=asset_coverage,
+        date_range_mode=date_range_mode(
+            [snapshot.date for snapshot in daily_timeline],
+            created_at.date(),
+        ),
+        notes=notes,
+    )
+
+
+def build_asset_coverage_summary(
+    asset: str,
+    daily_timeline: list[DailyScenarioSnapshot],
+    *,
+    language: ReportLanguage,
+) -> AssetCoverageSummary:
+    relevant_days = [snapshot for snapshot in daily_timeline if asset in snapshot.assets]
+    available_days = sum(
+        snapshot.data_coverage.market_daily == "available" for snapshot in relevant_days
+    )
+    future_placeholder_days = sum(
+        snapshot.data_coverage.market_daily == "future_placeholder"
+        or snapshot.data_coverage.source == "future_placeholder"
+        or snapshot.research_signals.data_quality == "future_placeholder"
+        for snapshot in relevant_days
+    )
+    missing_days = max(len(relevant_days) - available_days - future_placeholder_days, 0)
+    if relevant_days and available_days == len(relevant_days):
+        coverage_status = "available"
+    elif relevant_days and future_placeholder_days == len(relevant_days):
+        coverage_status = "future_placeholder"
+    elif available_days:
+        coverage_status = "mixed"
+    elif future_placeholder_days:
+        coverage_status = "future_placeholder"
+    else:
+        coverage_status = "missing"
+
+    if language == "zh-Hant":
+        notes = [
+            "資產層級覆蓋由每日 market_daily 狀態保守推導；此 MVP 尚未在每個快照內保存逐資產觀測覆蓋。",
+            "此摘要只用於描述資料脈絡，不是逐點回測。",
+        ]
+    else:
+        notes = [
+            "Asset-level coverage is conservatively inferred from daily market_daily status; this MVP does not store per-asset observed coverage inside each snapshot.",
+            "This summary is descriptive context only, not point-in-time backtesting.",
+        ]
+    return AssetCoverageSummary(
+        asset=asset,
+        available_days=available_days,
+        missing_days=missing_days,
+        future_placeholder_days=future_placeholder_days,
+        coverage_status=coverage_status,
+        notes=notes,
+    )
+
+
+def date_range_mode(dates: list[date], today: date) -> str:
+    if not dates:
+        return "empty"
+    if all(value > today for value in dates):
+        return "future"
+    if all(value <= today for value in dates):
+        return "historical"
+    return "mixed"
+
+
+def coverage_summary_notes(language: ReportLanguage) -> list[str]:
+    if language == "zh-Hant":
+        return [
+            "local_research_snapshot 表示當天可使用只讀本地研究脈絡。",
+            "future_placeholder 表示未來日期尚無已觀測市場或壓力資料。",
+            "coverage summary 只描述資料覆蓋，不代表逐點回測。",
+            "資產覆蓋為保守估算，因為每日快照目前只保存情境資產與 market_daily 整體狀態。",
+        ]
+    return [
+        "local_research_snapshot indicates read-only local research context was available for that day.",
+        "future_placeholder indicates no observed market/stress data is available for future dates.",
+        "coverage summary is descriptive only and is not a point-in-time backtest.",
+        "Asset coverage is conservative because daily snapshots currently store scenario assets and overall market_daily status, not a full per-asset audit.",
+    ]
+
+
+def render_coverage_markdown(
+    coverage_summary: ScenarioCoverageSummary | None,
+    *,
+    language: ReportLanguage,
+) -> str:
+    if coverage_summary is None:
+        if language == "zh-Hant":
+            return "此保存報告尚未包含情境層級資料覆蓋摘要。"
+        return "This saved report does not include a scenario-level coverage summary yet."
+
+    if language == "zh-Hant":
+        asset_lines = "\n".join(
+            (
+                f"- {asset.asset}: 狀態={asset.coverage_status}; "
+                f"可用={asset.available_days}; 缺失={asset.missing_days}; "
+                f"未來佔位={asset.future_placeholder_days}"
+            )
+            for asset in coverage_summary.asset_coverage
+        )
+        note_lines = "\n".join(f"- {note}" for note in coverage_summary.notes)
+        return f"""- 總天數：{coverage_summary.total_days}
+- 本地研究天數：{coverage_summary.local_research_days}
+- 佔位資料天數：{coverage_summary.placeholder_days}
+- 未來佔位天數：{coverage_summary.future_placeholder_days}
+- 混合脈絡天數：{coverage_summary.mixed_context_days}
+- 天象日線可用天數：{coverage_summary.astro_daily_available_days}
+- 金融壓力可用天數：{coverage_summary.financial_stress_available_days}
+- 市場日線可用天數：{coverage_summary.market_daily_available_days}
+- 宏觀日線可用天數：{coverage_summary.macro_daily_available_days}
+- 資料來源：{', '.join(coverage_summary.data_sources) or '無'}
+- 日期範圍模式：{coverage_summary.date_range_mode}
+
+### 資產覆蓋
+{asset_lines or '- 無資產覆蓋資料'}
+
+### 覆蓋說明
+{note_lines}
+"""
+
+    asset_lines = "\n".join(
+        (
+            f"- {asset.asset}: status={asset.coverage_status}; "
+            f"available={asset.available_days}; missing={asset.missing_days}; "
+            f"future_placeholder={asset.future_placeholder_days}"
+        )
+        for asset in coverage_summary.asset_coverage
+    )
+    note_lines = "\n".join(f"- {note}" for note in coverage_summary.notes)
+    return f"""- Total days: {coverage_summary.total_days}
+- Local research days: {coverage_summary.local_research_days}
+- Placeholder days: {coverage_summary.placeholder_days}
+- Future placeholder days: {coverage_summary.future_placeholder_days}
+- Mixed context days: {coverage_summary.mixed_context_days}
+- Astro daily available days: {coverage_summary.astro_daily_available_days}
+- Financial stress available days: {coverage_summary.financial_stress_available_days}
+- Market daily available days: {coverage_summary.market_daily_available_days}
+- Macro daily available days: {coverage_summary.macro_daily_available_days}
+- Data sources: {', '.join(coverage_summary.data_sources) or 'none'}
+- Date range mode: {coverage_summary.date_range_mode}
+
+### Asset coverage
+{asset_lines or '- No asset coverage data'}
+
+### Coverage notes
+{note_lines}
+"""
+
+
 def render_markdown(report: ScenarioReport) -> str:
     language: ReportLanguage = report.language or "en"
     is_chinese = language == "zh-Hant"
+    coverage_lines = render_coverage_markdown(report.coverage_summary, language=language)
 
     if is_chinese:
         agent_lines = "\n".join(
@@ -320,6 +549,9 @@ def render_markdown(report: ScenarioReport) -> str:
 ## 日線脈絡摘要
 {context_lines}
 
+## 情境資料覆蓋摘要
+{coverage_lines}
+
 ## 每日時間線
 {timeline_lines}
 
@@ -389,6 +621,9 @@ def render_markdown(report: ScenarioReport) -> str:
 ## Daily Context Summary
 {context_lines}
 
+## Context Coverage Summary
+{coverage_lines}
+
 ## Daily Timeline
 {timeline_lines}
 
@@ -426,6 +661,12 @@ def generate_scenario_report(
     report_id = scenario_id or create_scenario_id(request.title, created_at)
     agent_outputs = [build_agent_output(agent, request.language) for agent in agents]
     daily_timeline = build_daily_timeline(request, agents)
+    coverage_summary = build_coverage_summary(
+        daily_timeline,
+        request.assets,
+        created_at=created_at,
+        language=request.language,
+    )
     if request.language == "zh-Hant":
         summary = (
             "這份本地優先情境報告，用來推演所選代理原型如何討論日線市場、宏觀、"
@@ -471,6 +712,7 @@ def generate_scenario_report(
         risks=risk_themes,
         risk_themes=risk_themes,
         daily_timeline=daily_timeline,
+        coverage_summary=coverage_summary,
         caveats=safety_caveats_for(request.language),
         provenance=provenance,
         visibility=request.visibility,

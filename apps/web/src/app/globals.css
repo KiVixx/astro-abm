@@ -399,6 +399,70 @@ pre {
   padding: 14px;
 }
 
+.coverage-summary-card {
+  display: grid;
+  gap: 16px;
+}
+
+.coverage-summary-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.coverage-toggle-button {
+  flex: 0 0 auto;
+}
+
+.coverage-compact-summary {
+  margin-top: 0;
+}
+
+.coverage-summary-grid,
+.coverage-component-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.coverage-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.coverage-component-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.coverage-summary-grid > div,
+.coverage-component-grid > div {
+  background: var(--surface-muted);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.coverage-summary-grid strong,
+.coverage-component-grid strong {
+  font-size: 22px;
+}
+
+.coverage-count-list,
+.coverage-asset-list {
+  display: grid;
+  gap: 8px;
+}
+
+.coverage-asset-row {
+  align-items: center;
+  background: var(--surface-muted);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 90px minmax(90px, 1fr) repeat(3, minmax(110px, 1fr));
+  padding: 10px 12px;
+}
+
 .workbench-page {
   margin: 0 auto;
   max-width: 1480px;
@@ -1090,6 +1154,11 @@ pre {
   }
 
   .timeline-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .coverage-asset-row {
+    align-items: flex-start;
     grid-template-columns: 1fr;
   }
 

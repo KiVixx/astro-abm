@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ContextCoverageSummaryCard } from "./ContextCoverageSummaryCard";
 import { SafetyPhrases } from "./SafetyPhrases";
 import type {
   DailyDataCoverage,
@@ -405,6 +406,8 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
         <h2>{t("report.summary")}</h2>
         <p>{scenarioSummary}</p>
       </section>
+
+      <ContextCoverageSummaryCard coverageSummary={report.coverage_summary} />
 
       <section className="card">
         <h2>{t("report.dailyTimeline")}</h2>

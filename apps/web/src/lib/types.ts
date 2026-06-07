@@ -83,6 +83,33 @@ export interface DailyScenarioSnapshot {
   disclaimer: string;
 }
 
+export interface AssetCoverageSummary {
+  asset: string;
+  available_days: number;
+  missing_days: number;
+  future_placeholder_days: number;
+  coverage_status: string;
+  notes: string[];
+}
+
+export interface ScenarioCoverageSummary {
+  total_days: number;
+  local_research_days: number;
+  placeholder_days: number;
+  future_placeholder_days: number;
+  mixed_context_days: number;
+  astro_daily_available_days: number;
+  financial_stress_available_days: number;
+  market_daily_available_days: number;
+  macro_daily_available_days: number;
+  data_sources: string[];
+  data_quality_counts: Record<string, number>;
+  source_counts: Record<string, number>;
+  asset_coverage: AssetCoverageSummary[];
+  date_range_mode: string;
+  notes: string[];
+}
+
 export interface ScenarioCreateRequest {
   title: string;
   description?: string | null;
@@ -129,6 +156,7 @@ export interface ScenarioReport {
   risks: string[];
   risk_themes?: string[];
   daily_timeline?: DailyScenarioSnapshot[];
+  coverage_summary?: ScenarioCoverageSummary | null;
   caveats: string[];
   provenance: Record<string, unknown>;
   visibility: Visibility;

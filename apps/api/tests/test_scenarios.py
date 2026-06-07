@@ -65,6 +65,10 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert len(report["daily_timeline"]) == inclusive_day_count(
         "2026-07-01", "2026-09-30"
     )
+    assert report["coverage_summary"]["total_days"] == len(report["daily_timeline"])
+    assert report["coverage_summary"]["placeholder_days"] == len(report["daily_timeline"])
+    assert report["coverage_summary"]["local_research_days"] == 0
+    assert report["coverage_summary"]["asset_coverage"][0]["coverage_status"] == "missing"
     first_day = report["daily_timeline"][0]
     assert first_day["date"] == "2026-07-01"
     assert first_day["day_index"] == 1
@@ -87,6 +91,8 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert "not financial advice" in report["disclaimer"]
     assert "not a trading signal" in report["disclaimer"]
     assert "association only" in report["markdown_report"]
+    assert "## Context Coverage Summary" in report["markdown_report"]
+    assert "not a point-in-time backtest" in report["markdown_report"]
     assert "## Daily Timeline" in report["markdown_report"]
     assert "## 2026-07-01" in report["markdown_report"]
     assert "Data coverage:" in report["markdown_report"]
@@ -194,6 +200,7 @@ def test_old_scenario_report_without_daily_timeline_loads(
     report.pop("scenario_summary")
     report.pop("risk_themes")
     report.pop("language")
+    report.pop("coverage_summary")
     (tmp_path / f"{scenario_id}.json").write_text(json.dumps(report), encoding="utf-8")
 
     get_response = client.get(f"/scenarios/{scenario_id}")
@@ -205,6 +212,7 @@ def test_old_scenario_report_without_daily_timeline_loads(
     assert loaded["scenario_summary"] is None
     assert loaded["risk_themes"] == []
     assert loaded["language"] is None
+    assert loaded["coverage_summary"] is None
 
 
 def test_old_daily_timeline_without_research_fields_loads(
@@ -243,7 +251,18 @@ def test_scenario_uses_local_research_context_when_available(
     response = client.post("/scenarios", json=payload)
 
     assert response.status_code == 200
-    day = response.json()["daily_timeline"][0]
+    report = response.json()
+    day = report["daily_timeline"][0]
+    coverage_summary = report["coverage_summary"]
+    assert coverage_summary["total_days"] == 1
+    assert coverage_summary["local_research_days"] == 1
+    assert coverage_summary["astro_daily_available_days"] == 1
+    assert coverage_summary["financial_stress_available_days"] == 1
+    assert coverage_summary["market_daily_available_days"] == 1
+    assert coverage_summary["macro_daily_available_days"] == 1
+    assert coverage_summary["source_counts"]["local_research_snapshot"] == 1
+    assert coverage_summary["data_quality_counts"]["local_research_available"] == 1
+    assert coverage_summary["asset_coverage"][0]["coverage_status"] == "available"
     assert day["data_coverage"]["source"] == "local_research_snapshot"
     assert day["data_coverage"]["astro_daily"] == "available"
     assert day["data_coverage"]["financial_stress_daily"] == "available"
@@ -263,7 +282,7 @@ def test_scenario_uses_local_research_context_when_available(
     assert "elevated_stress_review" in day["daily_risk_themes"]
     assert "stress_stress_review" not in day["daily_risk_themes"]
     assert "stress stress" not in day["agent_states"][0]["likely_reaction"]
-    assert "local research" in response.json()["markdown_report"]
+    assert "local research" in report["markdown_report"]
 
 
 def test_scenario_generation_does_not_call_external_http(

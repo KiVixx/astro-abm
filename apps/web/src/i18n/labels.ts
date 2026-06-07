@@ -68,7 +68,14 @@ const enumLabels: Record<string, LabelMap> = {
     available: "value.coverage.available",
     missing: "value.coverage.missing",
     future_placeholder: "value.dataQuality.futurePlaceholder",
+    mixed: "value.coverage.mixed",
     unknown: "value.common.unknown",
+  },
+  date_range_mode: {
+    future: "value.dateRange.future",
+    historical: "value.dateRange.historical",
+    mixed: "value.dateRange.mixed",
+    empty: "value.dateRange.empty",
   },
   astro_intensity: {
     high: "value.intensity.high",
