@@ -511,6 +511,21 @@ pre {
   background: #5c6670;
 }
 
+.legend-dot-relationship {
+  background: linear-gradient(90deg, #8299a8 0 100%);
+  border-radius: 2px;
+  height: 3px;
+  width: 18px;
+}
+
+.force-graph-controls {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 10px;
+}
+
 .workbench-svg-frame {
   background:
     linear-gradient(rgba(23, 107, 135, 0.06) 1px, transparent 1px),
@@ -522,11 +537,30 @@ pre {
   overflow: auto;
 }
 
+.force-graph-frame {
+  min-height: 580px;
+  overflow: hidden;
+  position: relative;
+}
+
 .workbench-svg {
   display: block;
   min-height: 560px;
   min-width: 880px;
   width: 100%;
+}
+
+.force-graph-svg {
+  cursor: grab;
+  min-width: 720px;
+}
+
+.force-graph-svg:active {
+  cursor: grabbing;
+}
+
+.force-graph-hit-area {
+  fill: transparent;
 }
 
 .workbench-edge {
@@ -552,9 +586,154 @@ pre {
   fill: #8aa0ad;
 }
 
+.force-graph-edge {
+  cursor: pointer;
+  opacity: 0.56;
+  pointer-events: stroke;
+  stroke: #8aa0ad;
+  stroke-linecap: round;
+  stroke-width: 0.9;
+  transition:
+    opacity 120ms ease,
+    stroke-width 120ms ease;
+}
+
+.force-edge-agent_attention {
+  stroke-dasharray: 4 5;
+}
+
+.force-edge-context_to_asset {
+  stroke: #6c9c86;
+}
+
+.force-edge-context_to_risk {
+  stroke: #b48572;
+}
+
+.force-graph-edge:hover,
+.force-graph-edge:focus-visible,
+.force-graph-edge.is-selected,
+.force-graph-edge.is-connected {
+  opacity: 0.96;
+  stroke-width: 1.6;
+}
+
+.force-graph-edge.is-dimmed {
+  opacity: 0.16;
+}
+
+.force-graph-edge-hit {
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-width: 16;
+}
+
 .workbench-node {
   cursor: pointer;
   outline: none;
+}
+
+.force-graph-node {
+  cursor: grab;
+  outline: none;
+  transition: opacity 120ms ease;
+}
+
+.force-graph-node:active {
+  cursor: grabbing;
+}
+
+.force-graph-node circle,
+.force-graph-node polygon,
+.force-graph-node rect {
+  fill: #ffffff;
+  filter: drop-shadow(0 4px 9px rgba(29, 37, 45, 0.1));
+  stroke: #9cafbd;
+  stroke-width: 1.6;
+  transition:
+    filter 120ms ease,
+    stroke-width 120ms ease;
+}
+
+.force-graph-node:hover circle,
+.force-graph-node:hover polygon,
+.force-graph-node:hover rect,
+.force-graph-node:focus-visible circle,
+.force-graph-node:focus-visible polygon,
+.force-graph-node:focus-visible rect,
+.force-graph-node.is-selected circle,
+.force-graph-node.is-selected polygon,
+.force-graph-node.is-selected rect {
+  filter: drop-shadow(0 8px 15px rgba(29, 37, 45, 0.22));
+  stroke-width: 3;
+}
+
+.force-graph-node.is-connected circle,
+.force-graph-node.is-connected polygon,
+.force-graph-node.is-connected rect {
+  stroke-width: 2.4;
+}
+
+.force-graph-node.is-dimmed {
+  opacity: 0.26;
+}
+
+.force-node-agent circle {
+  fill: #e8f4f8;
+  stroke: #176b87;
+}
+
+.force-node-astro rect {
+  fill: #f7f1dc;
+  stroke: #8a7130;
+}
+
+.force-node-stress rect,
+.force-node-volatility rect,
+.force-node-liquidity rect {
+  fill: #f0eef8;
+  stroke: #6b5c93;
+}
+
+.force-node-data_quality rect {
+  fill: #edf1f4;
+  stroke: #5c6670;
+}
+
+.force-node-asset rect {
+  fill: #eaf5ef;
+  stroke: #28704f;
+}
+
+.force-node-risk polygon {
+  fill: #f8ece7;
+  stroke: #9b4f35;
+}
+
+.force-node-label {
+  pointer-events: none;
+}
+
+.force-graph-tooltip {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 4px;
+  max-width: min(320px, calc(100% - 28px));
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 4;
+}
+
+.force-graph-tooltip span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .workbench-node rect {
@@ -606,6 +785,10 @@ pre {
   fill: var(--text);
   font-size: 15px;
   font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-linejoin: round;
+  stroke-width: 5px;
   text-anchor: middle;
 }
 
@@ -613,6 +796,10 @@ pre {
   fill: var(--muted);
   font-size: 12px;
   font-weight: 650;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-linejoin: round;
+  stroke-width: 4px;
   text-anchor: middle;
 }
 

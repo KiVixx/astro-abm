@@ -7,14 +7,19 @@ import {
   type AssetNodePayload,
   type ContextNodePayload,
   type RiskNodePayload,
+  type WorkbenchEdge,
+  type WorkbenchGraph,
   type WorkbenchNode,
 } from "@/lib/workbenchGraph";
+import { edgeEndpointIds } from "@/lib/workbenchForceGraph";
 import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
 interface WorkbenchPanelProps {
   snapshot: DailyScenarioSnapshot;
   selectedNode: WorkbenchNode | null;
+  selectedEdge?: WorkbenchEdge | null;
+  graph?: WorkbenchGraph | null;
 }
 
 function hasKind<T extends string>(
@@ -229,28 +234,82 @@ function RiskNodePanel({ payload }: { payload: RiskNodePayload }) {
   );
 }
 
-export function WorkbenchPanel({ snapshot, selectedNode }: WorkbenchPanelProps) {
+function displayWorkbenchNodeLabel(
+  t: (key: string, fallback?: string) => string,
+  node?: WorkbenchNode,
+) {
+  if (!node) {
+    return t("value.common.unknown", "Unknown");
+  }
+  const payload = node.payload;
+  if (payload && hasKind(payload, "context")) {
+    const titleMap: Record<string, string> = {
+      "Astro Activity": "legend.astro",
+      "Stress Regime": "workbench.contextStress",
+      "Volatility Regime": "workbench.contextVolatility",
+      "Liquidity Regime": "workbench.contextLiquidity",
+      "Data Quality": "legend.data",
+    };
+    const contextPayload = payload as ContextNodePayload;
+    return t(titleMap[contextPayload.title] || "", node.label);
+  }
+  if (payload && hasKind(payload, "agent")) {
+    const agentPayload = payload as AgentNodePayload;
+    return formatAgentName(
+      t,
+      agentPayload.state.agent_id,
+      agentPayload.state.agent_name,
+    );
+  }
+  return node.label;
+}
+
+function EdgePanel({
+  edge,
+  graph,
+}: {
+  edge: WorkbenchEdge;
+  graph?: WorkbenchGraph | null;
+}) {
+  const { t } = useI18n();
+  const [sourceId, targetId] = edgeEndpointIds(edge);
+  const source = graph?.nodes.find((node) => node.id === sourceId);
+  const target = graph?.nodes.find((node) => node.id === targetId);
+
+  return (
+    <div className="stack">
+      <div>
+        <h2>{t("workbench.selectedRelationship")}</h2>
+        <p className="muted">{t("workbench.relationshipNotice")}</p>
+      </div>
+      <div className="nested-panel">
+        <strong>{displayWorkbenchNodeLabel(t, source)}</strong>
+        <p className="muted">{t("workbench.sourceNode")}</p>
+      </div>
+      <div className="nested-panel">
+        <strong>{displayWorkbenchNodeLabel(t, target)}</strong>
+        <p className="muted">{t("workbench.targetNode")}</p>
+      </div>
+      <div className="tag-row">
+        <span className="tag">
+          {t("workbench.edgeType")}: {edge.type.replaceAll("_", " ")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function WorkbenchPanel({
+  graph,
+  selectedEdge,
+  selectedNode,
+  snapshot,
+}: WorkbenchPanelProps) {
   const { t } = useI18n();
   const payload = selectedNode?.payload;
-  const selectedNodeLabel =
-    payload && hasKind(payload, "context")
-      ? t(
-          {
-            "Astro Activity": "legend.astro",
-            "Stress Regime": "workbench.contextStress",
-            "Volatility Regime": "workbench.contextVolatility",
-            "Liquidity Regime": "workbench.contextLiquidity",
-            "Data Quality": "legend.data",
-          }[(payload as ContextNodePayload).title] || "",
-          selectedNode?.label,
-        )
-      : payload && hasKind(payload, "agent")
-        ? formatAgentName(
-            t,
-            (payload as AgentNodePayload).state.agent_id,
-            (payload as AgentNodePayload).state.agent_name,
-          )
-      : selectedNode?.label;
+  const selectedLabel = selectedEdge
+    ? t("workbench.selectedRelationship")
+    : displayWorkbenchNodeLabel(t, selectedNode || undefined);
 
   return (
     <aside className="workbench-card workbench-panel">
@@ -258,12 +317,14 @@ export function WorkbenchPanel({ snapshot, selectedNode }: WorkbenchPanelProps) 
         <div>
           <h2>{t("workbench.panelTitle")}</h2>
           <p className="muted">
-            {selectedNode ? selectedNodeLabel : t("workbench.dailyOverview")}{" "}
+            {selectedNode || selectedEdge ? selectedLabel : t("workbench.dailyOverview")}{" "}
             {t("workbench.forDate")} {snapshot.date}
           </p>
         </div>
       </div>
-      {payload && hasKind(payload, "agent") ? (
+      {selectedEdge ? (
+        <EdgePanel edge={selectedEdge} graph={graph} />
+      ) : payload && hasKind(payload, "agent") ? (
         <AgentNodePanel payload={payload as AgentNodePayload} />
       ) : payload && hasKind(payload, "context") ? (
         <ContextNodePanel payload={payload as ContextNodePayload} />
