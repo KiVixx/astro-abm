@@ -513,6 +513,7 @@ export function DailyGraphCanvas({
                   tabIndex={0}
                   transform={`translate(${node.initialX} ${node.initialY})`}
                 >
+                  <circle className="force-node-hit-target" r={Math.max(38, node.radius + 28)} />
                   {shapeForNode(node)}
                   <g className="force-node-label" transform={`translate(0 ${node.radius + 18})`}>
                     <text className="node-label">

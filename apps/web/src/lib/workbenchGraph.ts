@@ -5,6 +5,7 @@ import type {
   DailyScenarioSnapshot,
   ScenarioReport,
 } from "./types";
+import { assetStressPointForSnapshot } from "./assetStressSentiment";
 
 export type WorkbenchNodeType =
   | "agent"
@@ -65,6 +66,9 @@ export interface AssetNodePayload {
   asset: string;
   date: string;
   summary: string;
+  sentimentStressSupport: number;
+  sentimentStressSource: string;
+  color: string;
 }
 
 export interface RiskNodePayload {
@@ -246,21 +250,27 @@ function buildRiskNodes(snapshot: DailyScenarioSnapshot): WorkbenchNode[] {
 
 function buildAssetNodes(report: ScenarioReport, snapshot: DailyScenarioSnapshot) {
   const assets = snapshot.assets.length ? snapshot.assets : report.assets;
-  return assets.map((asset, index) => ({
-    id: stableId("asset", asset),
-    type: "asset" as const,
-    label: asset,
-    subtitle: "Asset context",
-    detail: snapshot.market_context.summary,
-    x: RIGHT_X,
-    y: spacedY(assets.length + snapshot.daily_risk_themes.length, index),
-    payload: {
-      kind: "asset",
-      asset,
-      date: snapshot.date,
-      summary: snapshot.market_context.summary,
-    } satisfies AssetNodePayload,
-  }));
+  return assets.map((asset, index) => {
+    const stressPoint = assetStressPointForSnapshot(snapshot, asset, index);
+    return {
+      id: stableId("asset", asset),
+      type: "asset" as const,
+      label: asset,
+      subtitle: `${stressPoint.value.toFixed(1)}`,
+      detail: snapshot.market_context.summary,
+      x: RIGHT_X,
+      y: spacedY(assets.length + snapshot.daily_risk_themes.length, index),
+      payload: {
+        kind: "asset",
+        asset,
+        date: snapshot.date,
+        summary: snapshot.market_context.summary,
+        sentimentStressSupport: stressPoint.value,
+        sentimentStressSource: stressPoint.source,
+        color: stressPoint.color,
+      } satisfies AssetNodePayload,
+    };
+  });
 }
 
 function buildAgentNodes(snapshot: DailyScenarioSnapshot): WorkbenchNode[] {
@@ -340,4 +350,3 @@ export function buildWorkbenchGraph(
     height: GRAPH_HEIGHT,
   };
 }
-

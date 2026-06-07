@@ -6,6 +6,7 @@ import { DailyGraphCanvas } from "./DailyGraphCanvas";
 import { DailyTimelineRail } from "./DailyTimelineRail";
 import { WorkbenchPanel } from "./WorkbenchPanel";
 import type { DailyScenarioSnapshot, ScenarioReport } from "@/lib/types";
+import { buildAssetStressSeries } from "@/lib/assetStressSentiment";
 import { buildWorkbenchGraph } from "@/lib/workbenchGraph";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
@@ -41,6 +42,10 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
   const graph = useMemo(() => {
     return selectedSnapshot ? buildWorkbenchGraph(report, selectedSnapshot) : null;
   }, [report, selectedSnapshot]);
+  const assetStressSeries = useMemo(
+    () => buildAssetStressSeries(report, timeline),
+    [report, timeline],
+  );
 
   const selectedNode =
     graph?.nodes.find((node) => node.id === selectedNodeId) || null;
@@ -106,6 +111,7 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
       </header>
 
       <DailyTimelineRail
+        assetStressSeries={assetStressSeries}
         onSelectDate={selectDate}
         selectedDate={selectedSnapshot.date}
         timeline={timeline}

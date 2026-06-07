@@ -10,6 +10,7 @@ const legendItems = [
   ["risk", "legend.risk"],
   ["data", "legend.data"],
   ["relationship", "legend.relationship"],
+  ["asset-stress", "legend.assetStressSentiment"],
 ];
 
 export function GraphLegend() {
