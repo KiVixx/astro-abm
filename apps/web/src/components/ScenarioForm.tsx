@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AgentSelector } from "./AgentSelector";
+import { AssetSelector } from "./AssetSelector";
 import type { AgentProfile, ReportLanguage } from "@/lib/types";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
@@ -49,10 +50,10 @@ export function ScenarioForm({
           <span>{t("scenarioCreate.endDate")}</span>
           <input name="end_date" required type="date" defaultValue="2026-09-30" />
         </label>
-        <label className="form-field full">
+        <div className="form-field full">
           <span>{t("scenarioCreate.assets")}</span>
-          <input name="assets" required defaultValue="BTC, ETH" />
-        </label>
+          <AssetSelector />
+        </div>
         <label className="form-field">
           <span>{t("scenarioCreate.llmProvider")}</span>
           <select name="llm_provider" defaultValue="mock">
