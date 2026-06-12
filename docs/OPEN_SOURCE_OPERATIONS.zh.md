@@ -109,6 +109,44 @@ astro_research/output/reports/research_prepare_public.md
 astro_research/output/reports/research_prepare_public.json
 ```
 
+## 產品日線快照維護
+
+Scenario / Workbench 讀取的是本機日線研究快照，例如：
+
+```text
+astro_research/output/parquet/market_daily/
+astro_research/output/parquet/macro_daily/
+astro_research/output/parquet/financial_stress/
+```
+
+這一層和 QuestDB 的 1H crypto 維護不同。若只跑 `abm-maintenance`
+的 hourly/daily 交易維護，QuestDB 會更新，但產品頁面看到的日線快照
+不一定會更新。
+
+手動刷新產品快照：
+
+```bash
+make product-snapshots
+```
+
+Docker maintenance daemon 也可以每日刷新這一層：
+
+```bash
+ASTRO_ABM_REFRESH_PRODUCT_SNAPSHOTS=1
+ASTRO_ABM_PRODUCT_SNAPSHOT_MODE=local-full
+```
+
+如果也希望 daemon 每日重新拉取 SPX / Gold / DXY / CreditProxy 這些
+ignored 本機長歷史 CSV，還需要明確接受本機研究資料條款：
+
+```bash
+ASTRO_ABM_REFRESH_LOCAL_DATA=1
+ASTRO_ABM_ACCEPT_RESEARCH_LOCAL_TERMS=1
+```
+
+這個設計是刻意的：資料檔不進 git，且 Yahoo / LBMA / credit proxy
+等來源需要授權與再分發檢查，所以自動拉取必須由維護者明確開啟。
+
 可選模式：
 
 ```bash

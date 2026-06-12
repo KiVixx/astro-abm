@@ -75,6 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     maintain = sub.add_parser("maintain-now", help="Run one local hourly and daily maintenance pass.")
     maintain.add_argument("--hourly-only", action="store_true")
     maintain.add_argument("--daily-only", action="store_true")
+    maintain.add_argument("--with-product-snapshots", action="store_true", help="Also refresh product-layer daily snapshots.")
     maintain.add_argument(
         "--allow-partial",
         action="store_true",
@@ -101,6 +102,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     research_prepare.add_argument("--run-batch", action="store_true", help="In formal mode, run the exploratory formal batch.")
     research_prepare.add_argument("--dry-run", action="store_true", help="Write the plan report without executing commands.")
     research_prepare.add_argument("--strict-local-data", action="store_true", help="Fail local-full/formal mode if local CSV files are missing.")
+
+    product_snapshots = sub.add_parser("product-snapshots", help="Refresh product-layer market/macro/stress snapshots used by Scenario Workbench.")
+    product_snapshots.add_argument("--mode", choices=("public", "local-full", "formal"), default="local-full")
+    product_snapshots.add_argument("--start", default="1926-01-01")
+    product_snapshots.add_argument("--end", default=None)
+    product_snapshots.add_argument("--fetch-local-data", action="store_true")
+    product_snapshots.add_argument("--accept-research-local-terms", action="store_true")
+    product_snapshots.add_argument("--ingest", action="store_true")
 
     fetch_local = sub.add_parser("fetch-local-data", help="Fetch ignored long-history local research CSV files.")
     fetch_local.add_argument("--asset", action="append", choices=("SPX", "DXY", "Gold", "CreditProxy"))
@@ -145,6 +154,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             daily=not args.hourly_only,
             allow_partial=args.allow_partial,
             ensure_astro_daily=not args.hourly_only and not args.skip_astro_daily,
+            product_snapshots=args.with_product_snapshots,
         )
     if args.command == "astro-daily":
         return command_ensure_astro_daily(
@@ -165,6 +175,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_batch=args.run_batch,
             dry_run=args.dry_run,
             strict_local_data=args.strict_local_data,
+        )
+    if args.command == "product-snapshots":
+        return command_product_snapshots(
+            mode=args.mode,
+            start=args.start,
+            end=args.end,
+            fetch_local_data=args.fetch_local_data,
+            accept_terms=args.accept_research_local_terms,
+            ingest=args.ingest,
         )
     if args.command == "fetch-local-data":
         return command_fetch_local_data(
@@ -264,7 +283,14 @@ def command_status() -> int:
     return 0
 
 
-def command_maintain_now(*, hourly: bool, daily: bool, allow_partial: bool = False, ensure_astro_daily: bool = True) -> int:
+def command_maintain_now(
+    *,
+    hourly: bool,
+    daily: bool,
+    allow_partial: bool = False,
+    ensure_astro_daily: bool = True,
+    product_snapshots: bool = False,
+) -> int:
     code = 0
     if hourly:
         code |= run(["uv", "run", "astro-abm-maintain-hourly"], check=False).returncode
@@ -272,6 +298,8 @@ def command_maintain_now(*, hourly: bool, daily: bool, allow_partial: bool = Fal
         code |= run(["uv", "run", "astro-abm-maintain-daily"], check=False).returncode
     if ensure_astro_daily:
         code |= command_ensure_astro_daily()
+    if product_snapshots:
+        code |= command_product_snapshots(mode="local-full", start="1926-01-01", end=None, fetch_local_data=False, accept_terms=False, ingest=False)
     if code and allow_partial:
         print("maintenance completed with partial upstream failures; see task summary above")
         return 0
@@ -385,6 +413,35 @@ def command_research_prepare(
         cmd.append("--dry-run")
     if strict_local_data:
         cmd.append("--strict-local-data")
+    return run(cmd, check=False).returncode
+
+
+def command_product_snapshots(
+    *,
+    mode: str,
+    start: str,
+    end: str | None,
+    fetch_local_data: bool,
+    accept_terms: bool,
+    ingest: bool,
+) -> int:
+    cmd = [
+        "uv",
+        "run",
+        "astro-abm-maintain-product-snapshots",
+        "--mode",
+        mode,
+        "--start",
+        start,
+    ]
+    if end:
+        cmd.extend(["--end", end])
+    if fetch_local_data:
+        cmd.append("--fetch-local-data")
+    if accept_terms:
+        cmd.append("--accept-research-local-terms")
+    if ingest:
+        cmd.append("--ingest")
     return run(cmd, check=False).returncode
 
 

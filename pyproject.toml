@@ -33,6 +33,7 @@ dev = [
 astro-abm-live = "astro_abm.etl.live:main"
 astro-abm-maintain-hourly = "astro_abm.etl.maintain_hourly:main"
 astro-abm-maintain-daily = "astro_abm.etl.maintain_daily:main"
+astro-abm-maintain-product-snapshots = "astro_abm.etl.maintain_product_snapshots:main"
 astro-abm-maintenance-daemon = "astro_abm.etl.maintenance_daemon:main"
 astro-abm-data-completeness = "astro_abm.analysis.data_completeness:main"
 astro-abm-feature-summary = "astro_abm.analysis.feature_summary:main"

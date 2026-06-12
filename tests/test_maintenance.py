@@ -156,6 +156,24 @@ def test_build_maintenance_scheduler_can_disable_daily_job():
     assert [job.id for job in scheduler.get_jobs()] == ["hourly_maintenance"]
 
 
+def test_build_maintenance_scheduler_can_register_product_snapshot_job():
+    from astro_abm.etl.maintenance_daemon import build_maintenance_scheduler
+
+    scheduler = build_maintenance_scheduler(
+        symbols=("BTCUSDT",),
+        enable_hourly=False,
+        enable_daily=False,
+        enable_product_snapshots=True,
+        product_snapshot_hour=4,
+        product_snapshot_minute=40,
+    )
+
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+
+    assert set(jobs) == {"product_snapshot_maintenance"}
+    assert str(jobs["product_snapshot_maintenance"].trigger) == "cron[hour='4', minute='40']"
+
+
 def test_run_daemon_wires_ephemeris_forward_days_to_daily_run_on_start(monkeypatch):
     from astro_abm.etl import maintenance_daemon
 
@@ -193,3 +211,28 @@ def test_run_daemon_wires_ephemeris_forward_days_to_daily_run_on_start(monkeypat
         pass
 
     assert calls[0]["ephemeris_forward_days"] == 370
+
+
+def test_product_snapshot_command_runner_translates_uv_python(monkeypatch, tmp_path):
+    from astro_abm.etl import maintain_product_snapshots
+
+    calls = []
+
+    class Completed:
+        returncode = 0
+
+    def fake_run(command, *, cwd, check):
+        calls.append((list(command), cwd, check))
+        return Completed()
+
+    monkeypatch.setattr(maintain_product_snapshots.subprocess, "run", fake_run)
+
+    result = maintain_product_snapshots._run_python_command(
+        tmp_path,
+        ("uv", "run", "python", "scripts/example.py", "--flag"),
+    )
+
+    assert result.returncode == 0
+    assert "python" in calls[0][0][0]
+    assert calls[0][0][1:] == ["scripts/example.py", "--flag"]
+    assert calls[0][1] == tmp_path

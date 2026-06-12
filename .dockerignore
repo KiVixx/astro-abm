@@ -10,3 +10,9 @@ build
 dist
 *.egg-info
 .DS_Store
+astro_research/output
+astro_research/data/local/*
+!astro_research/data/local/README.md
+!astro_research/data/local/LOCAL_DATA_PROVENANCE.json
+!astro_research/data/local/examples
+!astro_research/data/local/examples/**

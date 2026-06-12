@@ -191,6 +191,39 @@ def test_command_research_prepare_builds_selectable_mode_command(monkeypatch):
     assert "--strict-local-data" in command
 
 
+def test_command_product_snapshots_builds_safe_refresh_command(monkeypatch):
+    ops = load_ops_module()
+
+    class Result:
+        returncode = 0
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(list(cmd))
+        return Result()
+
+    monkeypatch.setattr(ops, "run", fake_run)
+
+    code = ops.command_product_snapshots(
+        mode="local-full",
+        start="1926-01-01",
+        end="2026-06-12",
+        fetch_local_data=True,
+        accept_terms=True,
+        ingest=True,
+    )
+
+    assert code == 0
+    command = calls[0]
+    assert command[:3] == ["uv", "run", "astro-abm-maintain-product-snapshots"]
+    assert command[command.index("--mode") + 1] == "local-full"
+    assert command[command.index("--end") + 1] == "2026-06-12"
+    assert "--fetch-local-data" in command
+    assert "--accept-research-local-terms" in command
+    assert "--ingest" in command
+
+
 def test_command_fetch_local_data_builds_safe_fetch_command(monkeypatch):
     ops = load_ops_module()
 

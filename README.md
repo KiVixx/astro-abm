@@ -135,6 +135,23 @@ features, formal-readiness checks, the DuckDB full-history store, and research
 layer validation without requiring private local CSV files. Generated reports
 stay under `astro_research/output/reports/`.
 
+`make product-snapshots` refreshes the daily Scenario / Workbench snapshots
+used by the product API. This is the bridge between the maintained research
+layer and the local scenario UI: it rebuilds market daily, macro daily,
+financial stress daily, readiness reports, validation output, and the ignored
+DuckDB store. The Docker maintenance daemon can run the same refresh every day
+when `ASTRO_ABM_REFRESH_PRODUCT_SNAPSHOTS=1`.
+
+By default the daemon does not re-fetch optional local long-history CSV files
+because SPX / Gold / DXY / CreditProxy redistribution and licensing need local
+review. To let Docker refresh those ignored files before rebuilding product
+snapshots, set both:
+
+```bash
+ASTRO_ABM_REFRESH_LOCAL_DATA=1
+ASTRO_ABM_ACCEPT_RESEARCH_LOCAL_TERMS=1
+```
+
 `make fetch-local-data` pulls the optional long-history local research CSVs for
 SPX, Gold, DXY, and CreditProxy into `astro_research/data/local/`. The command
 writes refreshed provenance to ignored

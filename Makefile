@@ -5,7 +5,7 @@ WEB_PORT ?= 3000
 NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL ?= http://$(API_HOST):$(API_PORT)
 export NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL
 
-.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare fetch-local-data smoke checkpoint checkpoint-check api web product-smoke scenario-demo test
+.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check api web product-smoke scenario-demo test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -20,6 +20,7 @@ help:
 	@echo "  make astro-daily      Ensure 100-year core daily astro data exists"
 	@echo "  make research-store   Build ignored DuckDB full-history research store"
 	@echo "  make research-prepare Run selectable public/local/formal research preparation"
+	@echo "  make product-snapshots Refresh Scenario/Workbench daily product snapshots"
 	@echo "  make fetch-local-data Fetch ignored SPX/Gold/DXY/Credit local research CSVs"
 	@echo "  make smoke            Run small public smoke build"
 	@echo "  make checkpoint       Regenerate research workflow checkpoint"
@@ -59,6 +60,9 @@ research-store:
 
 research-prepare:
 	uv run python scripts/astro_abm_ops.py research-prepare
+
+product-snapshots:
+	uv run python scripts/astro_abm_ops.py product-snapshots
 
 fetch-local-data:
 	uv run python scripts/astro_abm_ops.py fetch-local-data --all --accept-research-local-terms
