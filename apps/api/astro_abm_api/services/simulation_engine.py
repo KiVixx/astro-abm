@@ -17,7 +17,11 @@ from astro_abm_api.models.report import (
 from astro_abm_api.models.scenario import ReportLanguage, ScenarioCreateRequest
 from astro_abm_api.services.asset_registry import profile_for_asset, profiles_for_assets
 from astro_abm_api.services.daily_context import build_placeholder_daily_contexts
-from astro_abm_api.services.llm_client import build_llm_config, provenance_for_llm
+from astro_abm_api.services.llm_client import (
+    build_llm_config,
+    generate_llm_scenario_report,
+    provenance_for_llm,
+)
 
 
 DISCLAIMER_BY_LANGUAGE: dict[ReportLanguage, str] = {
@@ -588,10 +592,134 @@ def render_daily_asset_contexts(
     )
 
 
+def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLanguage) -> str:
+    llm_report = report.llm_report
+    if llm_report is None:
+        if language == "zh-Hant":
+            return "此情境未請求 LLM 輔助報告。"
+        return "No LLM-assisted scenario report was requested."
+
+    if language == "zh-Hant":
+        if llm_report.status != "completed":
+            return f"""- 狀態：{llm_report.status}
+- 提供者：{llm_report.provider}
+- 模型：{llm_report.model or '未設定'}
+- 訊息：{llm_report.executive_summary}
+- 網路呼叫：{llm_report.provenance.network_call_performed}
+- 輸出驗證：{llm_report.provenance.output_validation_status}
+- 安全檢查：{llm_report.provenance.safety_check_status}
+"""
+        daily_lines = "\n".join(
+            (
+                f"### {item.date.isoformat()}\n"
+                f"- 摘要：{item.summary}\n"
+                f"- 關鍵脈絡：{'; '.join(item.key_context)}\n"
+                f"- 代理焦點：{'; '.join(item.agent_focus)}\n"
+                f"- 注意事項：{'; '.join(item.caveats)}"
+            )
+            for item in llm_report.daily_highlights
+        )
+        agent_lines = "\n".join(
+            (
+                f"### {item.agent_name}\n"
+                f"- 解讀：{item.interpretation}\n"
+                f"- 風險焦點：{'; '.join(item.risk_focus)}\n"
+                f"- 注意事項：{'; '.join(item.caveats)}"
+            )
+            for item in llm_report.agent_interpretations
+        )
+        return f"""- 狀態：{llm_report.status}
+- 提供者：{llm_report.provider}
+- 模型：{llm_report.model or '未設定'}
+- 網路呼叫：{llm_report.provenance.network_call_performed}
+- 輸出驗證：{llm_report.provenance.output_validation_status}
+- 安全檢查：{llm_report.provenance.safety_check_status}
+
+### 執行摘要
+{llm_report.executive_summary}
+
+### 情境解讀
+{llm_report.scenario_reading}
+
+### 每日重點
+{daily_lines or '無'}
+
+### 代理解讀
+{agent_lines or '無'}
+
+### 風險主題
+{chr(10).join(f'- {item}' for item in llm_report.risk_themes) or '- 無'}
+
+### 注意事項
+{chr(10).join(f'- {item}' for item in llm_report.caveats) or '- 無'}
+
+### 免責聲明
+{llm_report.disclaimer}
+"""
+
+    if llm_report.status != "completed":
+        return f"""- Status: {llm_report.status}
+- Provider: {llm_report.provider}
+- Model: {llm_report.model or 'not configured'}
+- Message: {llm_report.executive_summary}
+- Network call performed: {llm_report.provenance.network_call_performed}
+- Output validation: {llm_report.provenance.output_validation_status}
+- Safety check: {llm_report.provenance.safety_check_status}
+"""
+    daily_lines = "\n".join(
+        (
+            f"### {item.date.isoformat()}\n"
+            f"- Summary: {item.summary}\n"
+            f"- Key context: {'; '.join(item.key_context)}\n"
+            f"- Agent focus: {'; '.join(item.agent_focus)}\n"
+            f"- Caveats: {'; '.join(item.caveats)}"
+        )
+        for item in llm_report.daily_highlights
+    )
+    agent_lines = "\n".join(
+        (
+            f"### {item.agent_name}\n"
+            f"- Interpretation: {item.interpretation}\n"
+            f"- Risk focus: {'; '.join(item.risk_focus)}\n"
+            f"- Caveats: {'; '.join(item.caveats)}"
+        )
+        for item in llm_report.agent_interpretations
+    )
+    return f"""- Status: {llm_report.status}
+- Provider: {llm_report.provider}
+- Model: {llm_report.model or 'not configured'}
+- Network call performed: {llm_report.provenance.network_call_performed}
+- Output validation: {llm_report.provenance.output_validation_status}
+- Safety check: {llm_report.provenance.safety_check_status}
+
+### Executive summary
+{llm_report.executive_summary}
+
+### Scenario reading
+{llm_report.scenario_reading}
+
+### Daily highlights
+{daily_lines or 'none'}
+
+### Agent interpretations
+{agent_lines or 'none'}
+
+### Risk themes
+{chr(10).join(f'- {item}' for item in llm_report.risk_themes) or '- none'}
+
+### Caveats
+{chr(10).join(f'- {item}' for item in llm_report.caveats) or '- none'}
+
+### Disclaimer
+{llm_report.disclaimer}
+"""
+
+
 def render_markdown(report: ScenarioReport) -> str:
     language: ReportLanguage = report.language or "en"
     is_chinese = language == "zh-Hant"
     coverage_lines = render_coverage_markdown(report.coverage_summary, language=language)
+    llm_lines = render_llm_report_markdown(report, language=language)
 
     if is_chinese:
         agent_lines = "\n".join(
@@ -696,6 +824,9 @@ def render_markdown(report: ScenarioReport) -> str:
 ## 情境資料覆蓋摘要
 {coverage_lines}
 
+## LLM 情境報告
+{llm_lines}
+
 ## 每日時間線
 {timeline_lines}
 
@@ -768,6 +899,9 @@ def render_markdown(report: ScenarioReport) -> str:
 
 ## Context Coverage Summary
 {coverage_lines}
+
+## LLM Scenario Report
+{llm_lines}
 
 ## Daily Timeline
 {timeline_lines}
@@ -865,7 +999,10 @@ def generate_scenario_report(
         visibility=request.visibility,
         mode=request.mode,
         language=request.language,
+        llm_report=None,
         markdown_report="",
         disclaimer=disclaimer_for(request.language),
     )
+    llm_report = generate_llm_scenario_report(request, report)
+    report = report.model_copy(update={"llm_report": llm_report})
     return report.model_copy(update={"markdown_report": render_markdown(report)})

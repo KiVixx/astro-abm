@@ -127,6 +127,58 @@ class ScenarioCoverageSummary(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class LlmDailyHighlight(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    summary: str
+    key_context: list[str] = Field(default_factory=list)
+    agent_focus: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+
+
+class LlmAgentInterpretation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str
+    agent_name: str
+    interpretation: str
+    risk_focus: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+
+
+class LlmReportProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    model: str | None = None
+    base_url_status: str
+    credential_status: str
+    network_call_performed: bool
+    prompt_template_version: str
+    input_context_hash: str
+    output_validation_status: str
+    safety_check_status: str
+
+
+class LlmScenarioReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    provider: str
+    model: str | None = None
+    language: ReportLanguage
+    executive_summary: str
+    scenario_reading: str
+    daily_highlights: list[LlmDailyHighlight] = Field(default_factory=list)
+    agent_interpretations: list[LlmAgentInterpretation] = Field(default_factory=list)
+    risk_themes: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+    disclaimer: str
+    raw_text_preview: str | None = None
+    provenance: LlmReportProvenance
+
+
 class ScenarioReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -147,6 +199,7 @@ class ScenarioReport(BaseModel):
     risk_themes: list[str] = Field(default_factory=list)
     daily_timeline: list[DailyScenarioSnapshot] = Field(default_factory=list)
     coverage_summary: ScenarioCoverageSummary | None = None
+    llm_report: LlmScenarioReport | None = None
     caveats: list[str]
     provenance: dict[str, Any]
     visibility: Visibility

@@ -98,6 +98,10 @@ export function ScenarioForm({
           <span>{t("scenarioCreate.llmModel")}</span>
           <input name="llm_model" placeholder="local-model-name" />
         </label>
+        <div className="notice full">
+          <p>{t("scenarioCreate.llmApiKeyNote")}</p>
+          <p>{t("scenarioCreate.realLlmEnablementNote")}</p>
+        </div>
       </div>
       <section className="stack">
         <h2>{t("scenarioCreate.agentGroups")}</h2>

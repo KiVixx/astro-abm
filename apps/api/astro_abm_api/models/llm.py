@@ -23,6 +23,7 @@ class LLMTestResponse(BaseModel):
     provider: LLMProvider
     reachable: bool
     dry_run: bool
+    status: str = "ok"
     message: str
     base_url: str | None = None
     model: str | None = None

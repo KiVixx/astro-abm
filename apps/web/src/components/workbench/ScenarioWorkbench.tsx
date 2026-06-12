@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ContextCoverageSummaryCard } from "../ContextCoverageSummaryCard";
+import { LlmScenarioReportCard } from "../LlmScenarioReportCard";
 import { DailyGraphCanvas } from "./DailyGraphCanvas";
 import { DailyTimelineRail } from "./DailyTimelineRail";
 import { WorkbenchPanel } from "./WorkbenchPanel";
@@ -115,6 +116,8 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
         compact
         coverageSummary={report.coverage_summary}
       />
+
+      <LlmScenarioReportCard compact llmReport={report.llm_report} />
 
       <DailyTimelineRail
         assetStressSeries={assetStressSeries}

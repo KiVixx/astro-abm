@@ -136,6 +136,50 @@ export interface ScenarioCoverageSummary {
   notes: string[];
 }
 
+export interface LlmDailyHighlight {
+  date: string;
+  summary: string;
+  key_context: string[];
+  agent_focus: string[];
+  caveats: string[];
+}
+
+export interface LlmAgentInterpretation {
+  agent_id: string;
+  agent_name: string;
+  interpretation: string;
+  risk_focus: string[];
+  caveats: string[];
+}
+
+export interface LlmReportProvenance {
+  provider: string;
+  model?: string | null;
+  base_url_status: string;
+  credential_status: string;
+  network_call_performed: boolean;
+  prompt_template_version: string;
+  input_context_hash: string;
+  output_validation_status: string;
+  safety_check_status: string;
+}
+
+export interface LlmScenarioReport {
+  status: string;
+  provider: string;
+  model?: string | null;
+  language: ReportLanguage;
+  executive_summary: string;
+  scenario_reading: string;
+  daily_highlights: LlmDailyHighlight[];
+  agent_interpretations: LlmAgentInterpretation[];
+  risk_themes: string[];
+  caveats: string[];
+  disclaimer: string;
+  raw_text_preview?: string | null;
+  provenance: LlmReportProvenance;
+}
+
 export interface ScenarioCreateRequest {
   title: string;
   description?: string | null;
@@ -184,6 +228,7 @@ export interface ScenarioReport {
   risk_themes?: string[];
   daily_timeline?: DailyScenarioSnapshot[];
   coverage_summary?: ScenarioCoverageSummary | null;
+  llm_report?: LlmScenarioReport | null;
   caveats: string[];
   provenance: Record<string, unknown>;
   visibility: Visibility;

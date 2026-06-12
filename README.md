@@ -74,15 +74,32 @@ make web WEB_PORT=13000 API_PORT=18000
 ```
 
 The product MVP adds a local-first scenario API under `apps/api/`. It creates
-mock AI scenario rehearsals from daily-context placeholders and saves JSON plus
-Markdown reports under `astro_research/output/scenarios/`. These generated
-reports are intentionally git-ignored. The default LLM provider is `mock`;
-`openai_compatible` is only a typed interface in this PR and does not make
-external calls during tests. The optional web UI under `apps/web/` calls the API
-through `NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL`, defaulting to
+AI scenario rehearsals from daily context and saves JSON plus Markdown reports
+under `astro_research/output/scenarios/`. These generated reports are
+intentionally git-ignored. The default LLM provider is `mock`.
+`openai_compatible` can generate an optional LLM-assisted explanation layer, but
+real calls are disabled unless `ASTRO_ABM_ENABLE_REAL_LLM=1` is set on the API
+server. Tests and product smoke checks never require external LLM access. The
+optional web UI under `apps/web/` calls the API through
+`NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL`, defaulting to
 `http://localhost:8000`; it never reads generated scenario files directly.
 Reports are association only, scenario rehearsal only, not financial advice, and
 not a trading signal.
+
+OpenAI-compatible LLM report generation:
+
+```bash
+ASTRO_ABM_ENABLE_REAL_LLM=1
+ASTRO_ABM_LLM_BASE_URL=http://localhost:11434/v1
+ASTRO_ABM_LLM_MODEL=your-local-model
+ASTRO_ABM_LLM_API_KEY=optional-or-provider-key
+ASTRO_ABM_LLM_TIMEOUT_SECONDS=60
+ASTRO_ABM_LLM_MAX_CONTEXT_DAYS=60
+```
+
+API keys are read from the backend environment and are never saved into scenario
+JSON, Markdown, logs, or provenance. The LLM is an explanation layer over
+existing scenario context; it is not a market-data source.
 
 The web UI supports English and Traditional Chinese. Use the `EN / 中文`
 toggle in the product header; the selected language is stored locally in the

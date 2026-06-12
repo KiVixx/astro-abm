@@ -1,14 +1,53 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 from dataclasses import dataclass
+from typing import Any
+
+import requests
 
 from astro_abm_api.models.llm import LLMProvider, LLMTestRequest, LLMTestResponse
+from astro_abm_api.models.report import (
+    LlmAgentInterpretation,
+    LlmDailyHighlight,
+    LlmReportProvenance,
+    LlmScenarioReport,
+    ScenarioReport,
+)
+from astro_abm_api.models.scenario import ScenarioCreateRequest
+from astro_abm_api.services.llm_context import build_llm_context
+from astro_abm_api.services.llm_prompts import PROMPT_TEMPLATE_VERSION, build_messages
 
 
+ENABLE_REAL_LLM_ENV = "ASTRO_ABM_ENABLE_REAL_LLM"
 LLM_API_KEY_ENV = "ASTRO_ABM_LLM_API_KEY"
 LLM_BASE_URL_ENV = "ASTRO_ABM_LLM_BASE_URL"
 LLM_MODEL_ENV = "ASTRO_ABM_LLM_MODEL"
+LLM_TIMEOUT_ENV = "ASTRO_ABM_LLM_TIMEOUT_SECONDS"
+
+DEFAULT_TIMEOUT_SECONDS = 30.0
+RAW_TEXT_PREVIEW_LIMIT = 800
+
+BANNED_SAFETY_PATTERNS = (
+    r"you should buy",
+    r"you should sell",
+    r"you should short",
+    r"you should go long",
+    r"\bbuy signal\b",
+    r"\bsell signal\b",
+    r"\bshort signal\b",
+    r"\blong signal\b",
+    r"price target",
+    r"trading recommendation",
+    r"guaranteed",
+    r"predicts with certainty",
+    r"\bcaused\b",
+    r"\bcauses\b",
+    r"will rise",
+    r"will fall",
+)
 
 
 @dataclass(frozen=True)
@@ -16,7 +55,16 @@ class LLMConfig:
     provider: LLMProvider = "mock"
     base_url: str | None = None
     model: str | None = None
-    has_api_key: bool = False
+    api_key: str | None = None
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+
+    @property
+    def has_api_key(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def real_calls_enabled(self) -> bool:
+        return os.getenv(ENABLE_REAL_LLM_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def build_llm_config(
@@ -25,14 +73,12 @@ def build_llm_config(
     model: str | None = None,
     api_key: str | None = None,
 ) -> LLMConfig:
-    resolved_base_url = base_url or os.getenv(LLM_BASE_URL_ENV)
-    resolved_model = model or os.getenv(LLM_MODEL_ENV)
-    has_api_key = bool(api_key or os.getenv(LLM_API_KEY_ENV))
     return LLMConfig(
         provider=provider,
-        base_url=resolved_base_url,
-        model=resolved_model,
-        has_api_key=has_api_key,
+        base_url=(base_url or os.getenv(LLM_BASE_URL_ENV) or None),
+        model=(model or os.getenv(LLM_MODEL_ENV) or None),
+        api_key=(api_key or os.getenv(LLM_API_KEY_ENV) or None),
+        timeout_seconds=_timeout_seconds(),
     )
 
 
@@ -41,9 +87,119 @@ def provenance_for_llm(config: LLMConfig) -> dict[str, object]:
         "provider": config.provider,
         "base_url": config.base_url,
         "model": config.model,
-        "credential_status": "redacted" if config.has_api_key else "not_configured",
+        "credential_status": credential_status(config),
         "network_call_performed": False,
     }
+
+
+def generate_llm_scenario_report(
+    request: ScenarioCreateRequest,
+    report: ScenarioReport,
+) -> LlmScenarioReport | None:
+    if request.llm_provider == "mock":
+        return None
+
+    config = build_llm_config(
+        provider=request.llm_provider,
+        base_url=request.llm_base_url,
+        model=request.llm_model,
+    )
+    context = build_llm_context(report)
+    context_hash = str(context["input_context_hash"])
+    provenance = _provenance(
+        config,
+        input_context_hash=context_hash,
+        network_call_performed=False,
+        output_validation_status="not_run",
+        safety_check_status="not_run",
+    )
+
+    if not config.real_calls_enabled:
+        return _status_report(
+            status="dry_run",
+            request=request,
+            config=config,
+            provenance=provenance,
+            executive_summary="Real LLM calls are disabled. Set ASTRO_ABM_ENABLE_REAL_LLM=1 to enable.",
+            scenario_reading="No external LLM network call was performed. The deterministic scenario report remains the source of generated content.",
+        )
+    if not config.base_url or not config.model:
+        return _status_report(
+            status="failed",
+            request=request,
+            config=config,
+            provenance=provenance.model_copy(update={"output_validation_status": "configuration_missing"}),
+            executive_summary="OpenAI-compatible LLM provider is missing base_url or model.",
+            scenario_reading="Configure ASTRO_ABM_LLM_BASE_URL and ASTRO_ABM_LLM_MODEL, or pass request-level base URL and model.",
+        )
+
+    try:
+        raw_text = _call_openai_compatible(config, build_messages(context))
+    except requests.RequestException as exc:
+        return _status_report(
+            status="failed",
+            request=request,
+            config=config,
+            provenance=_provenance(
+                config,
+                input_context_hash=context_hash,
+                network_call_performed=True,
+                output_validation_status="request_failed",
+                safety_check_status="not_run",
+            ),
+            executive_summary="The OpenAI-compatible LLM request failed safely.",
+            scenario_reading=f"{type(exc).__name__}: {exc}",
+        )
+
+    parsed = parse_llm_json(raw_text)
+    if parsed is None:
+        return _status_report(
+            status="invalid_output",
+            request=request,
+            config=config,
+            provenance=_provenance(
+                config,
+                input_context_hash=context_hash,
+                network_call_performed=True,
+                output_validation_status="invalid_json",
+                safety_check_status="not_run",
+            ),
+            executive_summary="The LLM returned output that could not be parsed as strict JSON.",
+            scenario_reading="The raw output preview is retained for debugging without exposing credentials.",
+            raw_text_preview=_preview(raw_text),
+        )
+
+    report_candidate = build_report_from_payload(
+        parsed,
+        request=request,
+        config=config,
+        provenance=_provenance(
+            config,
+            input_context_hash=context_hash,
+            network_call_performed=True,
+            output_validation_status="valid_json",
+            safety_check_status="pending",
+        ),
+        raw_text_preview=_preview(raw_text),
+    )
+    if not safety_check_text(report_candidate.model_dump_json()):
+        return report_candidate.model_copy(
+            update={
+                "status": "safety_review_failed",
+                "executive_summary": "The LLM output failed safety review.",
+                "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
+                "daily_highlights": [],
+                "agent_interpretations": [],
+                "risk_themes": [],
+                "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
+            }
+        )
+    return report_candidate.model_copy(
+        update={
+            "status": "completed",
+            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
+        }
+    )
 
 
 def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
@@ -58,26 +214,209 @@ def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
             provider="mock",
             reachable=True,
             dry_run=True,
+            status="ok",
             message="Mock LLM provider is available. No network call was made.",
             base_url=None,
             model="mock-deterministic",
         )
 
-    if not config.base_url or not config.model:
+    if not config.real_calls_enabled:
         return LLMTestResponse(
             provider="openai_compatible",
             reachable=False,
             dry_run=True,
+            status="disabled",
+            message="Real LLM calls are disabled. Set ASTRO_ABM_ENABLE_REAL_LLM=1 to enable.",
+            base_url=config.base_url,
+            model=config.model,
+        )
+    if not config.base_url or not config.model:
+        return LLMTestResponse(
+            provider="openai_compatible",
+            reachable=False,
+            dry_run=False,
+            status="configuration_missing",
             message="OpenAI-compatible provider is not configured. Provide base_url and model.",
             base_url=config.base_url,
             model=config.model,
         )
 
+    try:
+        _call_openai_compatible(
+            config,
+            [
+                {"role": "system", "content": "Return a short JSON object."},
+                {"role": "user", "content": '{"ping": true}'},
+            ],
+            max_tokens=64,
+        )
+    except requests.RequestException as exc:
+        return LLMTestResponse(
+            provider="openai_compatible",
+            reachable=False,
+            dry_run=False,
+            status="request_failed",
+            message=f"{type(exc).__name__}: {exc}",
+            base_url=config.base_url,
+            model=config.model,
+        )
     return LLMTestResponse(
         provider="openai_compatible",
         reachable=True,
-        dry_run=True,
-        message="OpenAI-compatible provider configuration is present. PR1 does not perform network calls.",
+        dry_run=False,
+        status="ok",
+        message="OpenAI-compatible provider responded to a minimal chat completion test.",
         base_url=config.base_url,
         model=config.model,
     )
+
+
+def _call_openai_compatible(
+    config: LLMConfig,
+    messages: list[dict[str, str]],
+    *,
+    max_tokens: int = 1800,
+) -> str:
+    assert config.base_url and config.model
+    endpoint = config.base_url.rstrip("/") + "/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if config.api_key:
+        headers["Authorization"] = f"Bearer {config.api_key}"
+    payload: dict[str, Any] = {
+        "model": config.model,
+        "messages": messages,
+        "temperature": 0.2,
+        "max_tokens": max_tokens,
+    }
+    response = requests.post(endpoint, headers=headers, json=payload, timeout=config.timeout_seconds)
+    response.raise_for_status()
+    body = response.json()
+    return str(body["choices"][0]["message"]["content"])
+
+
+def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
+    text = raw_text.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def build_report_from_payload(
+    payload: dict[str, Any],
+    *,
+    request: ScenarioCreateRequest,
+    config: LLMConfig,
+    provenance: LlmReportProvenance,
+    raw_text_preview: str | None,
+) -> LlmScenarioReport:
+    return LlmScenarioReport(
+        status="completed",
+        provider=config.provider,
+        model=config.model,
+        language=request.language,
+        executive_summary=str(payload.get("executive_summary") or ""),
+        scenario_reading=str(payload.get("scenario_reading") or ""),
+        daily_highlights=[
+            LlmDailyHighlight.model_validate(item)
+            for item in payload.get("daily_highlights", [])
+            if isinstance(item, dict)
+        ],
+        agent_interpretations=[
+            LlmAgentInterpretation.model_validate(item)
+            for item in payload.get("agent_interpretations", [])
+            if isinstance(item, dict)
+        ],
+        risk_themes=[str(item) for item in payload.get("risk_themes", [])],
+        caveats=[str(item) for item in payload.get("caveats", [])],
+        disclaimer=str(payload.get("disclaimer") or _default_disclaimer(request.language)),
+        raw_text_preview=raw_text_preview,
+        provenance=provenance,
+    )
+
+
+def safety_check_text(text: str) -> bool:
+    lowered = text.lower()
+    return not any(re.search(pattern, lowered) for pattern in BANNED_SAFETY_PATTERNS)
+
+
+def credential_status(config: LLMConfig) -> str:
+    return "redacted" if config.has_api_key else "not_configured"
+
+
+def _provenance(
+    config: LLMConfig,
+    *,
+    input_context_hash: str,
+    network_call_performed: bool,
+    output_validation_status: str,
+    safety_check_status: str,
+) -> LlmReportProvenance:
+    return LlmReportProvenance(
+        provider=config.provider,
+        model=config.model,
+        base_url_status="configured" if config.base_url else "not_configured",
+        credential_status=credential_status(config),
+        network_call_performed=network_call_performed,
+        prompt_template_version=PROMPT_TEMPLATE_VERSION,
+        input_context_hash=input_context_hash,
+        output_validation_status=output_validation_status,
+        safety_check_status=safety_check_status,
+    )
+
+
+def _status_report(
+    *,
+    status: str,
+    request: ScenarioCreateRequest,
+    config: LLMConfig,
+    provenance: LlmReportProvenance,
+    executive_summary: str,
+    scenario_reading: str,
+    raw_text_preview: str | None = None,
+) -> LlmScenarioReport:
+    return LlmScenarioReport(
+        status=status,
+        provider=config.provider,
+        model=config.model,
+        language=request.language,
+        executive_summary=executive_summary,
+        scenario_reading=scenario_reading,
+        daily_highlights=[],
+        agent_interpretations=[],
+        risk_themes=[],
+        caveats=[_default_caveat(request.language)],
+        disclaimer=_default_disclaimer(request.language),
+        raw_text_preview=raw_text_preview,
+        provenance=provenance,
+    )
+
+
+def _default_disclaimer(language: str) -> str:
+    if language == "zh-Hant":
+        return "僅為相關性分析；僅為情境推演；不構成財務建議；不是交易訊號。"
+    return "association only; scenario rehearsal only; not financial advice; not a trading signal."
+
+
+def _default_caveat(language: str) -> str:
+    if language == "zh-Hant":
+        return "LLM 報告只解釋既有情境脈絡，不是市場資料來源。"
+    return "LLM report explains existing scenario context only; it is not a market data source."
+
+
+def _preview(raw_text: str) -> str:
+    return raw_text[:RAW_TEXT_PREVIEW_LIMIT]
+
+
+def _timeout_seconds() -> float:
+    raw = os.getenv(LLM_TIMEOUT_ENV)
+    if not raw:
+        return DEFAULT_TIMEOUT_SECONDS
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return DEFAULT_TIMEOUT_SECONDS

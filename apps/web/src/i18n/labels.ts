@@ -12,6 +12,14 @@ const enumLabels: Record<string, LabelMap> = {
     mock: "value.llm.mock",
     openai_compatible: "value.llm.openaiCompatible",
   },
+  llm_status: {
+    not_requested: "value.llmStatus.notRequested",
+    completed: "value.llmStatus.completed",
+    dry_run: "value.llmStatus.dryRun",
+    failed: "value.llmStatus.failed",
+    safety_review_failed: "value.llmStatus.safetyReviewFailed",
+    invalid_output: "value.llmStatus.invalidOutput",
+  },
   scenario_mode: {
     daily_association_only: "value.mode.dailyAssociationOnly",
   },
