@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 import { AgentSelector } from "./AgentSelector";
 import { AssetSelector } from "./AssetSelector";
-import type { AgentProfile, ReportLanguage } from "@/lib/types";
+import type { AgentProfile, MarketSeriesProfile, ReportLanguage } from "@/lib/types";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
 export function ScenarioForm({
   agents,
+  marketSeries,
   action,
 }: {
   agents: AgentProfile[];
+  marketSeries: MarketSeriesProfile[];
   action: (formData: FormData) => Promise<void>;
 }) {
   const { language: uiLanguage, t } = useI18n();
@@ -51,8 +53,8 @@ export function ScenarioForm({
           <input name="end_date" required type="date" defaultValue="2026-09-30" />
         </label>
         <div className="form-field full">
-          <span>{t("scenarioCreate.assets")}</span>
-          <AssetSelector />
+          <span>{t("scenarioCreate.marketSeries")}</span>
+          <AssetSelector marketSeries={marketSeries} />
         </div>
         <label className="form-field">
           <span>{t("scenarioCreate.llmProvider")}</span>

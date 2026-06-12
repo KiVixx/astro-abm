@@ -77,6 +77,15 @@ const enumLabels: Record<string, LabelMap> = {
     mixed: "value.dateRange.mixed",
     empty: "value.dateRange.empty",
   },
+  series_type: {
+    crypto_price: "value.seriesType.cryptoPrice",
+    equity_index: "value.seriesType.equityIndex",
+    commodity_price: "value.seriesType.commodityPrice",
+    currency_index: "value.seriesType.currencyIndex",
+    volatility_index: "value.seriesType.volatilityIndex",
+    rate_series: "value.seriesType.rateSeries",
+    custom: "value.seriesType.custom",
+  },
   astro_intensity: {
     high: "value.intensity.high",
     medium: "value.intensity.medium",

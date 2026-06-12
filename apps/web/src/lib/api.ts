@@ -1,5 +1,6 @@
 import type {
   AgentProfile,
+  MarketSeriesProfile,
   ScenarioCreateRequest,
   ScenarioReport,
   ScenarioSummary,
@@ -49,6 +50,10 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function getAgents(): Promise<AgentProfile[]> {
   return apiFetch<AgentProfile[]>("/agents");
+}
+
+export async function getAssets(): Promise<MarketSeriesProfile[]> {
+  return apiFetch<MarketSeriesProfile[]>("/assets");
 }
 
 export async function getScenarios(): Promise<ScenarioSummary[]> {

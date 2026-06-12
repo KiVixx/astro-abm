@@ -1,70 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import type { MarketSeriesProfile } from "@/lib/types";
+import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
-interface AssetOption {
-  symbol: string;
-  name: string;
-  statusKey: string;
+interface AssetSelectorProps {
+  marketSeries: MarketSeriesProfile[];
 }
 
-const DEFAULT_ASSETS: AssetOption[] = [
-  {
-    symbol: "BTC",
-    name: "Bitcoin",
-    statusKey: "scenarioCreate.assetStatus.crypto",
-  },
-  {
-    symbol: "ETH",
-    name: "Ethereum",
-    statusKey: "scenarioCreate.assetStatus.crypto",
-  },
-  {
-    symbol: "SPX",
-    name: "S&P 500",
-    statusKey: "scenarioCreate.assetStatus.longHistory",
-  },
-  {
-    symbol: "NDX",
-    name: "Nasdaq 100",
-    statusKey: "scenarioCreate.assetStatus.modernMarket",
-  },
-  {
-    symbol: "GOLD",
-    name: "Gold",
-    statusKey: "scenarioCreate.assetStatus.longHistory",
-  },
-  {
-    symbol: "DXY",
-    name: "US Dollar Index",
-    statusKey: "scenarioCreate.assetStatus.longHistory",
-  },
-  {
-    symbol: "VIX",
-    name: "Volatility Index",
-    statusKey: "scenarioCreate.assetStatus.modernMarket",
-  },
-  {
-    symbol: "US10Y",
-    name: "US 10Y Yield",
-    statusKey: "scenarioCreate.assetStatus.rates",
-  },
-  {
-    symbol: "CREDITPROXY",
-    name: "BAA-AAA Credit Proxy",
-    statusKey: "scenarioCreate.assetStatus.creditProxy",
-  },
-];
-
-function normalizeAsset(value: string): string {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9._-]+/g, "");
-}
-
-export function AssetSelector() {
+export function AssetSelector({ marketSeries }: AssetSelectorProps) {
   const { t } = useI18n();
-  const [selectedAssets, setSelectedAssets] = useState<string[]>(["BTC", "ETH"]);
-  const [customAsset, setCustomAsset] = useState("");
+  const defaultSelection = marketSeries
+    .map((series) => series.asset)
+    .filter((asset) => asset === "BTC" || asset === "ETH");
+  const [selectedAssets, setSelectedAssets] = useState<string[]>(
+    defaultSelection.length ? defaultSelection : marketSeries.slice(0, 2).map((series) => series.asset),
+  );
 
   const toggleAsset = (asset: string) => {
     setSelectedAssets((currentAssets) => {
@@ -73,17 +25,6 @@ export function AssetSelector() {
       }
       return [...currentAssets, asset];
     });
-  };
-
-  const addCustomAsset = () => {
-    const asset = normalizeAsset(customAsset);
-    if (!asset) {
-      return;
-    }
-    setSelectedAssets((currentAssets) =>
-      currentAssets.includes(asset) ? currentAssets : [...currentAssets, asset],
-    );
-    setCustomAsset("");
   };
 
   const removeAsset = (asset: string) => {
@@ -96,7 +37,7 @@ export function AssetSelector() {
     <div className="asset-picker">
       <input name="assets" type="hidden" value={selectedAssets.join(", ")} />
       <div className="asset-picker-selected">
-        <span className="muted">{t("scenarioCreate.selectedAssets")}</span>
+        <span className="muted">{t("scenarioCreate.selectedMarketSeries")}</span>
         <div className="asset-chip-row">
           {selectedAssets.length ? (
             selectedAssets.map((asset) => (
@@ -104,7 +45,7 @@ export function AssetSelector() {
                 className="asset-chip"
                 key={asset}
                 onClick={() => removeAsset(asset)}
-                title={t("scenarioCreate.removeAsset")}
+                title={t("scenarioCreate.removeMarketSeries")}
                 type="button"
               >
                 {asset}
@@ -112,54 +53,33 @@ export function AssetSelector() {
               </button>
             ))
           ) : (
-            <span className="muted">{t("scenarioCreate.noAssetSelected")}</span>
+            <span className="muted">{t("scenarioCreate.noMarketSeriesSelected")}</span>
           )}
         </div>
       </div>
       <details className="asset-picker-menu">
-        <summary>{t("scenarioCreate.selectAssets")}</summary>
+        <summary>{t("scenarioCreate.selectMarketSeries")}</summary>
         <div className="asset-picker-options">
-          {DEFAULT_ASSETS.map((asset) => (
-            <label className="asset-picker-option" key={asset.symbol}>
+          {marketSeries.map((series) => (
+            <label className="asset-picker-option" key={series.asset}>
               <input
-                checked={selectedAssets.includes(asset.symbol)}
-                onChange={() => toggleAsset(asset.symbol)}
+                checked={selectedAssets.includes(series.asset)}
+                onChange={() => toggleAsset(series.asset)}
                 type="checkbox"
               />
               <span>
-                <strong>{asset.symbol}</strong>
-                <span className="muted">{asset.name}</span>
+                <strong>{series.asset}</strong>
+                <span className="muted">{series.label}</span>
               </span>
-              <span className="tag">{t(asset.statusKey)}</span>
+              <span className="tag">
+                {formatEnumLabel(t, "series_type", series.series_type)}
+              </span>
             </label>
           ))}
         </div>
       </details>
-      <div className="asset-picker-custom">
-        <label className="form-field">
-          <span>{t("scenarioCreate.customAsset")}</span>
-          <input
-            onChange={(event) => setCustomAsset(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addCustomAsset();
-              }
-            }}
-            placeholder="SOL, NVDA, AAPL..."
-            value={customAsset}
-          />
-        </label>
-        <button
-          className="button secondary"
-          disabled={!normalizeAsset(customAsset)}
-          onClick={addCustomAsset}
-          type="button"
-        >
-          {t("scenarioCreate.addCustomAsset")}
-        </button>
-      </div>
-      <p className="muted">{t("scenarioCreate.assetSelectorHelp")}</p>
+      <p className="muted">{t("scenarioCreate.marketSeriesSelectorHelp")}</p>
+      <p className="muted">{t("scenarioCreate.customAssetsDisabled")}</p>
     </div>
   );
 }

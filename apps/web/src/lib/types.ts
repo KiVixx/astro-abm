@@ -27,6 +27,16 @@ export interface AgentOutput {
   caveats: string[];
 }
 
+export interface MarketSeriesProfile {
+  asset: string;
+  label: string;
+  series_type: string;
+  aliases: string[];
+  market_daily_supported: boolean;
+  supported: boolean;
+  notes: string[];
+}
+
 export interface DailyAstroContext {
   summary: string;
   event_tags: string[];
@@ -67,6 +77,21 @@ export interface DailyAgentState {
   caveats: string[];
 }
 
+export interface DailyAssetContext {
+  asset: string;
+  label: string;
+  series_type: string;
+  supported: boolean;
+  market_daily: string;
+  data_source: string;
+  data_quality: string;
+  return_1d?: number | null;
+  volatility_value?: number | null;
+  volatility_regime: string;
+  stress_sentiment: string;
+  notes: string[];
+}
+
 export interface DailyScenarioSnapshot {
   date: string;
   day_index: number;
@@ -75,6 +100,7 @@ export interface DailyScenarioSnapshot {
   market_context: DailyMarketContext;
   data_coverage?: DailyDataCoverage;
   research_signals?: DailyResearchSignals;
+  asset_contexts?: DailyAssetContext[];
   agent_states: DailyAgentState[];
   daily_risk_themes: string[];
   daily_summary: string;
@@ -148,6 +174,7 @@ export interface ScenarioReport {
   start_date: string;
   end_date: string;
   assets: string[];
+  asset_profiles?: MarketSeriesProfile[];
   agents: AgentProfile[];
   daily_context: Record<string, unknown>;
   simulation_summary: string;

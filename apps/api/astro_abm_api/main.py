@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from astro_abm_api.routers import agents, health, llm, scenarios
+from astro_abm_api.routers import agents, assets, health, llm, scenarios
 
 
 def create_app() -> FastAPI:
@@ -13,6 +13,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(agents.router)
+    app.include_router(assets.router)
     app.include_router(scenarios.router)
     app.include_router(llm.router)
     return app

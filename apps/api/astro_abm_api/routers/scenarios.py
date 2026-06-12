@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from astro_abm_api.models.report import ScenarioReport
 from astro_abm_api.models.scenario import ScenarioCreateRequest, ScenarioSummary
 from astro_abm_api.services.agents import resolve_agents
+from astro_abm_api.services.asset_registry import normalize_asset_ids
 from astro_abm_api.services.daily_context import build_daily_context
 from astro_abm_api.services.scenario_store import ScenarioNotFoundError, ScenarioStore
 from astro_abm_api.services.simulation_engine import generate_scenario_report
@@ -36,6 +37,7 @@ def create_scenario(request: ScenarioCreateRequest) -> ScenarioReport:
             status_code=400,
             detail=f"unknown agent_id: {', '.join(unknown)}",
         )
+    request = request.model_copy(update={"assets": normalize_asset_ids(request.assets)})
     daily_context = build_daily_context(request)
     report = generate_scenario_report(request, agents, daily_context)
     return ScenarioStore().save(report)

@@ -47,6 +47,27 @@ def test_list_agents() -> None:
     assert "macro_allocator" in agent_ids
 
 
+def test_list_supported_market_series_assets() -> None:
+    client = TestClient(app)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assets = response.json()
+    asset_ids = [asset["asset"] for asset in assets]
+    assert asset_ids == ["BTC", "ETH", "SPX", "NDX", "GOLD", "DXY", "VIX", "US10Y"]
+    assert "CREDITPROXY" not in asset_ids
+    assert {asset["market_daily_supported"] for asset in assets} == {True}
+    assert {asset["series_type"] for asset in assets} >= {
+        "crypto_price",
+        "equity_index",
+        "commodity_price",
+        "currency_index",
+        "volatility_index",
+        "rate_series",
+    }
+
+
 def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
     client = TestClient(app)
@@ -60,6 +81,9 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert report["language"] == "en"
     assert report["provenance"]["language"] == "en"
     assert report["daily_context"]["data_layer"] == "daily"
+    assert report["assets"] == ["BTC", "ETH"]
+    assert [profile["asset"] for profile in report["asset_profiles"]] == ["BTC", "ETH"]
+    assert report["asset_profiles"][0]["series_type"] == "crypto_price"
     assert report["scenario_summary"] == report["simulation_summary"]
     assert report["risk_themes"] == report["risks"]
     assert len(report["daily_timeline"]) == inclusive_day_count(
@@ -86,6 +110,9 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert first_day["data_coverage"]["source"] == "placeholder_fallback"
     assert first_day["data_coverage"]["financial_stress_daily"] == "missing"
     assert first_day["research_signals"]["data_quality"] == "placeholder_fallback"
+    assert [context["asset"] for context in first_day["asset_contexts"]] == ["BTC", "ETH"]
+    assert first_day["asset_contexts"][0]["market_daily"] in {"missing", "future_placeholder"}
+    assert first_day["asset_contexts"][0]["supported"] is True
     assert "association only" in report["disclaimer"]
     assert "scenario rehearsal only" in report["disclaimer"]
     assert "not financial advice" in report["disclaimer"]
@@ -96,6 +123,8 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert "## Daily Timeline" in report["markdown_report"]
     assert "## 2026-07-01" in report["markdown_report"]
     assert "Data coverage:" in report["markdown_report"]
+    assert "Market series context:" in report["markdown_report"]
+    assert "CREDITPROXY" not in report["markdown_report"]
     assert (tmp_path / f"{scenario_id}.json").exists()
     assert (tmp_path / f"{scenario_id}.md").exists()
 
@@ -129,6 +158,49 @@ def test_default_report_language_is_english(monkeypatch, tmp_path: Path) -> None
     assert "association only" in report["scenario_summary"]
     assert "## Executive Summary" in report["markdown_report"]
     assert "僅為相關性分析" not in report["scenario_summary"]
+
+
+def test_asset_aliases_are_normalized(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload["assets"] = ["Gold", "XAU", "DGS10", "S&P 500"]
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["assets"] == ["GOLD", "US10Y", "SPX"]
+    assert [profile["asset"] for profile in report["asset_profiles"]] == [
+        "GOLD",
+        "US10Y",
+        "SPX",
+    ]
+    assert [profile["series_type"] for profile in report["asset_profiles"]] == [
+        "commodity_price",
+        "rate_series",
+        "equity_index",
+    ]
+
+
+def test_unknown_custom_asset_remains_compatible(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload["assets"] = ["NVDA"]
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report = response.json()
+    first_day = report["daily_timeline"][0]
+    assert report["assets"] == ["NVDA"]
+    assert report["asset_profiles"][0]["asset"] == "NVDA"
+    assert report["asset_profiles"][0]["supported"] is False
+    assert report["asset_profiles"][0]["series_type"] == "custom"
+    assert first_day["asset_contexts"][0]["market_daily"] == "custom_missing"
+    assert first_day["asset_contexts"][0]["data_source"] == "custom_asset_no_local_snapshot"
+    assert report["coverage_summary"]["asset_coverage"][0]["coverage_status"] == "custom_missing"
 
 
 def test_traditional_chinese_report_generation(monkeypatch, tmp_path: Path) -> None:

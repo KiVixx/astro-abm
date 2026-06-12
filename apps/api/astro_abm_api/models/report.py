@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from astro_abm_api.models.agent import AgentOutput, AgentProfile
+from astro_abm_api.models.asset import MarketSeriesProfile
 from astro_abm_api.models.scenario import ReportLanguage, ScenarioMode, Visibility
 
 
@@ -59,6 +60,23 @@ class DailyAgentState(BaseModel):
     caveats: list[str]
 
 
+class DailyAssetContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset: str
+    label: str
+    series_type: str
+    supported: bool
+    market_daily: str
+    data_source: str
+    data_quality: str
+    return_1d: float | None = None
+    volatility_value: float | None = None
+    volatility_regime: str = "unknown"
+    stress_sentiment: str = "unknown"
+    notes: list[str] = Field(default_factory=list)
+
+
 class DailyScenarioSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -69,6 +87,7 @@ class DailyScenarioSnapshot(BaseModel):
     market_context: DailyMarketContext
     data_coverage: DailyDataCoverage = Field(default_factory=DailyDataCoverage)
     research_signals: DailyResearchSignals = Field(default_factory=DailyResearchSignals)
+    asset_contexts: list[DailyAssetContext] = Field(default_factory=list)
     agent_states: list[DailyAgentState]
     daily_risk_themes: list[str]
     daily_summary: str
@@ -118,6 +137,7 @@ class ScenarioReport(BaseModel):
     start_date: date
     end_date: date
     assets: list[str]
+    asset_profiles: list[MarketSeriesProfile] = Field(default_factory=list)
     agents: list[AgentProfile]
     daily_context: dict[str, Any]
     simulation_summary: str

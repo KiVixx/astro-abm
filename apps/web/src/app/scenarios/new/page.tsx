@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { ScenarioForm } from "@/components/ScenarioForm";
 import { I18nText } from "@/i18n/useI18n";
-import { getAgents } from "@/lib/api";
+import { getAgents, getAssets } from "@/lib/api";
 import { createScenarioAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewScenarioPage() {
   try {
-    const agents = await getAgents();
+    const [agents, marketSeries] = await Promise.all([getAgents(), getAssets()]);
     return (
       <div className="page stack">
         <header>
@@ -19,7 +19,11 @@ export default async function NewScenarioPage() {
             <I18nText tKey="scenarioCreate.lead" />
           </p>
         </header>
-        <ScenarioForm agents={agents} action={createScenarioAction} />
+        <ScenarioForm
+          agents={agents}
+          marketSeries={marketSeries}
+          action={createScenarioAction}
+        />
       </div>
     );
   } catch (error) {

@@ -9,11 +9,13 @@ from astro_abm_api.models.agent import AgentOutput, AgentProfile
 from astro_abm_api.models.report import (
     AssetCoverageSummary,
     DailyAgentState,
+    DailyAssetContext,
     DailyScenarioSnapshot,
     ScenarioCoverageSummary,
     ScenarioReport,
 )
 from astro_abm_api.models.scenario import ReportLanguage, ScenarioCreateRequest
+from astro_abm_api.services.asset_registry import profile_for_asset, profiles_for_assets
 from astro_abm_api.services.daily_context import build_placeholder_daily_contexts
 from astro_abm_api.services.llm_client import build_llm_config, provenance_for_llm
 
@@ -213,6 +215,11 @@ def build_daily_timeline(
                 market_context=context["market_context"],
                 data_coverage=context["data_coverage"],
                 research_signals=context["research_signals"],
+                asset_contexts=build_daily_asset_contexts(
+                    request.assets,
+                    context,
+                    language=request.language,
+                ),
                 agent_states=agent_states,
                 daily_risk_themes=context["daily_risk_themes"],
                 daily_summary=context["daily_summary"],
@@ -222,6 +229,98 @@ def build_daily_timeline(
             )
         )
     return snapshots
+
+
+def build_daily_asset_contexts(
+    assets: list[str],
+    snapshot_context: dict[str, object],
+    *,
+    language: ReportLanguage,
+) -> list[DailyAssetContext]:
+    data_coverage = snapshot_context["data_coverage"]
+    research_signals = snapshot_context["research_signals"]
+    contexts: list[DailyAssetContext] = []
+    for asset in assets:
+        profile = profile_for_asset(asset)
+        if profile.supported:
+            market_daily = data_coverage.market_daily
+            data_source = data_coverage.source
+            notes = supported_asset_notes(market_daily, language=language)
+        else:
+            market_daily = "custom_missing"
+            data_source = "custom_asset_no_local_snapshot"
+            notes = unsupported_asset_notes(language=language)
+        contexts.append(
+            DailyAssetContext(
+                asset=profile.asset,
+                label=profile.label,
+                series_type=profile.series_type,
+                supported=profile.supported,
+                market_daily=market_daily,
+                data_source=data_source,
+                data_quality=research_signals.data_quality if profile.supported else "unsupported",
+                volatility_regime=(
+                    research_signals.volatility_regime if profile.supported else "unknown"
+                ),
+                stress_sentiment=stress_sentiment_for(
+                    research_signals.stress_regime,
+                    market_daily=market_daily,
+                    supported=profile.supported,
+                ),
+                notes=notes,
+            )
+        )
+    return contexts
+
+
+def supported_asset_notes(market_daily: str, *, language: ReportLanguage) -> list[str]:
+    if language == "zh-Hant":
+        notes = ["支援的日線市場序列；僅作描述性情境脈絡。"]
+        if market_daily == "available":
+            notes.append("當日可使用本地 market_daily 快照。")
+        elif market_daily == "future_placeholder":
+            notes.append("未來日期尚無已觀測 market_daily 資料。")
+        else:
+            notes.append("當日沒有可用的逐資產 market_daily 快照。")
+        notes.append("不是交易訊號。")
+        return notes
+    notes = ["Supported daily market series; descriptive scenario context only."]
+    if market_daily == "available":
+        notes.append("Local market_daily snapshot is available for this day.")
+    elif market_daily == "future_placeholder":
+        notes.append("No observed market_daily data is available for this future date.")
+    else:
+        notes.append("No per-asset market_daily snapshot is available for this day.")
+    notes.append("Not a trading signal.")
+    return notes
+
+
+def unsupported_asset_notes(*, language: ReportLanguage) -> list[str]:
+    if language == "zh-Hant":
+        return [
+            "自訂或未支援資產為相容性保留；目前沒有註冊本地日線市場序列。",
+            "此資產不會被當作支援的日線市場資料來源。",
+        ]
+    return [
+        "Custom or unsupported asset retained for compatibility; no registered local daily market series exists yet.",
+        "This asset is not treated as a supported daily market data source.",
+    ]
+
+
+def stress_sentiment_for(stress_regime: str, *, market_daily: str, supported: bool) -> str:
+    if not supported:
+        return "unknown"
+    if market_daily == "future_placeholder":
+        return "unknown_future"
+    if market_daily not in {"available", "future_placeholder"}:
+        return "unknown"
+    if stress_regime == "stress":
+        return "stressed"
+    if stress_regime == "elevated":
+        return "elevated"
+    if stress_regime == "watchful":
+        return "watchful"
+    return "normal"
 
 
 def build_coverage_summary(
@@ -310,6 +409,26 @@ def build_asset_coverage_summary(
     language: ReportLanguage,
 ) -> AssetCoverageSummary:
     relevant_days = [snapshot for snapshot in daily_timeline if asset in snapshot.assets]
+    profile = profile_for_asset(asset)
+    if not profile.supported:
+        if language == "zh-Hant":
+            notes = [
+                "自訂或未支援資產沒有註冊本地日線市場資料。",
+                "此摘要只用於相容性與資料脈絡說明。",
+            ]
+        else:
+            notes = [
+                "Custom or unsupported asset has no registered local daily market data.",
+                "This summary is retained for compatibility and data context only.",
+            ]
+        return AssetCoverageSummary(
+            asset=asset,
+            available_days=0,
+            missing_days=len(relevant_days),
+            future_placeholder_days=0,
+            coverage_status="custom_missing",
+            notes=notes,
+        )
     available_days = sum(
         snapshot.data_coverage.market_daily == "available" for snapshot in relevant_days
     )
@@ -445,6 +564,30 @@ def render_coverage_markdown(
 """
 
 
+def render_daily_asset_contexts(
+    snapshot: DailyScenarioSnapshot,
+    *,
+    language: ReportLanguage,
+) -> str:
+    if not snapshot.asset_contexts:
+        return "無" if language == "zh-Hant" else "none"
+    if language == "zh-Hant":
+        return "; ".join(
+            (
+                f"{context.asset}: {context.market_daily}, "
+                f"{context.series_type}, supported={context.supported}"
+            )
+            for context in snapshot.asset_contexts
+        )
+    return "; ".join(
+        (
+            f"{context.asset}: {context.market_daily}, "
+            f"{context.series_type}, supported={context.supported}"
+        )
+        for context in snapshot.asset_contexts
+    )
+
+
 def render_markdown(report: ScenarioReport) -> str:
     language: ReportLanguage = report.language or "en"
     is_chinese = language == "zh-Hant"
@@ -519,6 +662,7 @@ def render_markdown(report: ScenarioReport) -> str:
                     f"liquidity={snapshot.research_signals.liquidity_regime}; "
                     f"astro_activity={snapshot.research_signals.astro_activity}; "
                     f"data_quality={snapshot.research_signals.data_quality}\n"
+                    f"- 市場序列脈絡：{render_daily_asset_contexts(snapshot, language=language)}\n"
                     f"- 代理狀態：\n"
                     + "\n".join(
                         [
@@ -591,6 +735,7 @@ def render_markdown(report: ScenarioReport) -> str:
                 f"liquidity={snapshot.research_signals.liquidity_regime}; "
                 f"astro_activity={snapshot.research_signals.astro_activity}; "
                 f"data_quality={snapshot.research_signals.data_quality}\n"
+                f"- Market series context: {render_daily_asset_contexts(snapshot, language=language)}\n"
                 f"- Agent states:\n"
                 + "\n".join(
                     [
@@ -660,6 +805,7 @@ def generate_scenario_report(
     created_at = datetime.now(UTC)
     report_id = scenario_id or create_scenario_id(request.title, created_at)
     agent_outputs = [build_agent_output(agent, request.language) for agent in agents]
+    asset_profiles = profiles_for_assets(request.assets)
     daily_timeline = build_daily_timeline(request, agents)
     coverage_summary = build_coverage_summary(
         daily_timeline,
@@ -704,6 +850,7 @@ def generate_scenario_report(
         start_date=request.start_date,
         end_date=request.end_date,
         assets=request.assets,
+        asset_profiles=asset_profiles,
         agents=agents,
         daily_context=daily_context,
         simulation_summary=summary,
