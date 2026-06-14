@@ -5,6 +5,8 @@ import json
 import os
 from typing import Any
 
+from datetime import date
+
 from astro_abm_api.models.report import DailyScenarioSnapshot, ScenarioReport
 
 
@@ -22,9 +24,20 @@ def configured_max_context_days() -> int:
         return DEFAULT_MAX_CONTEXT_DAYS
 
 
-def build_llm_context(report: ScenarioReport, *, max_context_days: int | None = None) -> dict[str, Any]:
+def build_llm_context(
+    report: ScenarioReport,
+    *,
+    max_context_days: int | None = None,
+    selected_dates: set[date] | None = None,
+    chunk_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     max_days = max_context_days or configured_max_context_days()
-    selected_days, compression_notes = select_context_days(report.daily_timeline, max_days=max_days)
+    timeline = (
+        [snapshot for snapshot in report.daily_timeline if snapshot.date in selected_dates]
+        if selected_dates is not None
+        else report.daily_timeline
+    )
+    selected_days, compression_notes = select_context_days(timeline, max_days=max_days)
     context = {
         "title": report.title,
         "description": report.description,
@@ -59,11 +72,12 @@ def build_llm_context(report: ScenarioReport, *, max_context_days: int | None = 
         "coverage_summary": report.coverage_summary.model_dump(mode="json") if report.coverage_summary else None,
         "daily_timeline": [compact_daily_snapshot(snapshot) for snapshot in selected_days],
         "context_compression": {
-            "original_days": len(report.daily_timeline),
+            "original_days": len(timeline),
             "included_days": len(selected_days),
             "max_context_days": max_days,
             "notes": compression_notes,
         },
+        "chunk_metadata": chunk_metadata,
         "risk_themes": report.risk_themes or report.risks,
         "caveats": report.caveats,
         "disclaimer": report.disclaimer,

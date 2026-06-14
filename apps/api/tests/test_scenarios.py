@@ -529,6 +529,89 @@ def test_openai_compatible_mocked_network_parses_valid_json(
     ]
 
 
+def test_llm_chunk_endpoint_merges_and_saves_report(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    request_secret = "chunk-request-secret"
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "executive_summary": "Chunked association-only reading.",
+                                    "scenario_reading": "This chunk reviews only the supplied dates.",
+                                    "daily_highlights": [
+                                        {
+                                            "date": "2026-07-01",
+                                            "summary": "Chunk day one reviewed.",
+                                            "key_context": ["chunk coverage"],
+                                            "agent_focus": ["agent attention"],
+                                            "caveats": ["scenario rehearsal only"],
+                                        }
+                                    ],
+                                    "agent_interpretations": [],
+                                    "risk_themes": ["chunked context"],
+                                    "caveats": ["does not invent missing data"],
+                                    "disclaimer": "association only; scenario rehearsal only; not financial advice; not a trading signal.",
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append((url, headers, json, timeout))
+        return Response()
+
+    monkeypatch.setattr("astro_abm_api.services.llm_client.requests.post", fake_post)
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/llm-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "llm_api_key": request_secret,
+            "llm_timeout_seconds": 77,
+            "llm_max_output_tokens": 3000,
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-03",
+            "chunk_index": 1,
+            "total_chunks": 2,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    body = chunk_response.json()
+    saved_text = (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
+    assert body["llm_status"] == "completed"
+    assert body["completed"] is False
+    assert body["report"]["llm_report"]["status"] == "completed"
+    assert body["report"]["llm_report"]["daily_highlights"][0]["date"] == "2026-07-01"
+    assert body["report"]["provenance"]["llm"]["chunked_generation"] is True
+    assert calls[0][2]["max_tokens"] == 3000
+    assert calls[0][3] == 77
+    assert request_secret not in saved_text
+    assert "## LLM Scenario Report" in body["report"]["markdown_report"]
+
+
 def test_openai_compatible_invalid_json_marks_invalid_output(
     monkeypatch, tmp_path: Path
 ) -> None:

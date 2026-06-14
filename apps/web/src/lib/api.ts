@@ -2,6 +2,8 @@ import type {
   AgentProfile,
   MarketSeriesProfile,
   ScenarioCreateRequest,
+  ScenarioLlmChunkRequest,
+  ScenarioLlmChunkResponse,
   ScenarioReport,
   ScenarioSummary,
 } from "./types";
@@ -71,4 +73,17 @@ export async function createScenario(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function generateScenarioLlmChunk(
+  scenarioId: string,
+  payload: ScenarioLlmChunkRequest,
+): Promise<ScenarioLlmChunkResponse> {
+  return apiFetch<ScenarioLlmChunkResponse>(
+    `/scenarios/${encodeURIComponent(scenarioId)}/llm-chunks`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }

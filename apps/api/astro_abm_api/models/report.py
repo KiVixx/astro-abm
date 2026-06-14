@@ -207,3 +207,16 @@ class ScenarioReport(BaseModel):
     language: ReportLanguage | None = None
     markdown_report: str
     disclaimer: str
+
+
+class ScenarioLlmChunkResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str
+    chunk_index: int
+    total_chunks: int
+    chunk_start_date: date
+    chunk_end_date: date
+    llm_status: str
+    completed: bool
+    report: ScenarioReport

@@ -1,8 +1,16 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createScenario } from "@/lib/api";
-import type { LlmProvider, ReportLanguage, Visibility } from "@/lib/types";
+import { createScenario, generateScenarioLlmChunk } from "@/lib/api";
+import type {
+  LlmProvider,
+  ReportLanguage,
+  ScenarioCreateRequest,
+  ScenarioLlmChunkRequest,
+  ScenarioLlmChunkResponse,
+  ScenarioReport,
+  Visibility,
+} from "@/lib/types";
 
 function getString(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -54,4 +62,17 @@ export async function createScenarioAction(formData: FormData): Promise<void> {
   });
 
   redirect(`/scenarios/${report.scenario_id}`);
+}
+
+export async function createScenarioForProgressAction(
+  payload: ScenarioCreateRequest,
+): Promise<ScenarioReport> {
+  return createScenario(payload);
+}
+
+export async function generateScenarioLlmChunkAction(
+  scenarioId: string,
+  payload: ScenarioLlmChunkRequest,
+): Promise<ScenarioLlmChunkResponse> {
+  return generateScenarioLlmChunk(scenarioId, payload);
 }

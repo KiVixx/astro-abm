@@ -4,6 +4,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any
 
 import requests
@@ -17,6 +18,7 @@ from astro_abm_api.models.report import (
     ScenarioReport,
 )
 from astro_abm_api.models.scenario import ScenarioCreateRequest
+from astro_abm_api.models.scenario import ScenarioLlmChunkRequest
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import PROMPT_TEMPLATE_VERSION, build_messages
 
@@ -132,20 +134,20 @@ def generate_llm_scenario_report(
     if not config.real_calls_enabled:
         return _status_report(
             status="dry_run",
-            request=request,
             config=config,
             provenance=provenance,
             executive_summary="Real LLM calls are disabled. Set ASTRO_ABM_ENABLE_REAL_LLM=1 to enable.",
             scenario_reading="No external LLM network call was performed. The deterministic scenario report remains the source of generated content.",
+            language=request.language,
         )
     if not config.base_url or not config.model:
         return _status_report(
             status="failed",
-            request=request,
             config=config,
             provenance=provenance.model_copy(update={"output_validation_status": "configuration_missing"}),
             executive_summary="OpenAI-compatible LLM provider is missing base_url or model.",
             scenario_reading="Configure ASTRO_ABM_LLM_BASE_URL and ASTRO_ABM_LLM_MODEL, or pass request-level base URL and model.",
+            language=request.language,
         )
 
     try:
@@ -153,7 +155,6 @@ def generate_llm_scenario_report(
     except requests.RequestException as exc:
         return _status_report(
             status="failed",
-            request=request,
             config=config,
             provenance=_provenance(
                 config,
@@ -164,13 +165,13 @@ def generate_llm_scenario_report(
             ),
             executive_summary="The OpenAI-compatible LLM request failed safely.",
             scenario_reading=f"{type(exc).__name__}: {exc}",
+            language=request.language,
         )
 
     parsed = parse_llm_json(raw_text)
     if parsed is None:
         return _status_report(
             status="invalid_output",
-            request=request,
             config=config,
             provenance=_provenance(
                 config,
@@ -182,11 +183,12 @@ def generate_llm_scenario_report(
             executive_summary="The LLM returned output that could not be parsed as strict JSON.",
             scenario_reading="The raw output preview is retained for debugging without exposing credentials.",
             raw_text_preview=_preview(raw_text),
+            language=request.language,
         )
 
     report_candidate = build_report_from_payload(
         parsed,
-        request=request,
+        language=request.language,
         config=config,
         provenance=_provenance(
             config,
@@ -213,6 +215,164 @@ def generate_llm_scenario_report(
         update={
             "status": "completed",
             "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
+        }
+    )
+
+
+def generate_llm_scenario_report_chunk(
+    request: ScenarioLlmChunkRequest,
+    report: ScenarioReport,
+) -> LlmScenarioReport:
+    config = build_llm_config(
+        provider=request.llm_provider,
+        base_url=request.llm_base_url,
+        model=request.llm_model,
+        api_key=request.llm_api_key,
+        real_enabled=request.llm_real_enabled,
+        timeout_seconds=request.llm_timeout_seconds,
+        max_output_tokens=request.llm_max_output_tokens,
+    )
+    selected_dates = _date_range(request.chunk_start_date, request.chunk_end_date)
+    context = build_llm_context(
+        report,
+        selected_dates=selected_dates,
+        max_context_days=max(10, len(selected_dates)),
+        chunk_metadata={
+            "chunk_index": request.chunk_index,
+            "total_chunks": request.total_chunks,
+            "chunk_start_date": request.chunk_start_date.isoformat(),
+            "chunk_end_date": request.chunk_end_date.isoformat(),
+            "instruction": "Generate narrative only for this chunk's dates.",
+        },
+    )
+    context_hash = str(context["input_context_hash"])
+    provenance = _provenance(
+        config,
+        input_context_hash=context_hash,
+        network_call_performed=False,
+        output_validation_status="not_run",
+        safety_check_status="not_run",
+    )
+
+    if not config.real_calls_enabled:
+        return _status_report(
+            status="dry_run",
+            config=config,
+            provenance=provenance,
+            executive_summary="Real LLM calls are disabled. Set ASTRO_ABM_ENABLE_REAL_LLM=1 to enable.",
+            scenario_reading="No external LLM network call was performed for this chunk.",
+            language=request.language,
+        )
+    if not config.base_url or not config.model:
+        return _status_report(
+            status="failed",
+            config=config,
+            provenance=provenance.model_copy(update={"output_validation_status": "configuration_missing"}),
+            executive_summary="OpenAI-compatible LLM provider is missing base_url or model.",
+            scenario_reading="Configure the LLM base URL and model before generating chunks.",
+            language=request.language,
+        )
+
+    try:
+        raw_text = _call_openai_compatible(config, build_messages(context))
+    except requests.RequestException as exc:
+        return _status_report(
+            status="failed",
+            config=config,
+            provenance=_provenance(
+                config,
+                input_context_hash=context_hash,
+                network_call_performed=True,
+                output_validation_status="request_failed",
+                safety_check_status="not_run",
+            ),
+            executive_summary="The OpenAI-compatible LLM request failed safely.",
+            scenario_reading=f"{type(exc).__name__}: {exc}",
+            language=request.language,
+        )
+
+    parsed = parse_llm_json(raw_text)
+    if parsed is None:
+        return _status_report(
+            status="invalid_output",
+            config=config,
+            provenance=_provenance(
+                config,
+                input_context_hash=context_hash,
+                network_call_performed=True,
+                output_validation_status="invalid_json",
+                safety_check_status="not_run",
+            ),
+            executive_summary="The LLM returned output that could not be parsed as strict JSON.",
+            scenario_reading="The raw output preview is retained for debugging without exposing credentials.",
+            raw_text_preview=_preview(raw_text),
+            language=request.language,
+        )
+
+    report_candidate = build_report_from_payload(
+        parsed,
+        language=request.language,
+        config=config,
+        provenance=_provenance(
+            config,
+            input_context_hash=context_hash,
+            network_call_performed=True,
+            output_validation_status="valid_json",
+            safety_check_status="pending",
+        ),
+        raw_text_preview=_preview(raw_text),
+    )
+    if not safety_check_text(report_candidate.model_dump_json()):
+        return report_candidate.model_copy(
+            update={
+                "status": "safety_review_failed",
+                "executive_summary": "The LLM output failed safety review.",
+                "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
+                "daily_highlights": [],
+                "agent_interpretations": [],
+                "risk_themes": [],
+                "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
+            }
+        )
+    return report_candidate.model_copy(
+        update={
+            "status": "completed",
+            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
+        }
+    )
+
+
+def merge_llm_report_chunk(
+    existing: LlmScenarioReport | None,
+    chunk: LlmScenarioReport,
+) -> LlmScenarioReport:
+    if chunk.status != "completed":
+        return chunk
+    if existing is None or existing.status != "completed":
+        return chunk
+
+    highlights_by_date = {
+        item.date.isoformat(): item for item in existing.daily_highlights
+    }
+    for item in chunk.daily_highlights:
+        highlights_by_date[item.date.isoformat()] = item
+    agent_by_id = {
+        item.agent_id: item for item in existing.agent_interpretations
+    }
+    for item in chunk.agent_interpretations:
+        agent_by_id.setdefault(item.agent_id, item)
+
+    return existing.model_copy(
+        update={
+            "scenario_reading": (existing.scenario_reading.rstrip() + "\n\n" + chunk.scenario_reading).strip(),
+            "daily_highlights": [
+                highlights_by_date[key] for key in sorted(highlights_by_date)
+            ],
+            "agent_interpretations": list(agent_by_id.values()),
+            "risk_themes": _merge_string_lists(existing.risk_themes, chunk.risk_themes),
+            "caveats": _merge_string_lists(existing.caveats, chunk.caveats),
+            "raw_text_preview": chunk.raw_text_preview,
+            "provenance": chunk.provenance,
         }
     )
 
@@ -332,7 +492,7 @@ def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
 def build_report_from_payload(
     payload: dict[str, Any],
     *,
-    request: ScenarioCreateRequest,
+    language: str,
     config: LLMConfig,
     provenance: LlmReportProvenance,
     raw_text_preview: str | None,
@@ -341,7 +501,7 @@ def build_report_from_payload(
         status="completed",
         provider=config.provider,
         model=config.model,
-        language=request.language,
+        language=language,
         executive_summary=str(payload.get("executive_summary") or ""),
         scenario_reading=str(payload.get("scenario_reading") or ""),
         daily_highlights=_daily_highlights_from_payload(payload.get("daily_highlights", [])),
@@ -350,7 +510,7 @@ def build_report_from_payload(
         ),
         risk_themes=_string_list(payload.get("risk_themes", [])),
         caveats=_string_list(payload.get("caveats", [])),
-        disclaimer=str(payload.get("disclaimer") or _default_disclaimer(request.language)),
+        disclaimer=str(payload.get("disclaimer") or _default_disclaimer(language)),
         raw_text_preview=raw_text_preview,
         provenance=provenance,
     )
@@ -389,25 +549,25 @@ def _provenance(
 def _status_report(
     *,
     status: str,
-    request: ScenarioCreateRequest,
     config: LLMConfig,
     provenance: LlmReportProvenance,
     executive_summary: str,
     scenario_reading: str,
+    language: str,
     raw_text_preview: str | None = None,
 ) -> LlmScenarioReport:
     return LlmScenarioReport(
         status=status,
         provider=config.provider,
         model=config.model,
-        language=request.language,
+        language=language,
         executive_summary=executive_summary,
         scenario_reading=scenario_reading,
         daily_highlights=[],
         agent_interpretations=[],
         risk_themes=[],
-        caveats=[_default_caveat(request.language)],
-        disclaimer=_default_disclaimer(request.language),
+        caveats=[_default_caveat(language)],
+        disclaimer=_default_disclaimer(language),
         raw_text_preview=raw_text_preview,
         provenance=provenance,
     )
@@ -479,6 +639,25 @@ def _string_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value if item is not None]
     return [str(value)]
+
+
+def _merge_string_lists(left: list[str], right: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for item in [*left, *right]:
+        if item not in seen:
+            merged.append(item)
+            seen.add(item)
+    return merged
+
+
+def _date_range(start: date, end: date) -> set[date]:
+    days: set[date] = set()
+    current = start
+    while current <= end:
+        days.add(current)
+        current += timedelta(days=1)
+    return days
 
 
 def _timeout_seconds(value: float | None = None) -> float:

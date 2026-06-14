@@ -240,6 +240,37 @@ pre {
   color: var(--warning);
 }
 
+.scenario-progress {
+  color: var(--text);
+  display: grid;
+  gap: 10px;
+}
+
+.scenario-progress.error {
+  color: var(--warning);
+}
+
+.scenario-progress-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.scenario-progress-bar {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.scenario-progress-bar div {
+  background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+  height: 100%;
+  transition: width 180ms ease;
+}
+
 .card h2,
 .card h3 {
   margin: 0 0 8px;

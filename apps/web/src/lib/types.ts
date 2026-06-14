@@ -199,6 +199,32 @@ export interface ScenarioCreateRequest {
   language?: ReportLanguage;
 }
 
+export interface ScenarioLlmChunkRequest {
+  llm_provider: LlmProvider;
+  llm_real_enabled?: boolean | null;
+  llm_base_url?: string | null;
+  llm_model?: string | null;
+  llm_api_key?: string | null;
+  llm_timeout_seconds?: number | null;
+  llm_max_output_tokens?: number | null;
+  language?: ReportLanguage;
+  chunk_start_date: string;
+  chunk_end_date: string;
+  chunk_index: number;
+  total_chunks: number;
+}
+
+export interface ScenarioLlmChunkResponse {
+  scenario_id: string;
+  chunk_index: number;
+  total_chunks: number;
+  chunk_start_date: string;
+  chunk_end_date: string;
+  llm_status: string;
+  completed: boolean;
+  report: ScenarioReport;
+}
+
 export interface ScenarioSummary {
   scenario_id: string;
   title: string;

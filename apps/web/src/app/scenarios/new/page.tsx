@@ -2,7 +2,10 @@ import Link from "next/link";
 import { ScenarioForm } from "@/components/ScenarioForm";
 import { I18nText } from "@/i18n/useI18n";
 import { getAgents, getAssets } from "@/lib/api";
-import { createScenarioAction } from "./actions";
+import {
+  createScenarioForProgressAction,
+  generateScenarioLlmChunkAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +23,10 @@ export default async function NewScenarioPage() {
           </p>
         </header>
         <ScenarioForm
+          chunkAction={generateScenarioLlmChunkAction}
+          createAction={createScenarioForProgressAction}
           agents={agents}
           marketSeries={marketSeries}
-          action={createScenarioAction}
         />
       </div>
     );
