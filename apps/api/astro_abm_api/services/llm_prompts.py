@@ -24,11 +24,16 @@ The requested output language is: {language}.
 Return strict JSON only, with these keys:
 - executive_summary: string
 - scenario_reading: string
-- daily_highlights: array of objects with date, summary, key_context, agent_focus, caveats
-- agent_interpretations: array of objects with agent_id, agent_name, interpretation, risk_focus, caveats
+- daily_highlights: array of at most 5 objects with date, summary, key_context, agent_focus, caveats
+- agent_interpretations: array of at most 1 object per agent with agent_id, agent_name, interpretation, risk_focus, caveats
 - risk_themes: array of strings
 - caveats: array of strings
 - disclaimer: string
+
+Keep the JSON compact and complete.
+Do not include every day in daily_highlights; select representative days only.
+For key_context, agent_focus, risk_focus, and caveats, always return arrays of short strings.
+Do not wrap the JSON in Markdown fences.
 
 The disclaimer must include these exact ideas:
 English: association only; scenario rehearsal only; not financial advice; not a trading signal.

@@ -26,8 +26,10 @@ LLM_API_KEY_ENV = "ASTRO_ABM_LLM_API_KEY"
 LLM_BASE_URL_ENV = "ASTRO_ABM_LLM_BASE_URL"
 LLM_MODEL_ENV = "ASTRO_ABM_LLM_MODEL"
 LLM_TIMEOUT_ENV = "ASTRO_ABM_LLM_TIMEOUT_SECONDS"
+LLM_MAX_OUTPUT_TOKENS_ENV = "ASTRO_ABM_LLM_MAX_OUTPUT_TOKENS"
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
+DEFAULT_MAX_OUTPUT_TOKENS = 5000
 RAW_TEXT_PREVIEW_LIMIT = 800
 
 BANNED_SAFETY_PATTERNS = (
@@ -283,7 +285,7 @@ def _call_openai_compatible(
     config: LLMConfig,
     messages: list[dict[str, str]],
     *,
-    max_tokens: int = 1800,
+    max_tokens: int | None = None,
 ) -> str:
     assert config.base_url and config.model
     endpoint = config.base_url.rstrip("/") + "/chat/completions"
@@ -294,7 +296,7 @@ def _call_openai_compatible(
         "model": config.model,
         "messages": messages,
         "temperature": 0.2,
-        "max_tokens": max_tokens,
+        "max_tokens": max_tokens or _max_output_tokens(),
     }
     response = requests.post(endpoint, headers=headers, json=payload, timeout=config.timeout_seconds)
     response.raise_for_status()
@@ -307,6 +309,11 @@ def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
     fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
     if fenced:
         text = fenced.group(1).strip()
+    elif not text.startswith("{"):
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            text = text[start : end + 1].strip()
     try:
         payload = json.loads(text)
     except json.JSONDecodeError:
@@ -329,18 +336,12 @@ def build_report_from_payload(
         language=request.language,
         executive_summary=str(payload.get("executive_summary") or ""),
         scenario_reading=str(payload.get("scenario_reading") or ""),
-        daily_highlights=[
-            LlmDailyHighlight.model_validate(item)
-            for item in payload.get("daily_highlights", [])
-            if isinstance(item, dict)
-        ],
-        agent_interpretations=[
-            LlmAgentInterpretation.model_validate(item)
-            for item in payload.get("agent_interpretations", [])
-            if isinstance(item, dict)
-        ],
-        risk_themes=[str(item) for item in payload.get("risk_themes", [])],
-        caveats=[str(item) for item in payload.get("caveats", [])],
+        daily_highlights=_daily_highlights_from_payload(payload.get("daily_highlights", [])),
+        agent_interpretations=_agent_interpretations_from_payload(
+            payload.get("agent_interpretations", [])
+        ),
+        risk_themes=_string_list(payload.get("risk_themes", [])),
+        caveats=_string_list(payload.get("caveats", [])),
         disclaimer=str(payload.get("disclaimer") or _default_disclaimer(request.language)),
         raw_text_preview=raw_text_preview,
         provenance=provenance,
@@ -420,6 +421,58 @@ def _preview(raw_text: str) -> str:
     return raw_text[:RAW_TEXT_PREVIEW_LIMIT]
 
 
+def _daily_highlights_from_payload(value: Any) -> list[LlmDailyHighlight]:
+    highlights: list[LlmDailyHighlight] = []
+    if not isinstance(value, list):
+        return highlights
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        normalized = {
+            "date": item.get("date"),
+            "summary": str(item.get("summary") or ""),
+            "key_context": _string_list(item.get("key_context", [])),
+            "agent_focus": _string_list(item.get("agent_focus", [])),
+            "caveats": _string_list(item.get("caveats", [])),
+        }
+        try:
+            highlights.append(LlmDailyHighlight.model_validate(normalized))
+        except ValueError:
+            continue
+    return highlights
+
+
+def _agent_interpretations_from_payload(value: Any) -> list[LlmAgentInterpretation]:
+    interpretations: list[LlmAgentInterpretation] = []
+    if not isinstance(value, list):
+        return interpretations
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        normalized = {
+            "agent_id": str(item.get("agent_id") or ""),
+            "agent_name": str(item.get("agent_name") or ""),
+            "interpretation": str(item.get("interpretation") or ""),
+            "risk_focus": _string_list(item.get("risk_focus", [])),
+            "caveats": _string_list(item.get("caveats", [])),
+        }
+        try:
+            interpretations.append(LlmAgentInterpretation.model_validate(normalized))
+        except ValueError:
+            continue
+    return interpretations
+
+
+def _string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [str(item) for item in value if item is not None]
+    return [str(value)]
+
+
 def _timeout_seconds() -> float:
     raw = os.getenv(LLM_TIMEOUT_ENV)
     if not raw:
@@ -428,3 +481,13 @@ def _timeout_seconds() -> float:
         return max(1.0, float(raw))
     except ValueError:
         return DEFAULT_TIMEOUT_SECONDS
+
+
+def _max_output_tokens() -> int:
+    raw = os.getenv(LLM_MAX_OUTPUT_TOKENS_ENV)
+    if not raw:
+        return DEFAULT_MAX_OUTPUT_TOKENS
+    try:
+        return max(512, int(raw))
+    except ValueError:
+        return DEFAULT_MAX_OUTPUT_TOKENS

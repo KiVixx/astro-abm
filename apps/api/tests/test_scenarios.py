@@ -448,37 +448,38 @@ def test_openai_compatible_mocked_network_parses_valid_json(
             return None
 
         def json(self):
+            content = json.dumps(
+                {
+                    "executive_summary": "Association-only scenario reading from supplied context.",
+                    "scenario_reading": "The context suggests a cautious rehearsal lens without causal claims.",
+                    "daily_highlights": [
+                        {
+                            "date": "2026-07-01",
+                            "summary": "Opening day highlights placeholder and coverage status.",
+                            "key_context": "coverage reviewed",
+                            "agent_focus": "risk review",
+                            "caveats": "scenario rehearsal only",
+                        }
+                    ],
+                    "agent_interpretations": [
+                        {
+                            "agent_id": "macro_allocator",
+                            "agent_name": "Macro Allocator",
+                            "interpretation": "Reviews cross-asset context cautiously.",
+                            "risk_focus": "coverage quality",
+                            "caveats": "not financial advice",
+                        }
+                    ],
+                    "risk_themes": ["coverage uncertainty"],
+                    "caveats": ["does not invent missing data"],
+                    "disclaimer": "association only; scenario rehearsal only; not financial advice; not a trading signal.",
+                }
+            )
             return {
                 "choices": [
                     {
                         "message": {
-                            "content": json.dumps(
-                                {
-                                    "executive_summary": "Association-only scenario reading from supplied context.",
-                                    "scenario_reading": "The context suggests a cautious rehearsal lens without causal claims.",
-                                    "daily_highlights": [
-                                        {
-                                            "date": "2026-07-01",
-                                            "summary": "Opening day highlights placeholder and coverage status.",
-                                            "key_context": ["coverage reviewed"],
-                                            "agent_focus": ["risk review"],
-                                            "caveats": ["scenario rehearsal only"],
-                                        }
-                                    ],
-                                    "agent_interpretations": [
-                                        {
-                                            "agent_id": "macro_allocator",
-                                            "agent_name": "Macro Allocator",
-                                            "interpretation": "Reviews cross-asset context cautiously.",
-                                            "risk_focus": ["coverage quality"],
-                                            "caveats": ["not financial advice"],
-                                        }
-                                    ],
-                                    "risk_themes": ["coverage uncertainty"],
-                                    "caveats": ["does not invent missing data"],
-                                    "disclaimer": "association only; scenario rehearsal only; not financial advice; not a trading signal.",
-                                }
-                            )
+                            "content": "Here is the JSON only:\n" + content
                         }
                     }
                 ]
@@ -510,12 +511,19 @@ def test_openai_compatible_mocked_network_parses_valid_json(
     output_text = (tmp_path / f"{report['scenario_id']}.json").read_text(encoding="utf-8")
     assert calls[0][0] == "http://llm.local/v1/chat/completions"
     assert calls[0][1]["Authorization"] == f"Bearer {request_secret}"
+    assert calls[0][2]["max_tokens"] == 5000
     assert request_secret not in output_text
     assert report["llm_report"]["status"] == "completed"
     assert report["llm_report"]["provenance"]["network_call_performed"] is True
     assert report["llm_report"]["provenance"]["output_validation_status"] == "valid_json"
     assert report["llm_report"]["provenance"]["safety_check_status"] == "passed"
     assert report["llm_report"]["daily_highlights"][0]["date"] == "2026-07-01"
+    assert report["llm_report"]["daily_highlights"][0]["key_context"] == [
+        "coverage reviewed"
+    ]
+    assert report["llm_report"]["agent_interpretations"][0]["risk_focus"] == [
+        "coverage quality"
+    ]
 
 
 def test_openai_compatible_invalid_json_marks_invalid_output(
