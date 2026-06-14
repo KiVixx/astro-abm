@@ -35,7 +35,10 @@ ASTRO_ABM_SCENARIO_OUTPUT_DIR=/tmp/astro-abm-scenarios make scenario-demo
 The API uses the mock provider by default. `openai_compatible` supports
 OpenAI-compatible chat-completions endpoints, including local providers such as
 Ollama, LM Studio, or vLLM when they expose an OpenAI-compatible API. Real LLM
-calls are opt-in and disabled unless the API server has:
+calls are opt-in. The web create form can enable them per scenario and pass a
+base URL, model, and optional API key for that request only.
+
+For API-only usage, the backend can also use environment defaults:
 
 ```bash
 ASTRO_ABM_ENABLE_REAL_LLM=1
@@ -45,7 +48,7 @@ ASTRO_ABM_LLM_API_KEY=optional-or-provider-key
 ```
 
 If real calls are disabled, `openai_compatible` scenario creation records a
-safe `dry_run` LLM report. API keys are read from environment variables and are
+safe `dry_run` LLM report. API keys from either the request or environment are
 never saved into scenario JSON, Markdown, logs, or provenance.
 
 Every report is association only, scenario rehearsal only, not financial advice,

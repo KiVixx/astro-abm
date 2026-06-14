@@ -23,8 +23,10 @@ class ScenarioCreateRequest(BaseModel):
     assets: list[str] = Field(min_length=1)
     agent_ids: list[str] = Field(min_length=1)
     llm_provider: LLMProvider = "mock"
+    llm_real_enabled: bool | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
+    llm_api_key: str | None = Field(default=None, exclude=True, repr=False)
     visibility: Visibility = "private"
     mode: ScenarioMode = "daily_association_only"
     language: ReportLanguage = "en"
@@ -43,6 +45,14 @@ class ScenarioCreateRequest(BaseModel):
         if not cleaned:
             raise ValueError("list must not be empty")
         return cleaned
+
+    @field_validator("llm_base_url", "llm_model", "llm_api_key")
+    @classmethod
+    def optional_strings_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
     @model_validator(mode="after")
     def date_range_must_be_ordered(self) -> "ScenarioCreateRequest":

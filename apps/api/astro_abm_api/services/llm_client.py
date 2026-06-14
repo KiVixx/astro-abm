@@ -56,6 +56,7 @@ class LLMConfig:
     base_url: str | None = None
     model: str | None = None
     api_key: str | None = None
+    real_enabled: bool | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
     @property
@@ -64,6 +65,8 @@ class LLMConfig:
 
     @property
     def real_calls_enabled(self) -> bool:
+        if self.real_enabled is not None:
+            return self.real_enabled
         return os.getenv(ENABLE_REAL_LLM_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -72,12 +75,14 @@ def build_llm_config(
     base_url: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    real_enabled: bool | None = None,
 ) -> LLMConfig:
     return LLMConfig(
         provider=provider,
         base_url=(base_url or os.getenv(LLM_BASE_URL_ENV) or None),
         model=(model or os.getenv(LLM_MODEL_ENV) or None),
         api_key=(api_key or os.getenv(LLM_API_KEY_ENV) or None),
+        real_enabled=real_enabled,
         timeout_seconds=_timeout_seconds(),
     )
 
@@ -103,6 +108,8 @@ def generate_llm_scenario_report(
         provider=request.llm_provider,
         base_url=request.llm_base_url,
         model=request.llm_model,
+        api_key=request.llm_api_key,
+        real_enabled=request.llm_real_enabled,
     )
     context = build_llm_context(report)
     context_hash = str(context["input_context_hash"])
@@ -208,6 +215,7 @@ def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
         base_url=request.base_url,
         model=request.model,
         api_key=request.api_key,
+        real_enabled=request.real_enabled,
     )
     if config.provider == "mock":
         return LLMTestResponse(

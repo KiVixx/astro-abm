@@ -65,6 +65,14 @@ export function ScenarioForm({
             </option>
           </select>
         </label>
+        <label className="checkbox-card">
+          <input name="llm_real_enabled" type="checkbox" />
+          <span>
+            <strong>{t("scenarioCreate.llmRealEnabled")}</strong>
+            <br />
+            <span className="muted">{t("scenarioCreate.llmRealEnabledHelp")}</span>
+          </span>
+        </label>
         <label className="form-field">
           <span>{t("scenarioCreate.visibility")}</span>
           <select name="visibility" defaultValue="private">
@@ -97,6 +105,15 @@ export function ScenarioForm({
         <label className="form-field">
           <span>{t("scenarioCreate.llmModel")}</span>
           <input name="llm_model" placeholder="local-model-name" />
+        </label>
+        <label className="form-field">
+          <span>{t("scenarioCreate.llmApiKey")}</span>
+          <input
+            autoComplete="off"
+            name="llm_api_key"
+            placeholder={t("scenarioCreate.llmApiKeyPlaceholder")}
+            type="password"
+          />
         </label>
         <div className="notice full">
           <p>{t("scenarioCreate.llmApiKeyNote")}</p>

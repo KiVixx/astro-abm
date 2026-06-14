@@ -408,11 +408,40 @@ def test_openai_compatible_disabled_returns_dry_run_without_network(
     assert "## LLM Scenario Report" in report["markdown_report"]
 
 
-def test_openai_compatible_mocked_network_parses_valid_json(
+def test_request_can_disable_real_llm_even_when_env_is_enabled(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
     monkeypatch.setenv("ASTRO_ABM_ENABLE_REAL_LLM", "1")
+
+    def fail_post(*args, **kwargs):
+        raise AssertionError("request-level disabled flag should prevent network calls")
+
+    monkeypatch.setattr("astro_abm_api.services.llm_client.requests.post", fail_post)
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update(
+        {
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": False,
+            "llm_base_url": "http://localhost:11434/v1",
+            "llm_model": "local-model",
+        }
+    )
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["llm_report"]["status"] == "dry_run"
+    assert report["llm_report"]["provenance"]["network_call_performed"] is False
+
+
+def test_openai_compatible_mocked_network_parses_valid_json(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    request_secret = "request-level-secret"
 
     class Response:
         def raise_for_status(self):
@@ -467,8 +496,10 @@ def test_openai_compatible_mocked_network_parses_valid_json(
     payload.update(
         {
             "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
             "llm_base_url": "http://llm.local/v1",
             "llm_model": "test-model",
+            "llm_api_key": request_secret,
         }
     )
 
@@ -476,8 +507,10 @@ def test_openai_compatible_mocked_network_parses_valid_json(
 
     assert response.status_code == 200
     report = response.json()
+    output_text = (tmp_path / f"{report['scenario_id']}.json").read_text(encoding="utf-8")
     assert calls[0][0] == "http://llm.local/v1/chat/completions"
-    assert "Authorization" not in calls[0][1]
+    assert calls[0][1]["Authorization"] == f"Bearer {request_secret}"
+    assert request_secret not in output_text
     assert report["llm_report"]["status"] == "completed"
     assert report["llm_report"]["provenance"]["network_call_performed"] is True
     assert report["llm_report"]["provenance"]["output_validation_status"] == "valid_json"
@@ -628,7 +661,6 @@ def test_llm_test_openai_compatible_enabled_uses_mocked_network(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
-    monkeypatch.setenv("ASTRO_ABM_ENABLE_REAL_LLM", "1")
 
     class Response:
         def raise_for_status(self):
@@ -650,6 +682,7 @@ def test_llm_test_openai_compatible_enabled_uses_mocked_network(
         "/llm/test",
         json={
             "provider": "openai_compatible",
+            "real_enabled": True,
             "base_url": "http://localhost:11434/v1",
             "model": "local-model",
             "api_key": "secret",

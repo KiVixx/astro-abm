@@ -12,6 +12,7 @@ class LLMTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider: LLMProvider = "mock"
+    real_enabled: bool | None = None
     base_url: str | None = None
     model: str | None = None
     api_key: str | None = None

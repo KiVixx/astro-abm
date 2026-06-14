@@ -109,12 +109,17 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.llmProvider": "LLM provider",
     "scenarioCreate.visibility": "Visibility",
     "scenarioCreate.reportLanguage": "Report language",
+    "scenarioCreate.llmRealEnabled": "Enable real LLM call for this scenario",
+    "scenarioCreate.llmRealEnabledHelp":
+      "When checked, the API server may call the configured OpenAI-compatible endpoint for this request.",
     "scenarioCreate.llmBaseUrl": "LLM base URL",
     "scenarioCreate.llmModel": "LLM model",
+    "scenarioCreate.llmApiKey": "LLM API key",
+    "scenarioCreate.llmApiKeyPlaceholder": "Optional; leave blank for local providers",
     "scenarioCreate.llmApiKeyNote":
-      "API keys should be configured in the backend environment and are never saved in scenario reports.",
+      "API keys can be supplied here for this request or configured in the backend environment. They are never saved in scenario reports.",
     "scenarioCreate.realLlmEnablementNote":
-      "Real LLM calls require ASTRO_ABM_ENABLE_REAL_LLM=1 on the API server.",
+      "Real LLM calls require OpenAI-compatible provider plus the real LLM checkbox, or ASTRO_ABM_ENABLE_REAL_LLM=1 on the API server for API-only requests.",
     "scenarioCreate.agentGroups": "Agent groups",
     "scenarioCreate.generate": "Generate scenario",
 
@@ -452,10 +457,17 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.llmProvider": "LLM 提供者",
     "scenarioCreate.visibility": "可見性",
     "scenarioCreate.reportLanguage": "報告生成語言",
+    "scenarioCreate.llmRealEnabled": "本次情境啟用真實 LLM 呼叫",
+    "scenarioCreate.llmRealEnabledHelp":
+      "勾選後，API server 可針對這次請求呼叫已設定的 OpenAI-compatible endpoint。",
     "scenarioCreate.llmBaseUrl": "LLM Base URL",
     "scenarioCreate.llmModel": "LLM 模型",
-    "scenarioCreate.llmApiKeyNote": "API key 應在後端環境變數中設定，且永遠不會保存到情境報告。",
-    "scenarioCreate.realLlmEnablementNote": "真實 LLM 呼叫需要在 API server 設定 ASTRO_ABM_ENABLE_REAL_LLM=1。",
+    "scenarioCreate.llmApiKey": "LLM API key",
+    "scenarioCreate.llmApiKeyPlaceholder": "可選；本地模型通常可留空",
+    "scenarioCreate.llmApiKeyNote":
+      "API key 可以在這次請求中填入，或放在後端環境變數；它永遠不會保存到情境報告。",
+    "scenarioCreate.realLlmEnablementNote":
+      "真實 LLM 呼叫需要選擇 OpenAI-compatible 並勾選本次啟用；API-only 使用也可由後端 ASTRO_ABM_ENABLE_REAL_LLM=1 控制。",
     "scenarioCreate.agentGroups": "代理群體",
     "scenarioCreate.generate": "生成情境",
 

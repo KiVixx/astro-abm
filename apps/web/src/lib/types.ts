@@ -188,8 +188,10 @@ export interface ScenarioCreateRequest {
   assets: string[];
   agent_ids: string[];
   llm_provider: LlmProvider;
+  llm_real_enabled?: boolean | null;
   llm_base_url?: string | null;
   llm_model?: string | null;
+  llm_api_key?: string | null;
   visibility: Visibility;
   mode?: ScenarioMode;
   language?: ReportLanguage;
