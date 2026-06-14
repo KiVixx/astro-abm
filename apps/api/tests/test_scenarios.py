@@ -501,6 +501,8 @@ def test_openai_compatible_mocked_network_parses_valid_json(
             "llm_base_url": "http://llm.local/v1",
             "llm_model": "test-model",
             "llm_api_key": request_secret,
+            "llm_timeout_seconds": 123,
+            "llm_max_output_tokens": 6000,
         }
     )
 
@@ -511,7 +513,8 @@ def test_openai_compatible_mocked_network_parses_valid_json(
     output_text = (tmp_path / f"{report['scenario_id']}.json").read_text(encoding="utf-8")
     assert calls[0][0] == "http://llm.local/v1/chat/completions"
     assert calls[0][1]["Authorization"] == f"Bearer {request_secret}"
-    assert calls[0][2]["max_tokens"] == 5000
+    assert calls[0][2]["max_tokens"] == 6000
+    assert calls[0][3] == 123
     assert request_secret not in output_text
     assert report["llm_report"]["status"] == "completed"
     assert report["llm_report"]["provenance"]["network_call_performed"] is True

@@ -27,6 +27,8 @@ class ScenarioCreateRequest(BaseModel):
     llm_base_url: str | None = None
     llm_model: str | None = None
     llm_api_key: str | None = Field(default=None, exclude=True, repr=False)
+    llm_timeout_seconds: float | None = Field(default=None, ge=1, le=600)
+    llm_max_output_tokens: int | None = Field(default=None, ge=512, le=32000)
     visibility: Visibility = "private"
     mode: ScenarioMode = "daily_association_only"
     language: ReportLanguage = "en"

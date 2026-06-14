@@ -107,6 +107,28 @@ export function ScenarioForm({
           <input name="llm_model" placeholder="local-model-name" />
         </label>
         <label className="form-field">
+          <span>{t("scenarioCreate.llmTimeoutSeconds")}</span>
+          <input
+            defaultValue="120"
+            max="600"
+            min="1"
+            name="llm_timeout_seconds"
+            step="1"
+            type="number"
+          />
+        </label>
+        <label className="form-field">
+          <span>{t("scenarioCreate.llmMaxOutputTokens")}</span>
+          <input
+            defaultValue="5000"
+            max="32000"
+            min="512"
+            name="llm_max_output_tokens"
+            step="1"
+            type="number"
+          />
+        </label>
+        <label className="form-field">
           <span>{t("scenarioCreate.llmApiKey")}</span>
           <input
             autoComplete="off"

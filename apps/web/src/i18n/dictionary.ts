@@ -114,12 +114,14 @@ export const dictionaries: Record<Language, Record<string, string>> = {
       "When checked, the API server may call the configured OpenAI-compatible endpoint for this request.",
     "scenarioCreate.llmBaseUrl": "LLM base URL",
     "scenarioCreate.llmModel": "LLM model",
+    "scenarioCreate.llmTimeoutSeconds": "LLM timeout seconds",
+    "scenarioCreate.llmMaxOutputTokens": "LLM max output tokens",
     "scenarioCreate.llmApiKey": "LLM API key",
     "scenarioCreate.llmApiKeyPlaceholder": "Optional; leave blank for local providers",
     "scenarioCreate.llmApiKeyNote":
       "API keys can be supplied here for this request or configured in the backend environment. They are never saved in scenario reports.",
     "scenarioCreate.realLlmEnablementNote":
-      "Real LLM calls require OpenAI-compatible provider plus the real LLM checkbox, or ASTRO_ABM_ENABLE_REAL_LLM=1 on the API server for API-only requests.",
+      "Real LLM calls require OpenAI-compatible provider plus the real LLM checkbox, or ASTRO_ABM_ENABLE_REAL_LLM=1 on the API server for API-only requests. Increase timeout seconds if the provider is slow.",
     "scenarioCreate.agentGroups": "Agent groups",
     "scenarioCreate.generate": "Generate scenario",
 
@@ -462,12 +464,14 @@ export const dictionaries: Record<Language, Record<string, string>> = {
       "勾選後，API server 可針對這次請求呼叫已設定的 OpenAI-compatible endpoint。",
     "scenarioCreate.llmBaseUrl": "LLM Base URL",
     "scenarioCreate.llmModel": "LLM 模型",
+    "scenarioCreate.llmTimeoutSeconds": "LLM timeout 秒數",
+    "scenarioCreate.llmMaxOutputTokens": "LLM 最大輸出 tokens",
     "scenarioCreate.llmApiKey": "LLM API key",
     "scenarioCreate.llmApiKeyPlaceholder": "可選；本地模型通常可留空",
     "scenarioCreate.llmApiKeyNote":
       "API key 可以在這次請求中填入，或放在後端環境變數；它永遠不會保存到情境報告。",
     "scenarioCreate.realLlmEnablementNote":
-      "真實 LLM 呼叫需要選擇 OpenAI-compatible 並勾選本次啟用；API-only 使用也可由後端 ASTRO_ABM_ENABLE_REAL_LLM=1 控制。",
+      "真實 LLM 呼叫需要選擇 OpenAI-compatible 並勾選本次啟用；API-only 使用也可由後端 ASTRO_ABM_ENABLE_REAL_LLM=1 控制。如果 provider 回應較慢，請調高 timeout 秒數。",
     "scenarioCreate.agentGroups": "代理群體",
     "scenarioCreate.generate": "生成情境",
 

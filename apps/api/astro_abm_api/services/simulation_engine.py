@@ -937,6 +937,8 @@ def generate_scenario_report(
         model=request.llm_model,
         api_key=request.llm_api_key,
         real_enabled=request.llm_real_enabled,
+        timeout_seconds=request.llm_timeout_seconds,
+        max_output_tokens=request.llm_max_output_tokens,
     )
     created_at = datetime.now(UTC)
     report_id = scenario_id or create_scenario_id(request.title, created_at)

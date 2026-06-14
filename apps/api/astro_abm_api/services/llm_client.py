@@ -28,7 +28,7 @@ LLM_MODEL_ENV = "ASTRO_ABM_LLM_MODEL"
 LLM_TIMEOUT_ENV = "ASTRO_ABM_LLM_TIMEOUT_SECONDS"
 LLM_MAX_OUTPUT_TOKENS_ENV = "ASTRO_ABM_LLM_MAX_OUTPUT_TOKENS"
 
-DEFAULT_TIMEOUT_SECONDS = 30.0
+DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_OUTPUT_TOKENS = 5000
 RAW_TEXT_PREVIEW_LIMIT = 800
 
@@ -60,6 +60,7 @@ class LLMConfig:
     api_key: str | None = None
     real_enabled: bool | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
 
     @property
     def has_api_key(self) -> bool:
@@ -78,6 +79,8 @@ def build_llm_config(
     model: str | None = None,
     api_key: str | None = None,
     real_enabled: bool | None = None,
+    timeout_seconds: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> LLMConfig:
     return LLMConfig(
         provider=provider,
@@ -85,7 +88,8 @@ def build_llm_config(
         model=(model or os.getenv(LLM_MODEL_ENV) or None),
         api_key=(api_key or os.getenv(LLM_API_KEY_ENV) or None),
         real_enabled=real_enabled,
-        timeout_seconds=_timeout_seconds(),
+        timeout_seconds=_timeout_seconds(timeout_seconds),
+        max_output_tokens=_max_output_tokens(max_output_tokens),
     )
 
 
@@ -112,6 +116,8 @@ def generate_llm_scenario_report(
         model=request.llm_model,
         api_key=request.llm_api_key,
         real_enabled=request.llm_real_enabled,
+        timeout_seconds=request.llm_timeout_seconds,
+        max_output_tokens=request.llm_max_output_tokens,
     )
     context = build_llm_context(report)
     context_hash = str(context["input_context_hash"])
@@ -218,6 +224,8 @@ def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
         model=request.model,
         api_key=request.api_key,
         real_enabled=request.real_enabled,
+        timeout_seconds=request.timeout_seconds,
+        max_output_tokens=request.max_output_tokens,
     )
     if config.provider == "mock":
         return LLMTestResponse(
@@ -296,7 +304,7 @@ def _call_openai_compatible(
         "model": config.model,
         "messages": messages,
         "temperature": 0.2,
-        "max_tokens": max_tokens or _max_output_tokens(),
+        "max_tokens": max_tokens or config.max_output_tokens,
     }
     response = requests.post(endpoint, headers=headers, json=payload, timeout=config.timeout_seconds)
     response.raise_for_status()
@@ -473,7 +481,9 @@ def _string_list(value: Any) -> list[str]:
     return [str(value)]
 
 
-def _timeout_seconds() -> float:
+def _timeout_seconds(value: float | None = None) -> float:
+    if value is not None:
+        return max(1.0, float(value))
     raw = os.getenv(LLM_TIMEOUT_ENV)
     if not raw:
         return DEFAULT_TIMEOUT_SECONDS
@@ -483,7 +493,9 @@ def _timeout_seconds() -> float:
         return DEFAULT_TIMEOUT_SECONDS
 
 
-def _max_output_tokens() -> int:
+def _max_output_tokens(value: int | None = None) -> int:
+    if value is not None:
+        return max(512, int(value))
     raw = os.getenv(LLM_MAX_OUTPUT_TOKENS_ENV)
     if not raw:
         return DEFAULT_MAX_OUTPUT_TOKENS
