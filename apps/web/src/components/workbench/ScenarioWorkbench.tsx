@@ -40,6 +40,14 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const selectedSnapshot =
     timeline.find((snapshot) => snapshot.date === selectedDate) || initialSnapshot;
+  const selectedIndex = selectedSnapshot
+    ? timeline.findIndex((snapshot) => snapshot.date === selectedSnapshot.date)
+    : -1;
+  const previousSnapshot = selectedIndex > 0 ? timeline[selectedIndex - 1] : undefined;
+  const nextSnapshot =
+    selectedIndex >= 0 && selectedIndex < timeline.length - 1
+      ? timeline[selectedIndex + 1]
+      : undefined;
 
   const graph = useMemo(() => {
     return selectedSnapshot ? buildWorkbenchGraph(report, selectedSnapshot) : null;
@@ -129,8 +137,12 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
       <main className="workbench-layout">
         <DailyGraphCanvas
           graph={graph}
+          nextDate={nextSnapshot?.date}
+          onSelectDate={selectDate}
           onSelectEdge={setSelectedEdgeId}
           onSelectNode={setSelectedNodeId}
+          previousDate={previousSnapshot?.date}
+          selectedDate={selectedSnapshot.date}
           selectedEdgeId={selectedEdgeId}
           selectedNodeId={selectedNodeId}
         />

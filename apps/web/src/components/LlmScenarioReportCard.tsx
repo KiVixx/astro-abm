@@ -18,6 +18,47 @@ function BulletList({ items }: { items: string[] }) {
   );
 }
 
+function ScenarioReadingText({ text }: { text: string }) {
+  const blocks = normalizeScenarioReadingText(text)
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  if (!blocks.length) {
+    return <p className="muted">-</p>;
+  }
+
+  return (
+    <div className="llm-readable-text">
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+        if (lines.length === 1) {
+          const heading = parseMarkdownHeading(lines[0]);
+          if (heading) {
+            return <h4 key={`${blockIndex}-${heading}`}>{heading}</h4>;
+          }
+          return <p key={`${blockIndex}-${lines[0]}`}>{lines[0]}</p>;
+        }
+        return (
+          <div className="llm-readable-block" key={`${blockIndex}-${lines[0]}`}>
+            {lines.map((line, lineIndex) => {
+              const heading = parseMarkdownHeading(line);
+              if (heading) {
+                return <h4 key={`${lineIndex}-${heading}`}>{heading}</h4>;
+              }
+              const bullet = parseMarkdownBullet(line);
+              if (bullet) {
+                return <p className="llm-readable-bullet" key={`${lineIndex}-${bullet}`}>{bullet}</p>;
+              }
+              return <p key={`${lineIndex}-${line}`}>{line}</p>;
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function LlmScenarioReportCard({
   compact = false,
   llmReport,
@@ -65,7 +106,7 @@ export function LlmScenarioReportCard({
           </div>
           <div>
             <h3>{t("llm.scenarioReading")}</h3>
-            <p>{llmReport.scenario_reading}</p>
+            <ScenarioReadingText text={llmReport.scenario_reading} />
           </div>
           {!compact ? (
             <>
@@ -125,7 +166,7 @@ export function LlmScenarioReportCard({
               : formatEnumLabel(t, "llm_status", llmReport.status)}
           </h3>
           <p>{llmReport.executive_summary}</p>
-          <p>{llmReport.scenario_reading}</p>
+          <ScenarioReadingText text={llmReport.scenario_reading} />
         </div>
       )}
 
@@ -152,4 +193,27 @@ export function LlmScenarioReportCard({
       <p className="notice">{llmReport.disclaimer}</p>
     </section>
   );
+}
+
+function normalizeScenarioReadingText(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.includes("\n") || trimmed.length < 600) {
+    return trimmed;
+  }
+  return trimmed
+    .replace(/。\s+(?=(?:\d{4}[年-]|在\d{4}年|單日快照|此單日快照|當日|當前情境|壓力平穩|202\d))/g, "。\n\n")
+    .replace(/\s+(?=(?:\d{4}-\d{2}-\d{2}|202\d年\d{1,2}月\d{1,2}日))/g, "\n\n");
+}
+
+function parseMarkdownHeading(line: string): string | null {
+  const match = line.match(/^#{1,6}\s+(.+)$/);
+  return match?.[1]?.trim() || null;
+}
+
+function parseMarkdownBullet(line: string): string | null {
+  const match = line.match(/^[-*]\s+(.+)$/);
+  return match?.[1]?.trim() || null;
 }

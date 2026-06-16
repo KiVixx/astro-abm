@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from typing import Any
 
 import requests
+from dotenv import load_dotenv
 
 from astro_abm_api.models.llm import LLMProvider, LLMTestRequest, LLMTestResponse
 from astro_abm_api.models.report import (
@@ -22,6 +23,8 @@ from astro_abm_api.models.scenario import ScenarioLlmChunkRequest
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import PROMPT_TEMPLATE_VERSION, build_messages
 
+
+load_dotenv()
 
 ENABLE_REAL_LLM_ENV = "ASTRO_ABM_ENABLE_REAL_LLM"
 LLM_API_KEY_ENV = "ASTRO_ABM_LLM_API_KEY"
@@ -214,6 +217,7 @@ def generate_llm_scenario_report(
     return report_candidate.model_copy(
         update={
             "status": "completed",
+            "scenario_reading": _normalize_multiline_text(report_candidate.scenario_reading),
             "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
         }
     )
@@ -334,9 +338,16 @@ def generate_llm_scenario_report_chunk(
                 "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
             }
         )
+    readable_reading = _format_chunk_scenario_reading(
+        report_candidate.scenario_reading,
+        start_date=request.chunk_start_date,
+        end_date=request.chunk_end_date,
+        language=request.language,
+    )
     return report_candidate.model_copy(
         update={
             "status": "completed",
+            "scenario_reading": readable_reading,
             "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
         }
     )
@@ -364,7 +375,10 @@ def merge_llm_report_chunk(
 
     return existing.model_copy(
         update={
-            "scenario_reading": (existing.scenario_reading.rstrip() + "\n\n" + chunk.scenario_reading).strip(),
+            "scenario_reading": _merge_scenario_readings(
+                existing.scenario_reading,
+                chunk.scenario_reading,
+            ),
             "daily_highlights": [
                 highlights_by_date[key] for key in sorted(highlights_by_date)
             ],
@@ -375,6 +389,38 @@ def merge_llm_report_chunk(
             "provenance": chunk.provenance,
         }
     )
+
+
+def _merge_scenario_readings(existing: str, chunk: str) -> str:
+    parts = [part.strip() for part in (existing, chunk) if part and part.strip()]
+    return "\n\n".join(parts)
+
+
+def _format_chunk_scenario_reading(
+    reading: str,
+    *,
+    start_date: date,
+    end_date: date,
+    language: str,
+) -> str:
+    cleaned = _normalize_multiline_text(reading)
+    if not cleaned:
+        return ""
+    date_label = (
+        f"{start_date.isoformat()} 至 {end_date.isoformat()}"
+        if language == "zh-Hant"
+        else f"{start_date.isoformat()} to {end_date.isoformat()}"
+    )
+    heading = f"#### {date_label}"
+    return f"{heading}\n{cleaned}"
+
+
+def _normalize_multiline_text(value: str) -> str:
+    lines = [line.strip() for line in value.replace("\r\n", "\n").split("\n")]
+    normalized = [line for line in lines if line]
+    if len(normalized) <= 1:
+        return value.strip()
+    return "\n".join(normalized)
 
 
 def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:

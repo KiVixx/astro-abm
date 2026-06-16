@@ -50,6 +50,15 @@ button:hover,
   background: var(--accent-dark);
 }
 
+button:disabled,
+button:disabled:hover {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .button.secondary {
   background: #fff;
   color: var(--accent-dark);
@@ -271,6 +280,39 @@ pre {
   transition: width 180ms ease;
 }
 
+.llm-readable-text {
+  display: grid;
+  gap: 10px;
+}
+
+.llm-readable-text h4 {
+  color: var(--accent-dark);
+  margin: 10px 0 0;
+}
+
+.llm-readable-text p {
+  line-height: 1.65;
+  margin: 0;
+}
+
+.llm-readable-block {
+  display: grid;
+  gap: 6px;
+}
+
+.llm-readable-bullet {
+  padding-left: 1.1rem;
+  position: relative;
+}
+
+.llm-readable-bullet::before {
+  color: var(--accent);
+  content: "•";
+  font-weight: 800;
+  left: 0;
+  position: absolute;
+}
+
 .card h2,
 .card h3 {
   margin: 0 0 8px;
@@ -330,6 +372,31 @@ pre {
   margin-top: 3px;
   min-height: auto;
   width: auto;
+}
+
+.checkbox-card.compact {
+  background: var(--surface);
+}
+
+.llm-preset-panel {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  padding: 14px;
+}
+
+.llm-preset-panel h3,
+.llm-preset-panel p {
+  margin: 0;
+}
+
+.llm-preset-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .asset-picker {
@@ -746,6 +813,13 @@ pre {
   gap: 12px;
   justify-content: space-between;
   margin: 0 0 10px;
+}
+
+.graph-date-controls {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
 }
 
 .workbench-svg-frame {
@@ -1201,7 +1275,11 @@ pre {
   flex-wrap: wrap;
   font-size: 12px;
   gap: 7px;
+  margin-left: auto;
   padding: 6px 9px;
+  position: sticky;
+  right: 12px;
+  z-index: 3;
 }
 
 .asset-stress-swatch {
@@ -1290,6 +1368,10 @@ pre {
     grid-template-columns: 1fr;
   }
 
+  .llm-preset-grid {
+    grid-template-columns: 1fr;
+  }
+
   .timeline-toolbar {
     grid-template-columns: 1fr;
   }
@@ -1318,6 +1400,11 @@ pre {
   .workbench-rail-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .graph-date-controls {
+    align-items: flex-start;
+    justify-items: start;
   }
 
   .workbench-layout {

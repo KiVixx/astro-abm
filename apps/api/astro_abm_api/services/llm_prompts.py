@@ -31,6 +31,16 @@ Return strict JSON only, with these keys:
 - disclaimer: string
 
 Keep the JSON compact and complete.
+Make scenario_reading easy for a human to scan:
+- Use 3 to 5 short lines separated by "\\n".
+- Prefer Markdown-style bullets, for example "- Market setup: ...".
+- Do not write one long paragraph.
+- Avoid repeating the same disclaimer or placeholder warning in every sentence.
+- If the context is a chunk, summarize only the supplied chunk dates.
+For Traditional Chinese, use short Traditional Chinese bullet lines with clear labels such as:
+"- 市場脈絡：..."
+"- 代理反應：..."
+"- 資料限制：..."
 Do not include every day in daily_highlights; select representative days only.
 For key_context, agent_focus, risk_focus, and caveats, always return arrays of short strings.
 Do not wrap the JSON in Markdown fences.

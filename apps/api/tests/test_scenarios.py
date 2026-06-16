@@ -604,6 +604,8 @@ def test_llm_chunk_endpoint_merges_and_saves_report(
     assert body["llm_status"] == "completed"
     assert body["completed"] is False
     assert body["report"]["llm_report"]["status"] == "completed"
+    assert "#### 2026-07-01 to 2026-07-03" in body["report"]["llm_report"]["scenario_reading"]
+    assert "\nThis chunk reviews only the supplied dates." in body["report"]["llm_report"]["scenario_reading"]
     assert body["report"]["llm_report"]["daily_highlights"][0]["date"] == "2026-07-01"
     assert body["report"]["provenance"]["llm"]["chunked_generation"] is True
     assert calls[0][2]["max_tokens"] == 3000
