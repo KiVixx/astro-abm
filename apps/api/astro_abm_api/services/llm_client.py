@@ -124,7 +124,7 @@ def generate_llm_scenario_report(
         timeout_seconds=request.llm_timeout_seconds,
         max_output_tokens=request.llm_max_output_tokens,
     )
-    context = build_llm_context(report)
+    context = build_llm_context(report, user_prompt=request.llm_user_prompt)
     context_hash = str(context["input_context_hash"])
     provenance = _provenance(
         config,
@@ -241,6 +241,7 @@ def generate_llm_scenario_report_chunk(
         report,
         selected_dates=selected_dates,
         max_context_days=max(10, len(selected_dates)),
+        user_prompt=request.llm_user_prompt,
         chunk_metadata={
             "chunk_index": request.chunk_index,
             "total_chunks": request.total_chunks,

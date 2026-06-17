@@ -10,6 +10,9 @@ import requests
 from fastapi.testclient import TestClient
 
 from astro_abm_api.main import app
+from astro_abm_api.models.report import ScenarioReport
+from astro_abm_api.services.llm_context import build_llm_context
+from astro_abm_api.services.llm_prompts import build_messages
 
 
 def scenario_payload() -> dict[str, object]:
@@ -92,8 +95,14 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
         "2026-07-01", "2026-09-30"
     )
     assert report["coverage_summary"]["total_days"] == len(report["daily_timeline"])
-    assert report["coverage_summary"]["placeholder_days"] == len(report["daily_timeline"])
+    assert report["coverage_summary"]["placeholder_days"] == 0
     assert report["coverage_summary"]["local_research_days"] == 0
+    assert report["coverage_summary"]["astro_daily_available_days"] == len(
+        report["daily_timeline"]
+    )
+    assert report["coverage_summary"]["source_counts"]["computed_ephemeris"] == len(
+        report["daily_timeline"]
+    )
     assert report["coverage_summary"]["asset_coverage"][0]["coverage_status"] == "missing"
     first_day = report["daily_timeline"][0]
     assert first_day["date"] == "2026-07-01"
@@ -109,9 +118,11 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
         "watchful",
         "elevated",
     }
-    assert first_day["data_coverage"]["source"] == "placeholder_fallback"
+    assert first_day["data_coverage"]["source"] == "computed_ephemeris"
+    assert first_day["data_coverage"]["astro_daily"] == "available"
     assert first_day["data_coverage"]["financial_stress_daily"] == "missing"
-    assert first_day["research_signals"]["data_quality"] == "placeholder_fallback"
+    assert first_day["research_signals"]["data_quality"] == "computed_ephemeris_available"
+    assert first_day["astro_context"]["event_tags"][0] == "computed_ephemeris"
     assert [context["asset"] for context in first_day["asset_contexts"]] == ["BTC", "ETH"]
     assert first_day["asset_contexts"][0]["market_daily"] in {"missing", "future_placeholder"}
     assert first_day["asset_contexts"][0]["supported"] is True
@@ -146,6 +157,108 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     get_response = client.get(f"/scenarios/{scenario_id}")
     assert get_response.status_code == 200
     assert get_response.json()["scenario_id"] == scenario_id
+
+
+def test_future_date_uses_computed_ephemeris_without_market_observations(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update(
+        {
+            "start_date": "2026-06-22",
+            "end_date": "2026-06-22",
+            "language": "zh-Hant",
+        }
+    )
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report = response.json()
+    day = report["daily_timeline"][0]
+    assert day["date"] == "2026-06-22"
+    assert day["data_coverage"]["astro_daily"] == "available"
+    assert day["data_coverage"]["source"] == "computed_ephemeris"
+    assert day["research_signals"]["data_quality"] == "computed_ephemeris_available"
+    assert day["astro_context"]["event_tags"][0] == "computed_ephemeris"
+    assert "daily_ephemeris_placeholder" not in day["astro_context"]["event_tags"]
+    assert day["data_coverage"]["market_daily"] in {"missing", "future_placeholder"}
+    assert "本機計算星曆" in day["daily_summary"]
+    assert "天象日線可用天數：1" in report["markdown_report"]
+
+
+def test_llm_daily_context_includes_ephemeris_details(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update(
+        {
+            "start_date": "2026-06-22",
+            "end_date": "2026-06-24",
+            "language": "zh-Hant",
+        }
+    )
+    response = client.post("/scenarios", json=payload)
+    assert response.status_code == 200
+    report = ScenarioReport.model_validate(response.json())
+
+    context = build_llm_context(
+        report,
+        selected_dates={date(2026, 6, 22)},
+        max_context_days=10,
+        chunk_metadata={
+            "chunk_index": 1,
+            "total_chunks": 3,
+            "instruction": "Generate narrative only for this chunk's dates.",
+        },
+    )
+
+    assert len(context["daily_timeline"]) == 1
+    ephemeris = context["daily_timeline"][0]["astro_ephemeris"]
+    assert ephemeris["status"] == "available"
+    assert ephemeris["source"] == "computed_swiss_ephemeris"
+    assert ephemeris["sample_time_utc"] == "2026-06-22T00:00:00Z"
+    assert ephemeris["moon_phase"]["name"]
+    assert "observed market data" in " ".join(ephemeris["notes"])
+    body_names = {body["body"] for body in ephemeris["bodies"]}
+    assert {"Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"} <= body_names
+    assert all("lon_deg" in body for body in ephemeris["bodies"])
+    assert all("lon_speed_deg_day" in body for body in ephemeris["bodies"])
+    assert all("is_retrograde" in body for body in ephemeris["bodies"])
+
+
+def test_llm_user_prompt_is_sent_to_llm_context_but_not_saved(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    custom_prompt = "Focus on liquidity disagreement, but stay concise."
+    payload = scenario_payload()
+    payload.update(
+        {
+            "start_date": "2026-06-22",
+            "end_date": "2026-06-22",
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": False,
+            "llm_user_prompt": custom_prompt,
+        }
+    )
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report_json = response.json()
+    assert custom_prompt not in json.dumps(report_json)
+    report = ScenarioReport.model_validate(report_json)
+    context = build_llm_context(report, user_prompt=custom_prompt)
+    assert context["user_prompt"]["text"] == custom_prompt
+    messages = build_messages(context)
+    assert custom_prompt in messages[1]["content"]
+    assert "lower priority than system safety rules" in messages[1]["content"]
 
 
 def test_default_report_language_is_english(monkeypatch, tmp_path: Path) -> None:

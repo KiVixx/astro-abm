@@ -192,6 +192,7 @@ export interface ScenarioCreateRequest {
   llm_base_url?: string | null;
   llm_model?: string | null;
   llm_api_key?: string | null;
+  llm_user_prompt?: string | null;
   llm_timeout_seconds?: number | null;
   llm_max_output_tokens?: number | null;
   visibility: Visibility;
@@ -205,6 +206,7 @@ export interface ScenarioLlmChunkRequest {
   llm_base_url?: string | null;
   llm_model?: string | null;
   llm_api_key?: string | null;
+  llm_user_prompt?: string | null;
   llm_timeout_seconds?: number | null;
   llm_max_output_tokens?: number | null;
   language?: ReportLanguage;

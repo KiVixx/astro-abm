@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +10,35 @@ from astro_abm_api.models.report import DailyDataCoverage, DailyResearchSignals
 
 
 RESEARCH_OUTPUT_ROOT_ENV = "ASTRO_ABM_RESEARCH_OUTPUT_ROOT"
+EPHEMERIS_BODIES = (
+    "Sun",
+    "Moon",
+    "Mercury",
+    "Venus",
+    "Mars",
+    "Jupiter",
+    "Saturn",
+    "Uranus",
+    "Neptune",
+    "Pluto",
+)
+RETROGRADE_BODIES = (
+    "Mercury",
+    "Venus",
+    "Mars",
+    "Jupiter",
+    "Saturn",
+    "Uranus",
+    "Neptune",
+    "Pluto",
+)
+MAJOR_ASPECTS = {
+    "conjunction": 0,
+    "sextile": 60,
+    "square": 90,
+    "trine": 120,
+    "opposition": 180,
+}
 
 
 @dataclass(frozen=True)
@@ -52,6 +81,13 @@ class DailyResearchContextProvider:
         fallback_astro_activity: str,
     ) -> DailyResearchContext:
         astro = self._row_for_day("astro_daily", current_date)
+        if astro is None:
+            astro = self._computed_ephemeris_row(current_date)
+        astro_source = (
+            "computed_ephemeris"
+            if astro and astro.get("_computed_ephemeris")
+            else "local_snapshot"
+        )
         stress = self._row_for_day("financial_stress_daily", current_date)
         market = [
             row
@@ -87,7 +123,10 @@ class DailyResearchContextProvider:
 
         if astro:
             astro_activity = _astro_activity_from_features(astro, astro_activity)
-            notes.append("astro_daily_features local snapshot used for astro activity tags")
+            if astro_source == "computed_ephemeris":
+                notes.append("computed Swiss Ephemeris daily astro context used for astro activity tags")
+            else:
+                notes.append("astro_daily_features local snapshot used for astro activity tags")
 
         if market:
             volatility_regime = _volatility_regime_from_market(market, volatility_regime)
@@ -104,11 +143,18 @@ class DailyResearchContextProvider:
         ]
         available_count = coverage_values.count("available")
         if available_count:
-            coverage.source = "local_research_snapshot"
+            if astro_source == "computed_ephemeris" and available_count == 1:
+                coverage.source = "computed_ephemeris"
+            elif astro_source == "computed_ephemeris":
+                coverage.source = "mixed_computed_research"
+            else:
+                coverage.source = "local_research_snapshot"
         coverage.notes = notes + self._coverage_notes(coverage)
 
         data_quality = "placeholder_fallback"
-        if available_count == 4:
+        if astro_source == "computed_ephemeris" and available_count == 1:
+            data_quality = "computed_ephemeris_available"
+        elif available_count == 4:
             data_quality = "local_research_available"
         elif available_count:
             data_quality = "partial_local_research_available"
@@ -219,6 +265,27 @@ class DailyResearchContextProvider:
             return pd.read_parquet(path)
         return pd.read_csv(path)
 
+    def _computed_ephemeris_row(self, current_date: date) -> dict[str, Any] | None:
+        """Compute a light-weight daily astro row when snapshots do not cover a date.
+
+        This is intentionally limited to deterministic ephemeris-derived context.
+        It never fetches external data and it does not try to synthesize observed
+        market, macro, or financial-stress data.
+        """
+        cache_key = f"computed_astro:{current_date.isoformat()}"
+        cached = self._tables.get(cache_key)
+        if isinstance(cached, dict):
+            return cached
+        if cached is False:
+            return None
+        try:
+            row = compute_daily_ephemeris_context(current_date)
+        except Exception:
+            self._tables[cache_key] = False
+            return None
+        self._tables[cache_key] = row
+        return row
+
     def _table_path(self, table_name: str) -> Path | None:
         candidates = {
             "astro_daily": (
@@ -306,3 +373,157 @@ def _astro_activity_from_features(row: dict[str, Any], fallback: str) -> str:
     if active_retrograde >= 1 or station_cluster >= 1 or aspect_cluster >= 1:
         return "medium"
     return fallback if fallback != "unknown" else "low"
+
+
+def compute_daily_ephemeris_context(current_date: date) -> dict[str, Any]:
+    details = compute_daily_ephemeris_details(current_date)
+    return {
+        "ts": details["sample_time_utc"],
+        "active_retrograde_count": len(details["active_retrograde_bodies"]),
+        "station_cluster_count_7d": len(details["near_station_bodies"]),
+        "major_aspect_cluster_count_7d": len(details["major_aspects"]),
+        "moon_phase_name": details["moon_phase"]["name"],
+        "_computed_ephemeris": True,
+        "_ephemeris_details": details,
+    }
+
+
+def compute_daily_ephemeris_details(current_date: date) -> dict[str, Any]:
+    import swisseph as swe
+
+    body_ids = {
+        "Sun": swe.SUN,
+        "Moon": swe.MOON,
+        "Mercury": swe.MERCURY,
+        "Venus": swe.VENUS,
+        "Mars": swe.MARS,
+        "Jupiter": swe.JUPITER,
+        "Saturn": swe.SATURN,
+        "Uranus": swe.URANUS,
+        "Neptune": swe.NEPTUNE,
+        "Pluto": swe.PLUTO,
+    }
+    ts = datetime(
+        current_date.year,
+        current_date.month,
+        current_date.day,
+        tzinfo=UTC,
+    )
+    _jd_et, jd_ut = swe.utc_to_jd(
+        ts.year,
+        ts.month,
+        ts.day,
+        ts.hour,
+        ts.minute,
+        0,
+        swe.GREG_CAL,
+    )
+    positions: dict[str, dict[str, float | bool]] = {}
+    flags = swe.FLG_SWIEPH | swe.FLG_SPEED
+    for body in EPHEMERIS_BODIES:
+        body_id = body_ids[body]
+        xx, _ = swe.calc_ut(jd_ut, body_id, flags)
+        lon = float(xx[0]) % 360
+        speed = float(xx[3])
+        positions[body] = {
+            "lon_deg": round(lon, 4),
+            "lon_speed_deg_day": round(speed, 6),
+            "is_retrograde": speed < 0,
+        }
+
+    sun_lon = float(positions["Sun"]["lon_deg"])
+    moon_lon = float(positions["Moon"]["lon_deg"])
+    elongation = (moon_lon - sun_lon) % 360
+    active_retrograde_bodies = [
+        body for body in RETROGRADE_BODIES if bool(positions[body]["is_retrograde"])
+    ]
+    near_station_bodies = [
+        body
+        for body in RETROGRADE_BODIES
+        if abs(float(positions[body]["lon_speed_deg_day"])) <= _station_speed_threshold(body)
+    ]
+    return {
+        "source": "computed_swiss_ephemeris",
+        "sample_time_utc": ts.isoformat().replace("+00:00", "Z"),
+        "coordinate_system": "geocentric_tropical_ecliptic",
+        "bodies": [
+            {
+                "body": body,
+                "lon_deg": positions[body]["lon_deg"],
+                "lon_speed_deg_day": positions[body]["lon_speed_deg_day"],
+                "is_retrograde": positions[body]["is_retrograde"],
+            }
+            for body in EPHEMERIS_BODIES
+        ],
+        "moon_phase": {
+            "name": _computed_moon_phase_name(sun_lon, moon_lon),
+            "elongation_deg": round(elongation, 4),
+        },
+        "active_retrograde_bodies": active_retrograde_bodies,
+        "near_station_bodies": near_station_bodies,
+        "major_aspects": _computed_major_aspects(positions),
+        "notes": [
+            "Computed locally with Swiss Ephemeris at UTC midnight.",
+            "This is astronomy/ephemeris context only, not observed market data.",
+        ],
+    }
+
+
+def _station_speed_threshold(body: str) -> float:
+    return {
+        "Mercury": 0.18,
+        "Venus": 0.08,
+        "Mars": 0.06,
+        "Jupiter": 0.025,
+        "Saturn": 0.018,
+        "Uranus": 0.01,
+        "Neptune": 0.006,
+        "Pluto": 0.006,
+    }.get(body, 0.02)
+
+
+def _computed_major_aspect_count(positions: dict[str, dict[str, float | bool]]) -> int:
+    return len(_computed_major_aspects(positions))
+
+
+def _computed_major_aspects(
+    positions: dict[str, dict[str, float | bool]],
+) -> list[dict[str, Any]]:
+    bodies = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn")
+    aspects: list[dict[str, Any]] = []
+    for index, left in enumerate(bodies):
+        for right in bodies[index + 1 :]:
+            distance = _angular_distance(
+                float(positions[left]["lon_deg"]),
+                float(positions[right]["lon_deg"]),
+            )
+            for aspect_name, aspect_deg in MAJOR_ASPECTS.items():
+                orb = abs(distance - aspect_deg)
+                if orb <= 2.0:
+                    aspects.append(
+                        {
+                            "body_a": left,
+                            "body_b": right,
+                            "aspect_name": aspect_name,
+                            "aspect_deg": aspect_deg,
+                            "angle_deg": round(distance, 4),
+                            "orb_deg": round(orb, 4),
+                        }
+                    )
+    return sorted(aspects, key=lambda item: (float(item["orb_deg"]), item["body_a"], item["body_b"]))[:12]
+
+
+def _computed_moon_phase_name(sun_lon: float, moon_lon: float) -> str:
+    elongation = (moon_lon - sun_lon) % 360
+    if elongation < 45 or elongation >= 315:
+        return "NewMoonZone"
+    if elongation < 135:
+        return "FirstQuarterZone"
+    if elongation < 225:
+        return "FullMoonZone"
+    return "LastQuarterZone"
+
+
+def _angular_distance(left: float, right: float) -> float:
+    diff = abs((left - right) % 360)
+    return min(diff, 360 - diff)

@@ -54,6 +54,7 @@ export async function createScenarioAction(formData: FormData): Promise<void> {
     llm_base_url: optionalString(getString(formData, "llm_base_url")),
     llm_model: optionalString(getString(formData, "llm_model")),
     llm_api_key: optionalString(getString(formData, "llm_api_key")),
+    llm_user_prompt: optionalString(getString(formData, "llm_user_prompt")),
     llm_timeout_seconds: optionalNumber(getString(formData, "llm_timeout_seconds")),
     llm_max_output_tokens: optionalNumber(getString(formData, "llm_max_output_tokens")),
     visibility: visibility || "private",

@@ -11,6 +11,7 @@ interface AssetSelectorProps {
 
 export function AssetSelector({ marketSeries }: AssetSelectorProps) {
   const { t } = useI18n();
+  const allAssetIds = marketSeries.map((series) => series.asset);
   const defaultSelection = marketSeries
     .map((series) => series.asset)
     .filter((asset) => asset === "BTC" || asset === "ETH");
@@ -31,6 +32,14 @@ export function AssetSelector({ marketSeries }: AssetSelectorProps) {
     setSelectedAssets((currentAssets) =>
       currentAssets.filter((currentAsset) => currentAsset !== asset),
     );
+  };
+
+  const selectAllAssets = () => {
+    setSelectedAssets(allAssetIds);
+  };
+
+  const clearAssets = () => {
+    setSelectedAssets([]);
   };
 
   return (
@@ -59,6 +68,24 @@ export function AssetSelector({ marketSeries }: AssetSelectorProps) {
       </div>
       <details className="asset-picker-menu">
         <summary>{t("scenarioCreate.selectMarketSeries")}</summary>
+        <div className="button-row asset-picker-actions">
+          <button
+            className="button secondary"
+            disabled={selectedAssets.length === marketSeries.length}
+            onClick={selectAllAssets}
+            type="button"
+          >
+            {t("scenarioCreate.selectAllMarketSeries")}
+          </button>
+          <button
+            className="button secondary"
+            disabled={!selectedAssets.length}
+            onClick={clearAssets}
+            type="button"
+          >
+            {t("scenarioCreate.clearMarketSeries")}
+          </button>
+        </div>
         <div className="asset-picker-options">
           {marketSeries.map((series) => (
             <label className="asset-picker-option" key={series.asset}>

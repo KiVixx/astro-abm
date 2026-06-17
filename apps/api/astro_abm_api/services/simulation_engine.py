@@ -488,12 +488,14 @@ def coverage_summary_notes(language: ReportLanguage) -> list[str]:
     if language == "zh-Hant":
         return [
             "local_research_snapshot 表示當天可使用只讀本地研究脈絡。",
+            "computed_ephemeris 表示當天星曆由本機 Swiss Ephemeris 即時計算，不代表市場觀測資料可用。",
             "future_placeholder 表示未來日期尚無已觀測市場或壓力資料。",
             "coverage summary 只描述資料覆蓋，不代表逐點回測。",
             "資產覆蓋為保守估算，因為每日快照目前只保存情境資產與 market_daily 整體狀態。",
         ]
     return [
         "local_research_snapshot indicates read-only local research context was available for that day.",
+        "computed_ephemeris indicates local Swiss Ephemeris calculations were used for astro context; it does not imply observed market data is available.",
         "future_placeholder indicates no observed market/stress data is available for future dates.",
         "coverage summary is descriptive only and is not a point-in-time backtest.",
         "Asset coverage is conservative because daily snapshots currently store scenario assets and overall market_daily status, not a full per-asset audit.",

@@ -38,6 +38,7 @@ interface LlmSettingsPreset {
   callDelaySeconds: string;
   timeoutSeconds: string;
   maxOutputTokens: string;
+  userPrompt: string;
   apiKey?: string | null;
 }
 
@@ -163,6 +164,7 @@ export function ScenarioForm({
           llm_base_url: payload.llm_base_url,
           llm_model: payload.llm_model,
           llm_api_key: payload.llm_api_key,
+          llm_user_prompt: payload.llm_user_prompt,
           llm_timeout_seconds: payload.llm_timeout_seconds,
           llm_max_output_tokens: payload.llm_max_output_tokens,
           language: payload.language,
@@ -395,6 +397,15 @@ export function ScenarioForm({
             type="password"
           />
         </label>
+        <label className="form-field full">
+          <span>{t("scenarioCreate.llmUserPrompt")}</span>
+          <textarea
+            name="llm_user_prompt"
+            placeholder={t("scenarioCreate.llmUserPromptPlaceholder")}
+            rows={5}
+          />
+          <span className="muted">{t("scenarioCreate.llmUserPromptHelp")}</span>
+        </label>
         <section className="llm-preset-panel full">
           <div>
             <h3>{t("scenarioCreate.llmPresetTitle")}</h3>
@@ -509,6 +520,7 @@ function payloadFromFormData(formData: FormData): ScenarioCreateRequest {
     llm_base_url: optionalString(getString(formData, "llm_base_url")),
     llm_model: optionalString(getString(formData, "llm_model")),
     llm_api_key: optionalString(getString(formData, "llm_api_key")),
+    llm_user_prompt: optionalString(getString(formData, "llm_user_prompt")),
     llm_timeout_seconds: optionalNumber(getString(formData, "llm_timeout_seconds")),
     llm_max_output_tokens: optionalNumber(getString(formData, "llm_max_output_tokens")),
     visibility: (getString(formData, "visibility") || "private") as Visibility,
@@ -632,6 +644,7 @@ function readLlmPresetFromForm(
       String(DEFAULT_LLM_CALL_DELAY_SECONDS),
     timeoutSeconds: getString(formData, "llm_timeout_seconds") || "120",
     maxOutputTokens: getString(formData, "llm_max_output_tokens") || "5000",
+    userPrompt: getString(formData, "llm_user_prompt"),
     apiKey: includeApiKey ? getString(formData, "llm_api_key") : null,
   };
 }
@@ -649,6 +662,7 @@ function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmSettingsPreset) 
   );
   setFormValue(form, "llm_timeout_seconds", preset.timeoutSeconds);
   setFormValue(form, "llm_max_output_tokens", preset.maxOutputTokens);
+  setFormValue(form, "llm_user_prompt", preset.userPrompt || "");
   setFormValue(form, "llm_api_key", preset.apiKey || "");
 }
 
@@ -687,6 +701,7 @@ function isLlmSettingsPreset(value: unknown): value is LlmSettingsPreset {
     (preset.callDelaySeconds === undefined || typeof preset.callDelaySeconds === "string") &&
     typeof preset.timeoutSeconds === "string" &&
     typeof preset.maxOutputTokens === "string" &&
+    (preset.userPrompt === undefined || typeof preset.userPrompt === "string") &&
     (preset.apiKey === undefined ||
       preset.apiKey === null ||
       typeof preset.apiKey === "string")

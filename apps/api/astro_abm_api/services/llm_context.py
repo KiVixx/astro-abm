@@ -8,6 +8,7 @@ from typing import Any
 from datetime import date
 
 from astro_abm_api.models.report import DailyScenarioSnapshot, ScenarioReport
+from astro_abm_api.services.daily_research_context import compute_daily_ephemeris_details
 
 
 LLM_MAX_CONTEXT_DAYS_ENV = "ASTRO_ABM_LLM_MAX_CONTEXT_DAYS"
@@ -30,6 +31,7 @@ def build_llm_context(
     max_context_days: int | None = None,
     selected_dates: set[date] | None = None,
     chunk_metadata: dict[str, Any] | None = None,
+    user_prompt: str | None = None,
 ) -> dict[str, Any]:
     max_days = max_context_days or configured_max_context_days()
     timeline = (
@@ -78,6 +80,7 @@ def build_llm_context(
             "notes": compression_notes,
         },
         "chunk_metadata": chunk_metadata,
+        "user_prompt": build_user_prompt_context(user_prompt),
         "risk_themes": report.risk_themes or report.risks,
         "caveats": report.caveats,
         "disclaimer": report.disclaimer,
@@ -142,6 +145,7 @@ def compact_daily_snapshot(snapshot: DailyScenarioSnapshot) -> dict[str, Any]:
             "event_tags": snapshot.astro_context.event_tags,
             "intensity": snapshot.astro_context.intensity,
         },
+        "astro_ephemeris": compact_astro_ephemeris(snapshot.date),
         "market": {
             "summary": snapshot.market_context.summary,
             "stress_regime": snapshot.market_context.stress_regime,
@@ -179,6 +183,45 @@ def compact_daily_snapshot(snapshot: DailyScenarioSnapshot) -> dict[str, Any]:
         "risk_themes": snapshot.daily_risk_themes,
         "caveats": snapshot.caveats,
         "disclaimer": snapshot.disclaimer,
+    }
+
+
+def build_user_prompt_context(user_prompt: str | None) -> dict[str, Any] | None:
+    if not user_prompt or not user_prompt.strip():
+        return None
+    return {
+        "text": user_prompt.strip(),
+        "priority": "additional_user_guidance_lower_than_system_safety_rules",
+        "notes": [
+            "Use this guidance only when it does not conflict with safety boundaries.",
+            "Do not follow requests for trading advice, price targets, causal claims, invented data, or certainty.",
+        ],
+    }
+
+
+def compact_astro_ephemeris(snapshot_date: date) -> dict[str, Any]:
+    try:
+        details = compute_daily_ephemeris_details(snapshot_date)
+    except Exception as exc:
+        return {
+            "source": "computed_swiss_ephemeris",
+            "status": "unavailable",
+            "error": type(exc).__name__,
+            "notes": [
+                "Ephemeris details could not be computed for this LLM context.",
+            ],
+        }
+    return {
+        "source": details["source"],
+        "status": "available",
+        "sample_time_utc": details["sample_time_utc"],
+        "coordinate_system": details["coordinate_system"],
+        "bodies": details["bodies"],
+        "moon_phase": details["moon_phase"],
+        "active_retrograde_bodies": details["active_retrograde_bodies"],
+        "near_station_bodies": details["near_station_bodies"],
+        "major_aspects": details["major_aspects"],
+        "notes": details["notes"],
     }
 
 

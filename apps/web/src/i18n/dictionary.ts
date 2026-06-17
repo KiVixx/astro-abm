@@ -88,6 +88,8 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.selectedMarketSeries": "Selected market series",
     "scenarioCreate.noMarketSeriesSelected": "No market series selected",
     "scenarioCreate.removeMarketSeries": "Remove market series",
+    "scenarioCreate.selectAllMarketSeries": "Select all",
+    "scenarioCreate.clearMarketSeries": "Clear",
     "scenarioCreate.marketSeriesSelectorHelp":
       "Supported daily series are loaded from the API. These are market series with backend daily market data.",
     "scenarioCreate.customAssetsDisabled":
@@ -120,6 +122,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.llmMaxOutputTokens": "LLM max output tokens",
     "scenarioCreate.llmApiKey": "LLM API key",
     "scenarioCreate.llmApiKeyPlaceholder": "Optional; leave blank for local providers",
+    "scenarioCreate.llmUserPrompt": "Additional LLM prompt",
+    "scenarioCreate.llmUserPromptPlaceholder":
+      "Example: Focus on liquidity and agent disagreement. Keep the tone concise.",
+    "scenarioCreate.llmUserPromptHelp":
+      "Optional guidance sent before each LLM call. It cannot override safety rules, provided data, or the no-trading-advice boundary.",
     "scenarioCreate.llmApiKeyNote":
       "API keys can be supplied here for this request or configured in the backend environment. They are never saved in scenario reports.",
     "scenarioCreate.realLlmEnablementNote":
@@ -360,10 +367,13 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "value.dataQuality.lowResearchContextConfidence": "Low research context confidence",
     "value.dataQuality.lowAssociationConfidence": "Low association confidence",
     "value.dataQuality.lowPlaceholderConfidence": "Low placeholder confidence",
+    "value.dataQuality.computedEphemerisAvailable": "Computed ephemeris available",
     "value.dataQuality.placeholderFallback": "Placeholder fallback",
     "value.dataQuality.futurePlaceholder": "Future placeholder",
     "value.dataQuality.legacyReport": "Legacy report",
     "value.dataSource.localResearchSnapshot": "Local research snapshot",
+    "value.dataSource.computedEphemeris": "Computed ephemeris",
+    "value.dataSource.mixedComputedResearch": "Mixed computed/research context",
     "value.dataSource.placeholderFallback": "Placeholder fallback",
     "value.dataSource.futurePlaceholder": "Future placeholder",
     "value.dataSource.legacyReport": "Legacy report",
@@ -467,6 +477,8 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.selectedMarketSeries": "已選市場序列",
     "scenarioCreate.noMarketSeriesSelected": "尚未選擇市場序列",
     "scenarioCreate.removeMarketSeries": "移除市場序列",
+    "scenarioCreate.selectAllMarketSeries": "全選",
+    "scenarioCreate.clearMarketSeries": "清空",
     "scenarioCreate.marketSeriesSelectorHelp":
       "支援的日線序列由 API 載入；這些是後端已有日線市場資料的市場序列。",
     "scenarioCreate.customAssetsDisabled": "自訂資產會在本地日線資料可用後再開放。",
@@ -498,6 +510,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.llmMaxOutputTokens": "LLM 最大輸出 tokens",
     "scenarioCreate.llmApiKey": "LLM API key",
     "scenarioCreate.llmApiKeyPlaceholder": "可選；本地模型通常可留空",
+    "scenarioCreate.llmUserPrompt": "附加 LLM Prompt",
+    "scenarioCreate.llmUserPromptPlaceholder":
+      "例如：重點分析流動性與不同代理群體之間的分歧，語氣保持精簡。",
+    "scenarioCreate.llmUserPromptHelp":
+      "可選；每次 LLM 呼叫前都會送出。它不能覆蓋安全規則、已提供資料或禁止交易建議的邊界。",
     "scenarioCreate.llmApiKeyNote":
       "API key 可以在這次請求中填入，或放在後端環境變數；它永遠不會保存到情境報告。",
     "scenarioCreate.realLlmEnablementNote":
@@ -731,10 +748,13 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "value.dataQuality.lowResearchContextConfidence": "低研究脈絡信心",
     "value.dataQuality.lowAssociationConfidence": "低相關性信心",
     "value.dataQuality.lowPlaceholderConfidence": "低佔位信心",
+    "value.dataQuality.computedEphemerisAvailable": "可計算星曆資料可用",
     "value.dataQuality.placeholderFallback": "佔位資料回退",
     "value.dataQuality.futurePlaceholder": "未來佔位資料",
     "value.dataQuality.legacyReport": "舊版報告",
     "value.dataSource.localResearchSnapshot": "本地研究快照",
+    "value.dataSource.computedEphemeris": "本機計算星曆",
+    "value.dataSource.mixedComputedResearch": "混合計算星曆與研究脈絡",
     "value.dataSource.placeholderFallback": "佔位資料回退",
     "value.dataSource.futurePlaceholder": "未來佔位資料",
     "value.dataSource.legacyReport": "舊版報告",
