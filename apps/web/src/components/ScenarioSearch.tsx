@@ -2,18 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { ScenarioCard } from "./ScenarioCard";
+import { deleteScenario } from "@/lib/api";
 import type { ScenarioSummary } from "@/lib/types";
 import { useI18n } from "@/i18n/useI18n";
 
 export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) {
   const { t } = useI18n();
+  const [scenarioItems, setScenarioItems] = useState(scenarios);
+  const [deletingScenarioId, setDeletingScenarioId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredScenarios = useMemo(() => {
     if (!normalizedQuery) {
-      return scenarios;
+      return scenarioItems;
     }
-    return scenarios.filter((scenario) => {
+    return scenarioItems.filter((scenario) => {
       const haystack = [
         scenario.title,
         scenario.description || "",
@@ -25,7 +28,31 @@ export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) 
         .toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [normalizedQuery, scenarios]);
+  }, [normalizedQuery, scenarioItems]);
+
+  const confirmAndDelete = async (scenario: ScenarioSummary) => {
+    const confirmed = window.confirm(
+      `${t("scenarios.deleteConfirm")}\n\n${scenario.title}`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingScenarioId(scenario.scenario_id);
+    try {
+      await deleteScenario(scenario.scenario_id);
+      setScenarioItems((items) =>
+        items.filter((item) => item.scenario_id !== scenario.scenario_id),
+      );
+    } catch (error) {
+      window.alert(
+        `${t("scenarios.deleteFailed")}: ${
+          error instanceof Error ? error.message : t("common.unknownError")
+        }`,
+      );
+    } finally {
+      setDeletingScenarioId(null);
+    }
+  };
 
   return (
     <section className="stack">
@@ -40,7 +67,12 @@ export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) 
       <div className="stack">
         {filteredScenarios.length ? (
           filteredScenarios.map((scenario) => (
-            <ScenarioCard key={scenario.scenario_id} scenario={scenario} />
+            <ScenarioCard
+              isDeleting={deletingScenarioId === scenario.scenario_id}
+              key={scenario.scenario_id}
+              onDelete={confirmAndDelete}
+              scenario={scenario}
+            />
           ))
         ) : (
           <div className="notice">{t("scenarios.noMatches")}</div>

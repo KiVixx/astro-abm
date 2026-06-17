@@ -64,6 +64,17 @@ button:disabled:hover {
   color: var(--accent-dark);
 }
 
+.button.danger {
+  background: #fff;
+  border-color: #b95b5b;
+  color: #8f2f2f;
+}
+
+.button.danger:hover {
+  background: #8f2f2f;
+  color: #fff;
+}
+
 input,
 select,
 textarea {
@@ -342,6 +353,17 @@ pre {
 .card h2,
 .card h3 {
   margin: 0 0 8px;
+}
+
+.scenario-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.scenario-card-header h3 {
+  margin: 0;
 }
 
 .muted {

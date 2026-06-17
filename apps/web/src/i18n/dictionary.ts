@@ -72,6 +72,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarios.searchLabel": "Search by title, asset, agent, or visibility",
     "scenarios.searchPlaceholder": "BTC, Macro Allocator, private...",
     "scenarios.noMatches": "No scenarios match the current search.",
+    "scenarios.delete": "Delete",
+    "scenarios.deleting": "Deleting...",
+    "scenarios.deleteConfirm": "Delete this scenario? This will remove the local JSON and Markdown report.",
+    "scenarios.deleteFailed": "Failed to delete scenario",
 
     "scenarioCreate.title": "Create scenario",
     "scenarioCreate.lead":
@@ -465,6 +469,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarios.searchLabel": "按標題、資產、代理群體或可見性搜尋",
     "scenarios.searchPlaceholder": "BTC、宏觀配置者、private...",
     "scenarios.noMatches": "沒有符合目前搜尋條件的情境。",
+    "scenarios.delete": "刪除",
+    "scenarios.deleting": "刪除中...",
+    "scenarios.deleteConfirm": "確定要刪除此情境嗎？這會移除本地 JSON 和 Markdown 報告。",
+    "scenarios.deleteFailed": "刪除情境失敗",
 
     "scenarioCreate.title": "建立情境",
     "scenarioCreate.lead": "透過 FastAPI 產品 API 生成本地 mock 情境報告。",

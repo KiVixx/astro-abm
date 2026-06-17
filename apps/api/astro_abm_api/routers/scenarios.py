@@ -37,6 +37,17 @@ def get_scenario(scenario_id: str) -> ScenarioReport:
         raise HTTPException(status_code=404, detail="scenario not found") from exc
 
 
+@router.delete("/scenarios/{scenario_id}")
+def delete_scenario(scenario_id: str) -> dict[str, object]:
+    try:
+        ScenarioStore().delete(scenario_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ScenarioNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="scenario not found") from exc
+    return {"scenario_id": scenario_id, "deleted": True}
+
+
 @router.post("/scenarios", response_model=ScenarioReport)
 def create_scenario(request: ScenarioCreateRequest) -> ScenarioReport:
     agents, unknown = resolve_agents(request.agent_ids)

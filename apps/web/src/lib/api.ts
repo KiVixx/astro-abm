@@ -66,6 +66,15 @@ export async function getScenario(scenarioId: string): Promise<ScenarioReport> {
   return apiFetch<ScenarioReport>(`/scenarios/${encodeURIComponent(scenarioId)}`);
 }
 
+export async function deleteScenario(
+  scenarioId: string,
+): Promise<{ scenario_id: string; deleted: boolean }> {
+  return apiFetch<{ scenario_id: string; deleted: boolean }>(
+    `/scenarios/${encodeURIComponent(scenarioId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function createScenario(
   payload: ScenarioCreateRequest,
 ): Promise<ScenarioReport> {

@@ -159,6 +159,39 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert get_response.json()["scenario_id"] == scenario_id
 
 
+def test_delete_scenario_removes_saved_json_and_markdown(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+    json_path = tmp_path / f"{scenario_id}.json"
+    markdown_path = tmp_path / f"{scenario_id}.md"
+    assert json_path.exists()
+    assert markdown_path.exists()
+
+    delete_response = client.delete(f"/scenarios/{scenario_id}")
+
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"scenario_id": scenario_id, "deleted": True}
+    assert not json_path.exists()
+    assert not markdown_path.exists()
+    assert client.get(f"/scenarios/{scenario_id}").status_code == 404
+    assert client.get("/scenarios").json() == []
+
+
+def test_delete_missing_scenario_returns_404(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+
+    response = client.delete("/scenarios/missing_scenario")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "scenario not found"
+
+
 def test_future_date_uses_computed_ephemeris_without_market_observations(
     monkeypatch, tmp_path: Path
 ) -> None:
