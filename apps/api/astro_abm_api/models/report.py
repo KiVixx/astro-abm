@@ -147,6 +147,17 @@ class LlmAgentInterpretation(BaseModel):
     caveats: list[str] = Field(default_factory=list)
 
 
+class LlmAssetStressIndicator(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    asset: str
+    sentiment_stress_support: float = Field(ge=0, le=100)
+    label: str
+    rationale: str
+    caveats: list[str] = Field(default_factory=list)
+
+
 class LlmReportProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -172,6 +183,7 @@ class LlmScenarioReport(BaseModel):
     scenario_reading: str
     daily_highlights: list[LlmDailyHighlight] = Field(default_factory=list)
     agent_interpretations: list[LlmAgentInterpretation] = Field(default_factory=list)
+    asset_stress_indicators: list[LlmAssetStressIndicator] = Field(default_factory=list)
     risk_themes: list[str] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
     disclaimer: str

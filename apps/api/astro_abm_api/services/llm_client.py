@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from astro_abm_api.models.llm import LLMProvider, LLMTestRequest, LLMTestResponse
 from astro_abm_api.models.report import (
     LlmAgentInterpretation,
+    LlmAssetStressIndicator,
     LlmDailyHighlight,
     LlmReportProvenance,
     LlmScenarioReport,
@@ -210,6 +211,7 @@ def generate_llm_scenario_report(
                 "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
                 "daily_highlights": [],
                 "agent_interpretations": [],
+                "asset_stress_indicators": [],
                 "risk_themes": [],
                 "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
             }
@@ -335,6 +337,7 @@ def generate_llm_scenario_report_chunk(
                 "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
                 "daily_highlights": [],
                 "agent_interpretations": [],
+                "asset_stress_indicators": [],
                 "risk_themes": [],
                 "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
             }
@@ -373,6 +376,12 @@ def merge_llm_report_chunk(
     }
     for item in chunk.agent_interpretations:
         agent_by_id.setdefault(item.agent_id, item)
+    indicators_by_key = {
+        (item.date.isoformat(), item.asset): item
+        for item in existing.asset_stress_indicators
+    }
+    for item in chunk.asset_stress_indicators:
+        indicators_by_key[(item.date.isoformat(), item.asset)] = item
 
     return existing.model_copy(
         update={
@@ -384,6 +393,9 @@ def merge_llm_report_chunk(
                 highlights_by_date[key] for key in sorted(highlights_by_date)
             ],
             "agent_interpretations": list(agent_by_id.values()),
+            "asset_stress_indicators": [
+                indicators_by_key[key] for key in sorted(indicators_by_key)
+            ],
             "risk_themes": _merge_string_lists(existing.risk_themes, chunk.risk_themes),
             "caveats": _merge_string_lists(existing.caveats, chunk.caveats),
             "raw_text_preview": chunk.raw_text_preview,
@@ -555,6 +567,9 @@ def build_report_from_payload(
         agent_interpretations=_agent_interpretations_from_payload(
             payload.get("agent_interpretations", [])
         ),
+        asset_stress_indicators=_asset_stress_indicators_from_payload(
+            payload.get("asset_stress_indicators", [])
+        ),
         risk_themes=_string_list(payload.get("risk_themes", [])),
         caveats=_string_list(payload.get("caveats", [])),
         disclaimer=str(payload.get("disclaimer") or _default_disclaimer(language)),
@@ -676,6 +691,60 @@ def _agent_interpretations_from_payload(value: Any) -> list[LlmAgentInterpretati
         except ValueError:
             continue
     return interpretations
+
+
+def _asset_stress_indicators_from_payload(value: Any) -> list[LlmAssetStressIndicator]:
+    indicators: list[LlmAssetStressIndicator] = []
+    if not isinstance(value, list):
+        return indicators
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        score = _stress_support_score(item)
+        if score is None:
+            continue
+        normalized = {
+            "date": item.get("date"),
+            "asset": str(item.get("asset") or "").strip().upper(),
+            "sentiment_stress_support": score,
+            "label": _stress_support_label(str(item.get("label") or ""), score),
+            "rationale": str(item.get("rationale") or ""),
+            "caveats": _string_list(item.get("caveats", [])),
+        }
+        try:
+            indicators.append(LlmAssetStressIndicator.model_validate(normalized))
+        except ValueError:
+            continue
+    return indicators
+
+
+def _stress_support_score(item: dict[str, Any]) -> float | None:
+    candidates = (
+        item.get("sentiment_stress_support"),
+        item.get("stress_support"),
+        item.get("value"),
+        item.get("score"),
+    )
+    for candidate in candidates:
+        if isinstance(candidate, (int, float)):
+            return max(0.0, min(100.0, float(candidate)))
+        if isinstance(candidate, str) and candidate.strip():
+            try:
+                return max(0.0, min(100.0, float(candidate)))
+            except ValueError:
+                continue
+    return None
+
+
+def _stress_support_label(value: str, score: float) -> str:
+    label = value.strip().lower().replace(" ", "_").replace("-", "_")
+    if label in {"low_support", "mid_support", "high_support"}:
+        return label
+    if score <= 35:
+        return "low_support"
+    if score >= 66:
+        return "high_support"
+    return "mid_support"
 
 
 def _string_list(value: Any) -> list[str]:

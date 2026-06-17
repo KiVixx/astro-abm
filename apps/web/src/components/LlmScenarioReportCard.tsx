@@ -76,9 +76,13 @@ export function LlmScenarioReportCard({
     );
   }
 
+  const containerClass = compact
+    ? "nested-panel stack llm-report-card"
+    : "card stack llm-report-card";
+
   return (
-    <section className={compact ? "nested-panel stack" : "card stack"}>
-      <div>
+    <details className={containerClass}>
+      <summary className="llm-report-summary">
         <h2>{t("llm.title")}</h2>
         <div className="tag-row">
           <span className="tag">
@@ -96,10 +100,11 @@ export function LlmScenarioReportCard({
             {llmReport.provenance.network_call_performed ? "true" : "false"}
           </span>
         </div>
-      </div>
+      </summary>
 
-      {llmReport.status === "completed" ? (
-        <>
+      <div className="llm-report-body stack">
+        {llmReport.status === "completed" ? (
+          <>
           <div>
             <h3>{t("llm.executiveSummary")}</h3>
             <p>{llmReport.executive_summary}</p>
@@ -145,6 +150,27 @@ export function LlmScenarioReportCard({
                   ))}
                 </div>
               </div>
+              <div>
+                <h3>{t("llm.assetStressIndicators")}</h3>
+                <div className="stack">
+                  {(llmReport.asset_stress_indicators || []).slice(0, 12).map((indicator) => (
+                    <div
+                      className="nested-panel"
+                      key={`${indicator.date}-${indicator.asset}`}
+                    >
+                      <strong>
+                        {indicator.date} · {indicator.asset} ·{" "}
+                        {indicator.sentiment_stress_support.toFixed(1)}
+                      </strong>
+                      <p>{indicator.rationale}</p>
+                      <div className="tag-row">
+                        <span className="tag">{indicator.label}</span>
+                        <span className="tag">{t("workbench.llmMetric")}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </>
           ) : null}
           <div className="grid">
@@ -157,9 +183,9 @@ export function LlmScenarioReportCard({
               <BulletList items={llmReport.caveats} />
             </div>
           </div>
-        </>
-      ) : (
-        <div className="notice">
+          </>
+        ) : (
+          <div className="notice">
           <h3>
             {llmReport.status === "dry_run"
               ? t("llm.dryRun")
@@ -167,12 +193,12 @@ export function LlmScenarioReportCard({
           </h3>
           <p>{llmReport.executive_summary}</p>
           <ScenarioReadingText text={llmReport.scenario_reading} />
-        </div>
-      )}
+          </div>
+        )}
 
-      <details>
-        <summary>{t("llm.provenance")}</summary>
-        <div className="tag-row">
+        <details>
+          <summary>{t("llm.provenance")}</summary>
+          <div className="tag-row">
           <span className="tag">
             {t("llm.outputValidation")}:{" "}
             {llmReport.provenance.output_validation_status}
@@ -188,10 +214,11 @@ export function LlmScenarioReportCard({
             {t("llm.credentialStatus")}:{" "}
             {llmReport.provenance.credential_status}
           </span>
-        </div>
-      </details>
-      <p className="notice">{llmReport.disclaimer}</p>
-    </section>
+          </div>
+        </details>
+        <p className="notice">{llmReport.disclaimer}</p>
+      </div>
+    </details>
   );
 }
 

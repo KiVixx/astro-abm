@@ -245,6 +245,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "llm.scenarioReading": "Scenario reading",
     "llm.dailyHighlights": "Daily highlights",
     "llm.agentInterpretations": "Agent interpretations",
+    "llm.assetStressIndicators": "Asset stress support indicators",
     "llm.riskThemes": "Risk themes",
     "llm.caveats": "Caveats",
     "llm.provenance": "Provenance",
@@ -304,7 +305,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "workbench.scrollRight": "Scroll right",
     "workbench.assetStressSentiment": "Asset Stress Sentiment",
     "workbench.assetStressCurveHelp":
-      "Visualization-only support line by asset. Demo values are deterministic when no numeric metric exists in the saved scenario.",
+      "Visualization-only support line by asset. LLM scenario metrics are used when present; deterministic demo values are used only as fallback.",
     "workbench.assetStressValue": "stress support",
     "workbench.assetStressHigh": "high support",
     "workbench.assetStressMid": "mid",
@@ -313,6 +314,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "workbench.assetStressSelectAssets": "Select assets",
     "workbench.assetStressShowAll": "Show all",
     "workbench.assetStressNoAssetsSelected": "No assets selected",
+    "workbench.llmMetric": "LLM scenario metric",
     "workbench.mockMetric": "demo metric",
     "workbench.timelineMetric": "timeline metric",
 
@@ -630,6 +632,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "llm.scenarioReading": "情境解讀",
     "llm.dailyHighlights": "每日重點",
     "llm.agentInterpretations": "代理解讀",
+    "llm.assetStressIndicators": "資產壓力支撐指標",
     "llm.riskThemes": "風險主題",
     "llm.caveats": "注意事項",
     "llm.provenance": "來源紀錄",
@@ -685,7 +688,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "workbench.scrollRight": "向右滾動",
     "workbench.assetStressSentiment": "資產情緒壓力支撐",
     "workbench.assetStressCurveHelp":
-      "僅作視覺化的資產支撐曲線；若保存情境中沒有數值指標，會使用 deterministic demo 值。",
+      "僅作視覺化的資產支撐曲線；若報告含 LLM 情境指標會優先使用，否則才回退到 deterministic demo 值。",
     "workbench.assetStressValue": "壓力支撐",
     "workbench.assetStressHigh": "高支撐",
     "workbench.assetStressMid": "中位",
@@ -694,6 +697,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "workbench.assetStressSelectAssets": "選擇資產",
     "workbench.assetStressShowAll": "顯示全部",
     "workbench.assetStressNoAssetsSelected": "未選擇資產",
+    "workbench.llmMetric": "LLM 情境指標",
     "workbench.mockMetric": "demo 指標",
     "workbench.timelineMetric": "時間線指標",
 

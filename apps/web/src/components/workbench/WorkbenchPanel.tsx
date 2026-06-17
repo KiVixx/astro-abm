@@ -204,6 +204,12 @@ function ContextNodePanel({ payload }: { payload: ContextNodePayload }) {
 
 function AssetNodePanel({ payload }: { payload: AssetNodePayload }) {
   const { t } = useI18n();
+  const sourceLabel =
+    payload.sentimentStressSource === "llm_scenario_metric"
+      ? t("workbench.llmMetric")
+      : payload.sentimentStressSource === "timeline_metric"
+        ? t("workbench.timelineMetric")
+        : t("workbench.mockMetric");
   return (
     <div className="stack">
       <div>
@@ -216,11 +222,7 @@ function AssetNodePanel({ payload }: { payload: AssetNodePayload }) {
           {t("workbench.assetStressSentiment")}:{" "}
           {payload.sentimentStressSupport.toFixed(1)}
         </span>
-        <span className="tag">
-          {payload.sentimentStressSource === "mock_demo"
-            ? t("workbench.mockMetric")
-            : t("workbench.timelineMetric")}
-        </span>
+        <span className="tag">{sourceLabel}</span>
       </div>
       <p className="notice">
         {t("workbench.assetNotice")}

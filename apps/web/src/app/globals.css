@@ -313,6 +313,32 @@ pre {
   position: absolute;
 }
 
+.llm-report-summary {
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+
+.llm-report-summary::-webkit-details-marker {
+  display: none;
+}
+
+.llm-report-summary h2::before {
+  color: var(--accent);
+  content: "▸ ";
+}
+
+.llm-report-card[open] .llm-report-summary h2::before {
+  content: "▾ ";
+}
+
+.llm-report-body {
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 16px;
+}
+
 .card h2,
 .card h3 {
   margin: 0 0 8px;

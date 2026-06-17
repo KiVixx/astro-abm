@@ -152,6 +152,15 @@ export interface LlmAgentInterpretation {
   caveats: string[];
 }
 
+export interface LlmAssetStressIndicator {
+  date: string;
+  asset: string;
+  sentiment_stress_support: number;
+  label: string;
+  rationale: string;
+  caveats: string[];
+}
+
 export interface LlmReportProvenance {
   provider: string;
   model?: string | null;
@@ -173,6 +182,7 @@ export interface LlmScenarioReport {
   scenario_reading: string;
   daily_highlights: LlmDailyHighlight[];
   agent_interpretations: LlmAgentInterpretation[];
+  asset_stress_indicators?: LlmAssetStressIndicator[];
   risk_themes: string[];
   caveats: string[];
   disclaimer: string;

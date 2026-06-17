@@ -40,6 +40,16 @@ function pathFor(points: ChartPoint[]): string {
     .join(" ");
 }
 
+function sourceLabelKey(source: AssetStressPoint["source"]): string {
+  if (source === "llm_scenario_metric") {
+    return "workbench.llmMetric";
+  }
+  if (source === "timeline_metric") {
+    return "workbench.timelineMetric";
+  }
+  return "workbench.mockMetric";
+}
+
 export function AssetStressSentimentChart({
   series,
   selectedAssets,
@@ -98,9 +108,7 @@ export function AssetStressSentimentChart({
               {t("workbench.assetStressValue")}: {tooltipPoint.displayValue}
             </span>
             <span>
-              {tooltipPoint.source === "mock_demo"
-                ? t("workbench.mockMetric")
-                : t("workbench.timelineMetric")}
+              {t(sourceLabelKey(tooltipPoint.source))}
             </span>
           </div>
         ) : null}

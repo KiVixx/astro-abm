@@ -583,6 +583,16 @@ def test_openai_compatible_mocked_network_parses_valid_json(
                             "caveats": "not financial advice",
                         }
                     ],
+                    "asset_stress_indicators": [
+                        {
+                            "date": "2026-07-01",
+                            "asset": "BTC",
+                            "sentiment_stress_support": 62.5,
+                            "label": "mid_support",
+                            "rationale": "Mixed placeholder context with controlled liquidity.",
+                            "caveats": ["scenario metric only"],
+                        }
+                    ],
                     "risk_themes": ["coverage uncertainty"],
                     "caveats": ["does not invent missing data"],
                     "disclaimer": "association only; scenario rehearsal only; not financial advice; not a trading signal.",
@@ -640,6 +650,12 @@ def test_openai_compatible_mocked_network_parses_valid_json(
     assert report["llm_report"]["agent_interpretations"][0]["risk_focus"] == [
         "coverage quality"
     ]
+    assert report["llm_report"]["asset_stress_indicators"][0]["asset"] == "BTC"
+    assert (
+        report["llm_report"]["asset_stress_indicators"][0]["sentiment_stress_support"]
+        == 62.5
+    )
+    assert "Asset stress support indicators" in report["markdown_report"]
 
 
 def test_llm_chunk_endpoint_merges_and_saves_report(
@@ -671,6 +687,16 @@ def test_llm_chunk_endpoint_merges_and_saves_report(
                                         }
                                     ],
                                     "agent_interpretations": [],
+                                    "asset_stress_indicators": [
+                                        {
+                                            "date": "2026-07-01",
+                                            "asset": "ETH",
+                                            "sentiment_stress_support": 48,
+                                            "label": "mid_support",
+                                            "rationale": "Chunk context remains mixed.",
+                                            "caveats": ["visualization only"],
+                                        }
+                                    ],
                                     "risk_themes": ["chunked context"],
                                     "caveats": ["does not invent missing data"],
                                     "disclaimer": "association only; scenario rehearsal only; not financial advice; not a trading signal.",
@@ -720,6 +746,7 @@ def test_llm_chunk_endpoint_merges_and_saves_report(
     assert "#### 2026-07-01 to 2026-07-03" in body["report"]["llm_report"]["scenario_reading"]
     assert "\nThis chunk reviews only the supplied dates." in body["report"]["llm_report"]["scenario_reading"]
     assert body["report"]["llm_report"]["daily_highlights"][0]["date"] == "2026-07-01"
+    assert body["report"]["llm_report"]["asset_stress_indicators"][0]["asset"] == "ETH"
     assert body["report"]["provenance"]["llm"]["chunked_generation"] is True
     assert calls[0][2]["max_tokens"] == 3000
     assert calls[0][3] == 77

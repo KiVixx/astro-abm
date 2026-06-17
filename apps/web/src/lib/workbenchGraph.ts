@@ -251,7 +251,7 @@ function buildRiskNodes(snapshot: DailyScenarioSnapshot): WorkbenchNode[] {
 function buildAssetNodes(report: ScenarioReport, snapshot: DailyScenarioSnapshot) {
   const assets = snapshot.assets.length ? snapshot.assets : report.assets;
   return assets.map((asset, index) => {
-    const stressPoint = assetStressPointForSnapshot(snapshot, asset, index);
+    const stressPoint = assetStressPointForSnapshot(snapshot, asset, index, report);
     return {
       id: stableId("asset", asset),
       type: "asset" as const,

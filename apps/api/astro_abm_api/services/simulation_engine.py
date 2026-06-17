@@ -630,6 +630,14 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
             )
             for item in llm_report.agent_interpretations
         )
+        indicator_lines = "\n".join(
+            (
+                f"- {item.date.isoformat()} {item.asset}: "
+                f"{item.sentiment_stress_support:.1f} ({item.label}) — "
+                f"{item.rationale}"
+            )
+            for item in llm_report.asset_stress_indicators
+        )
         return f"""- 狀態：{llm_report.status}
 - 提供者：{llm_report.provider}
 - 模型：{llm_report.model or '未設定'}
@@ -648,6 +656,9 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
 
 ### 代理解讀
 {agent_lines or '無'}
+
+### 資產情緒壓力支撐指標
+{indicator_lines or '無'}
 
 ### 風險主題
 {chr(10).join(f'- {item}' for item in llm_report.risk_themes) or '- 無'}
@@ -687,6 +698,14 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
         )
         for item in llm_report.agent_interpretations
     )
+    indicator_lines = "\n".join(
+        (
+            f"- {item.date.isoformat()} {item.asset}: "
+            f"{item.sentiment_stress_support:.1f} ({item.label}) — "
+            f"{item.rationale}"
+        )
+        for item in llm_report.asset_stress_indicators
+    )
     return f"""- Status: {llm_report.status}
 - Provider: {llm_report.provider}
 - Model: {llm_report.model or 'not configured'}
@@ -705,6 +724,9 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
 
 ### Agent interpretations
 {agent_lines or 'none'}
+
+### Asset stress support indicators
+{indicator_lines or '- none'}
 
 ### Risk themes
 {chr(10).join(f'- {item}' for item in llm_report.risk_themes) or '- none'}

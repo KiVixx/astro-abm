@@ -32,9 +32,20 @@ Return strict JSON only, with these keys:
 - scenario_reading: string
 - daily_highlights: array of at most 5 objects with date, summary, key_context, agent_focus, caveats
 - agent_interpretations: array of at most 1 object per agent with agent_id, agent_name, interpretation, risk_focus, caveats
+- asset_stress_indicators: array of objects with date, asset, sentiment_stress_support, label, rationale, caveats
 - risk_themes: array of strings
 - caveats: array of strings
 - disclaimer: string
+
+For asset_stress_indicators:
+- Return one entry per provided asset per supplied daily_timeline date when possible.
+- sentiment_stress_support is a 0 to 100 scenario metric.
+- 0-35 means low support / fragile scenario context.
+- 36-65 means mid support / mixed scenario context.
+- 66-100 means high support / more resilient scenario context.
+- label should be one of: low_support, mid_support, high_support.
+- Base it only on provided stress, volatility, liquidity, astro, coverage, and asset_contexts.
+- This metric is visualization-only scenario support, not a market price forecast, not financial advice, and not a trading signal.
 
 Keep the JSON compact and complete.
 Make scenario_reading easy for a human to scan:
