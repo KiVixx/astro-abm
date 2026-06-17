@@ -75,6 +75,7 @@ def regime_label(value: str, *, language: str) -> str:
         "placeholder_fallback": "佔位資料回退",
         "local_research_available": "本地研究資料可用",
         "partial_local_research_available": "部分本地研究資料可用",
+        "computed_ephemeris_available": "可計算星曆資料可用",
     }
     return labels.get(value, value)
 
@@ -88,6 +89,14 @@ def stress_risk_theme(stress_regime: str, *, language: str = "en") -> str:
 
 
 def snapshot_kind(source: str, *, language: str = "en") -> str:
+    if source == "computed_ephemeris":
+        if language == "zh-Hant":
+            return "本機計算星曆脈絡快照"
+        return "computed daily ephemeris context snapshot"
+    if source == "mixed_computed_research":
+        if language == "zh-Hant":
+            return "混合本地研究與計算星曆脈絡快照"
+        return "mixed local research and computed ephemeris context snapshot"
     if source == "local_research_snapshot":
         if language == "zh-Hant":
             return "只讀日線研究脈絡快照"
@@ -100,7 +109,7 @@ def snapshot_kind(source: str, *, language: str = "en") -> str:
 def confidence_label(data_quality: str) -> str:
     if data_quality == "local_research_available":
         return "low_research_context_confidence"
-    if data_quality == "partial_local_research_available":
+    if data_quality in {"partial_local_research_available", "computed_ephemeris_available"}:
         return "low_association_confidence"
     return "low_placeholder_confidence"
 
@@ -110,8 +119,11 @@ def astro_event_tags(
     *,
     astro_daily_status: str,
     astro_activity: str,
+    data_source: str,
 ) -> list[str]:
     if astro_daily_status == "available":
+        if data_source in {"computed_ephemeris", "mixed_computed_research"}:
+            return ["computed_ephemeris", f"astro_activity:{astro_activity}"]
         return ["local_astro_daily", f"astro_activity:{astro_activity}"]
     return placeholder_tags
 
@@ -125,6 +137,8 @@ def localize_coverage_notes(coverage: DailyDataCoverage, *, language: str) -> li
             translated.append("已使用 financial_stress_daily 本地快照生成壓力與波動標籤")
         elif note == "astro_daily_features local snapshot used for astro activity tags":
             translated.append("已使用 astro_daily_features 本地快照生成天象活動標籤")
+        elif note == "computed Swiss Ephemeris daily astro context used for astro activity tags":
+            translated.append("已使用本機 Swiss Ephemeris 計算日線天象活動標籤")
         elif note == "market_daily_features local snapshot found for selected assets":
             translated.append("已找到所選資產的 market_daily_features 本地快照")
         elif note == "macro_daily_observations local snapshot found for this date":
@@ -188,6 +202,7 @@ def build_placeholder_daily_contexts(
             tags,
             astro_daily_status=research_context.coverage.astro_daily,
             astro_activity=intensity,
+            data_source=research_context.coverage.source,
         )
         coverage = research_context.coverage.model_copy(
             update={
@@ -203,7 +218,7 @@ def build_placeholder_daily_contexts(
             astro_summary = (
                 f"{current_date.isoformat()} 的日線天象脈絡使用"
                 f"{regime_label(intensity, language=language)}活動標籤；"
-                "若本地研究資料可用則採用本地標籤，否則使用 deterministic 佔位標籤。"
+                "若本地研究資料可用則採用本地標籤；若是未來日期，會使用本機可計算星曆標籤。"
             )
             market_summary = (
                 f"日線市場脈絡標記為壓力狀態：{regime_label(stress_regime, language=language)}，"
@@ -229,7 +244,7 @@ def build_placeholder_daily_contexts(
             astro_summary = (
                 f"Daily astro context for {current_date.isoformat()} uses "
                 f"{intensity} activity tags from local research when available, "
-                "otherwise deterministic placeholder tags."
+                "or local computed ephemeris tags for future dates."
             )
             market_summary = (
                 f"Daily market context marks stress regime: {stress_regime}, "

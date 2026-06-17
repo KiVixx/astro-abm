@@ -1,6 +1,9 @@
 import type { DailyScenarioSnapshot, ScenarioReport } from "./types";
 
-export type AssetStressSource = "timeline_metric" | "mock_demo";
+export type AssetStressSource =
+  | "llm_scenario_metric"
+  | "timeline_metric"
+  | "mock_demo";
 
 export interface AssetStressPoint {
   asset: string;
@@ -94,6 +97,22 @@ function extractMetricFromAssetBucket(
   return null;
 }
 
+function extractLlmMetric(
+  report: ScenarioReport | undefined,
+  snapshot: DailyScenarioSnapshot,
+  asset: string,
+): number | null {
+  const indicators = report?.llm_report?.asset_stress_indicators || [];
+  const normalizedAsset = asset.toUpperCase();
+  const indicator = indicators.find(
+    (item) =>
+      item.date === snapshot.date &&
+      item.asset.toUpperCase() === normalizedAsset &&
+      Number.isFinite(item.sentiment_stress_support),
+  );
+  return indicator ? clampStressValue(indicator.sentiment_stress_support) : null;
+}
+
 function hashString(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -137,7 +156,19 @@ export function assetStressPointForSnapshot(
   snapshot: DailyScenarioSnapshot,
   asset: string,
   assetIndex = 0,
+  report?: ScenarioReport,
 ): AssetStressPoint {
+  const llmMetric = extractLlmMetric(report, snapshot, asset);
+  if (llmMetric !== null) {
+    return {
+      asset,
+      date: snapshot.date,
+      value: llmMetric,
+      source: "llm_scenario_metric",
+      color: assetStressColor(assetIndex),
+    };
+  }
+
   const snapshotRecord = snapshot as unknown as Record<string, unknown>;
   const extracted = extractMetricFromAssetBucket(snapshotRecord, asset);
   const value = extracted ?? mockStressValue(snapshot, asset, assetIndex);
@@ -163,7 +194,7 @@ export function buildAssetStressSeries(
 
   return assets.map((asset, assetIndex) => {
     const points = timeline.map((snapshot) =>
-      assetStressPointForSnapshot(snapshot, asset, assetIndex),
+      assetStressPointForSnapshot(snapshot, asset, assetIndex, report),
     );
     const values = points.map((point) => point.value);
     return {

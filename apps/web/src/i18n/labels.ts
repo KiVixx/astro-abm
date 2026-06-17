@@ -12,6 +12,14 @@ const enumLabels: Record<string, LabelMap> = {
     mock: "value.llm.mock",
     openai_compatible: "value.llm.openaiCompatible",
   },
+  llm_status: {
+    not_requested: "value.llmStatus.notRequested",
+    completed: "value.llmStatus.completed",
+    dry_run: "value.llmStatus.dryRun",
+    failed: "value.llmStatus.failed",
+    safety_review_failed: "value.llmStatus.safetyReviewFailed",
+    invalid_output: "value.llmStatus.invalidOutput",
+  },
   scenario_mode: {
     daily_association_only: "value.mode.dailyAssociationOnly",
   },
@@ -53,6 +61,7 @@ const enumLabels: Record<string, LabelMap> = {
     low_research_context_confidence: "value.dataQuality.lowResearchContextConfidence",
     low_association_confidence: "value.dataQuality.lowAssociationConfidence",
     low_placeholder_confidence: "value.dataQuality.lowPlaceholderConfidence",
+    computed_ephemeris_available: "value.dataQuality.computedEphemerisAvailable",
     placeholder_fallback: "value.dataQuality.placeholderFallback",
     future_placeholder: "value.dataQuality.futurePlaceholder",
     legacy_report: "value.dataQuality.legacyReport",
@@ -60,6 +69,8 @@ const enumLabels: Record<string, LabelMap> = {
   },
   data_source: {
     local_research_snapshot: "value.dataSource.localResearchSnapshot",
+    computed_ephemeris: "value.dataSource.computedEphemeris",
+    mixed_computed_research: "value.dataSource.mixedComputedResearch",
     placeholder_fallback: "value.dataSource.placeholderFallback",
     future_placeholder: "value.dataSource.futurePlaceholder",
     legacy_report: "value.dataSource.legacyReport",

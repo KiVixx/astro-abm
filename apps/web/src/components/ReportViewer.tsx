@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ContextCoverageSummaryCard } from "./ContextCoverageSummaryCard";
+import { LlmScenarioReportCard } from "./LlmScenarioReportCard";
 import { SafetyPhrases } from "./SafetyPhrases";
 import type {
   DailyDataCoverage,
@@ -408,6 +409,8 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
       </section>
 
       <ContextCoverageSummaryCard coverageSummary={report.coverage_summary} />
+
+      <LlmScenarioReportCard llmReport={report.llm_report} />
 
       <section className="card">
         <h2>{t("report.dailyTimeline")}</h2>

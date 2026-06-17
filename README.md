@@ -74,15 +74,43 @@ make web WEB_PORT=13000 API_PORT=18000
 ```
 
 The product MVP adds a local-first scenario API under `apps/api/`. It creates
-mock AI scenario rehearsals from daily-context placeholders and saves JSON plus
-Markdown reports under `astro_research/output/scenarios/`. These generated
-reports are intentionally git-ignored. The default LLM provider is `mock`;
-`openai_compatible` is only a typed interface in this PR and does not make
-external calls during tests. The optional web UI under `apps/web/` calls the API
-through `NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL`, defaulting to
+AI scenario rehearsals from daily context and saves JSON plus Markdown reports
+under `astro_research/output/scenarios/`. These generated reports are
+intentionally git-ignored. The default LLM provider is `mock`.
+`openai_compatible` can generate an optional LLM-assisted explanation layer when
+explicitly enabled per scenario or by backend environment defaults. Tests and
+product smoke checks never require external LLM access. The
+optional web UI under `apps/web/` calls the API through
+`NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL`, defaulting to
 `http://localhost:8000`; it never reads generated scenario files directly.
 Reports are association only, scenario rehearsal only, not financial advice, and
 not a trading signal.
+
+OpenAI-compatible LLM report generation can be configured per scenario in the
+web create form:
+
+- select `OpenAI-compatible`
+- check `Enable real LLM call for this scenario`
+- enter a base URL such as `http://localhost:11434/v1`
+- enter a model name
+- optionally enter an API key when the provider requires one
+
+The API key is used only for that request and is never saved into scenario JSON,
+Markdown, logs, or provenance. For API-only usage, the backend can also use
+environment defaults:
+
+```bash
+ASTRO_ABM_ENABLE_REAL_LLM=1
+ASTRO_ABM_LLM_BASE_URL=http://localhost:11434/v1
+ASTRO_ABM_LLM_MODEL=your-local-model
+ASTRO_ABM_LLM_API_KEY=optional-or-provider-key
+ASTRO_ABM_LLM_TIMEOUT_SECONDS=120
+ASTRO_ABM_LLM_MAX_OUTPUT_TOKENS=5000
+ASTRO_ABM_LLM_MAX_CONTEXT_DAYS=60
+```
+
+The LLM is an explanation layer over existing scenario context; it is not a
+market-data source.
 
 The web UI supports English and Traditional Chinese. Use the `EN / 中文`
 toggle in the product header; the selected language is stored locally in the

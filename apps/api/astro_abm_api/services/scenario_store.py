@@ -81,6 +81,15 @@ class ScenarioStore:
             raise ScenarioNotFoundError(scenario_id)
         return ScenarioReport.model_validate_json(json_path.read_text(encoding="utf-8"))
 
+    def delete(self, scenario_id: str) -> None:
+        json_path = self._path_for(scenario_id, ".json")
+        markdown_path = self._path_for(scenario_id, ".md")
+        if not json_path.exists():
+            raise ScenarioNotFoundError(scenario_id)
+        json_path.unlink()
+        if markdown_path.exists():
+            markdown_path.unlink()
+
     def list_summaries(self) -> list[ScenarioSummary]:
         if not self.output_dir.exists():
             return []

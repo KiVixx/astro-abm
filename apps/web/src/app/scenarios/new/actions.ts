@@ -1,8 +1,16 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createScenario } from "@/lib/api";
-import type { LlmProvider, ReportLanguage, Visibility } from "@/lib/types";
+import { createScenario, generateScenarioLlmChunk } from "@/lib/api";
+import type {
+  LlmProvider,
+  ReportLanguage,
+  ScenarioCreateRequest,
+  ScenarioLlmChunkRequest,
+  ScenarioLlmChunkResponse,
+  ScenarioReport,
+  Visibility,
+} from "@/lib/types";
 
 function getString(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -11,6 +19,14 @@ function getString(formData: FormData, name: string): string {
 
 function optionalString(value: string): string | null {
   return value ? value : null;
+}
+
+function optionalNumber(value: string): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export async function createScenarioAction(formData: FormData): Promise<void> {
@@ -34,12 +50,30 @@ export async function createScenarioAction(formData: FormData): Promise<void> {
     assets,
     agent_ids: agentIds,
     llm_provider: llmProvider || "mock",
+    llm_real_enabled: formData.get("llm_real_enabled") === "on",
     llm_base_url: optionalString(getString(formData, "llm_base_url")),
     llm_model: optionalString(getString(formData, "llm_model")),
+    llm_api_key: optionalString(getString(formData, "llm_api_key")),
+    llm_user_prompt: optionalString(getString(formData, "llm_user_prompt")),
+    llm_timeout_seconds: optionalNumber(getString(formData, "llm_timeout_seconds")),
+    llm_max_output_tokens: optionalNumber(getString(formData, "llm_max_output_tokens")),
     visibility: visibility || "private",
     mode: "daily_association_only",
     language: language || "en",
   });
 
   redirect(`/scenarios/${report.scenario_id}`);
+}
+
+export async function createScenarioForProgressAction(
+  payload: ScenarioCreateRequest,
+): Promise<ScenarioReport> {
+  return createScenario(payload);
+}
+
+export async function generateScenarioLlmChunkAction(
+  scenarioId: string,
+  payload: ScenarioLlmChunkRequest,
+): Promise<ScenarioLlmChunkResponse> {
+  return generateScenarioLlmChunk(scenarioId, payload);
 }

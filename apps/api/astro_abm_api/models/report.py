@@ -127,6 +127,70 @@ class ScenarioCoverageSummary(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class LlmDailyHighlight(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    summary: str
+    key_context: list[str] = Field(default_factory=list)
+    agent_focus: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+
+
+class LlmAgentInterpretation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str
+    agent_name: str
+    interpretation: str
+    risk_focus: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+
+
+class LlmAssetStressIndicator(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    asset: str
+    sentiment_stress_support: float = Field(ge=0, le=100)
+    label: str
+    rationale: str
+    caveats: list[str] = Field(default_factory=list)
+
+
+class LlmReportProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    model: str | None = None
+    base_url_status: str
+    credential_status: str
+    network_call_performed: bool
+    prompt_template_version: str
+    input_context_hash: str
+    output_validation_status: str
+    safety_check_status: str
+
+
+class LlmScenarioReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    provider: str
+    model: str | None = None
+    language: ReportLanguage
+    executive_summary: str
+    scenario_reading: str
+    daily_highlights: list[LlmDailyHighlight] = Field(default_factory=list)
+    agent_interpretations: list[LlmAgentInterpretation] = Field(default_factory=list)
+    asset_stress_indicators: list[LlmAssetStressIndicator] = Field(default_factory=list)
+    risk_themes: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+    disclaimer: str
+    raw_text_preview: str | None = None
+    provenance: LlmReportProvenance
+
+
 class ScenarioReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -147,6 +211,7 @@ class ScenarioReport(BaseModel):
     risk_themes: list[str] = Field(default_factory=list)
     daily_timeline: list[DailyScenarioSnapshot] = Field(default_factory=list)
     coverage_summary: ScenarioCoverageSummary | None = None
+    llm_report: LlmScenarioReport | None = None
     caveats: list[str]
     provenance: dict[str, Any]
     visibility: Visibility
@@ -154,3 +219,16 @@ class ScenarioReport(BaseModel):
     language: ReportLanguage | None = None
     markdown_report: str
     disclaimer: str
+
+
+class ScenarioLlmChunkResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str
+    chunk_index: int
+    total_chunks: int
+    chunk_start_date: date
+    chunk_end_date: date
+    llm_status: str
+    completed: bool
+    report: ScenarioReport
