@@ -2,6 +2,7 @@ export type Visibility = "private" | "public";
 export type ScenarioMode = "daily_association_only";
 export type LlmProvider = "mock" | "openai_compatible";
 export type ReportLanguage = "en" | "zh-Hant";
+export type WorldlineProvider = "deterministic_mock" | "llm";
 
 export interface AgentProfile {
   agent_id: string;
@@ -190,6 +191,67 @@ export interface LlmScenarioReport {
   provenance: LlmReportProvenance;
 }
 
+export interface WorldlineImpactScores {
+  sentiment_delta: number;
+  narrative_pressure_delta: number;
+  leverage_pressure_delta: number;
+  liquidity_pressure_delta: number;
+  volatility_pressure_delta: number;
+  stress_pressure_delta: number;
+}
+
+export interface WorldlineAgentEvent {
+  agent_id: string;
+  agent_name: string;
+  what_happened: string;
+  why_it_happened: string;
+  impact_on_tomorrow: string;
+  impact_scores: WorldlineImpactScores;
+  confidence: string;
+  caveats: string[];
+}
+
+export interface WorldlineCausalLink {
+  source: string;
+  target: string;
+  description: string;
+  strength: string;
+  caveats: string[];
+}
+
+export interface WorldlineState {
+  sentiment_state: string;
+  narrative_pressure: number;
+  leverage_pressure: number;
+  liquidity_pressure: number;
+  volatility_pressure: number;
+  stress_pressure: number;
+  regime_label?: string | null;
+  notes: string[];
+}
+
+export interface WorldlineDay {
+  date: string;
+  day_index: number;
+  input_context_summary: string;
+  world_state_before: WorldlineState;
+  agent_events: WorldlineAgentEvent[];
+  causal_links: WorldlineCausalLink[];
+  next_day_update: string;
+  world_state_after: WorldlineState;
+  disclaimer: string;
+}
+
+export interface WorldlineSimulation {
+  status: string;
+  mode: string;
+  horizon_days: number;
+  days: WorldlineDay[];
+  summary: string;
+  caveats: string[];
+  provenance: Record<string, unknown>;
+}
+
 export interface ScenarioCreateRequest {
   title: string;
   description?: string | null;
@@ -208,6 +270,8 @@ export interface ScenarioCreateRequest {
   visibility: Visibility;
   mode?: ScenarioMode;
   language?: ReportLanguage;
+  worldline_provider?: WorldlineProvider;
+  worldline_chunk_days?: 1 | 2 | 3 | 5;
 }
 
 export interface ScenarioLlmChunkRequest {
@@ -233,6 +297,34 @@ export interface ScenarioLlmChunkResponse {
   chunk_start_date: string;
   chunk_end_date: string;
   llm_status: string;
+  completed: boolean;
+  report: ScenarioReport;
+}
+
+export interface ScenarioWorldlineChunkRequest {
+  llm_provider: LlmProvider;
+  llm_real_enabled?: boolean | null;
+  llm_base_url?: string | null;
+  llm_model?: string | null;
+  llm_api_key?: string | null;
+  llm_user_prompt?: string | null;
+  llm_timeout_seconds?: number | null;
+  llm_max_output_tokens?: number | null;
+  language?: ReportLanguage;
+  chunk_start_date: string;
+  chunk_end_date: string;
+  chunk_index: number;
+  total_chunks: number;
+  worldline_chunk_days?: 1 | 2 | 3 | 5;
+}
+
+export interface ScenarioWorldlineChunkResponse {
+  scenario_id: string;
+  chunk_index: number;
+  total_chunks: number;
+  chunk_start_date: string;
+  chunk_end_date: string;
+  worldline_status: string;
   completed: boolean;
   report: ScenarioReport;
 }
@@ -271,6 +363,7 @@ export interface ScenarioReport {
   daily_timeline?: DailyScenarioSnapshot[];
   coverage_summary?: ScenarioCoverageSummary | null;
   llm_report?: LlmScenarioReport | null;
+  worldline_simulation?: WorldlineSimulation | null;
   caveats: string[];
   provenance: Record<string, unknown>;
   visibility: Visibility;

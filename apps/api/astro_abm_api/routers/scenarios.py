@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from astro_abm_api.models.report import ScenarioLlmChunkResponse, ScenarioReport
+from astro_abm_api.models.report import (
+    ScenarioLlmChunkResponse,
+    ScenarioReport,
+    ScenarioWorldlineChunkResponse,
+)
 from astro_abm_api.models.scenario import (
     ScenarioCreateRequest,
     ScenarioLlmChunkRequest,
+    ScenarioWorldlineChunkRequest,
     ScenarioSummary,
 )
 from astro_abm_api.services.agents import resolve_agents
@@ -17,6 +22,7 @@ from astro_abm_api.services.llm_client import (
     merge_llm_report_chunk,
 )
 from astro_abm_api.services.simulation_engine import generate_scenario_report, render_markdown
+from astro_abm_api.services.worldline_llm_generator import generate_worldline_chunk
 
 
 router = APIRouter()
@@ -112,5 +118,66 @@ def generate_scenario_llm_chunk(
         chunk_end_date=request.chunk_end_date,
         llm_status=chunk_report.status,
         completed=chunk_report.status == "completed" and request.chunk_index == request.total_chunks,
+        report=saved_report,
+    )
+
+
+@router.post(
+    "/scenarios/{scenario_id}/worldline-chunks",
+    response_model=ScenarioWorldlineChunkResponse,
+)
+def generate_scenario_worldline_chunk(
+    scenario_id: str,
+    request: ScenarioWorldlineChunkRequest,
+) -> ScenarioWorldlineChunkResponse:
+    store = ScenarioStore()
+    try:
+        report = store.load(scenario_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ScenarioNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="scenario not found") from exc
+
+    if request.chunk_start_date < report.start_date or request.chunk_end_date > report.end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="chunk date range must stay inside scenario date range",
+        )
+
+    worldline_simulation = generate_worldline_chunk(request, report)
+    provenance = dict(report.provenance)
+    provenance["worldline"] = {
+        "provider": request.llm_provider,
+        "base_url": request.llm_base_url,
+        "model": request.llm_model,
+        "credential_status": worldline_simulation.provenance.get("credential_status"),
+        "network_call_performed": worldline_simulation.provenance.get("network_call_performed"),
+        "chunked_generation": True,
+        "last_chunk_index": request.chunk_index,
+        "total_chunks": request.total_chunks,
+        "generation_mode": worldline_simulation.provenance.get("generation_mode"),
+        "failed_chunk_count": worldline_simulation.provenance.get("failed_chunk_count"),
+    }
+    updated_report = report.model_copy(
+        update={
+            "worldline_simulation": worldline_simulation,
+            "provenance": provenance,
+        }
+    )
+    updated_report = updated_report.model_copy(
+        update={"markdown_report": render_markdown(updated_report)}
+    )
+    saved_report = store.save(updated_report)
+    return ScenarioWorldlineChunkResponse(
+        scenario_id=scenario_id,
+        chunk_index=request.chunk_index,
+        total_chunks=request.total_chunks,
+        chunk_start_date=request.chunk_start_date,
+        chunk_end_date=request.chunk_end_date,
+        worldline_status=worldline_simulation.status,
+        completed=(
+            worldline_simulation.status == "completed"
+            and request.chunk_index == request.total_chunks
+        ),
         report=saved_report,
     )

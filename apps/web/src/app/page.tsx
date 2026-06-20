@@ -15,11 +15,14 @@ export default function HomePage() {
             {t("home.lead")}
           </p>
           <div className="actions">
-            <Link className="button" href="/scenarios">
-              {t("home.searchScenarios")}
+            <Link className="button" href="/worldlines/new">
+              {t("home.createWorldline")}
             </Link>
-            <Link className="button secondary" href="/scenarios/new">
-              {t("home.createScenario")}
+            <Link className="button secondary" href="/worldlines">
+              {t("home.exploreWorldlines")}
+            </Link>
+            <Link className="button secondary" href="/scenarios">
+              {t("home.searchScenarios")}
             </Link>
           </div>
         </div>

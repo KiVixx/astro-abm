@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from astro_abm_api.models.agent import AgentOutput, AgentProfile
 from astro_abm_api.models.asset import MarketSeriesProfile
@@ -191,6 +191,88 @@ class LlmScenarioReport(BaseModel):
     provenance: LlmReportProvenance
 
 
+class WorldlineImpactScores(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sentiment_delta: int
+    narrative_pressure_delta: int
+    leverage_pressure_delta: int
+    liquidity_pressure_delta: int
+    volatility_pressure_delta: int
+    stress_pressure_delta: int
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def clamp_score(cls, value: object) -> int:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            numeric = 0
+        return max(-2, min(2, numeric))
+
+
+class WorldlineAgentEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str
+    agent_name: str
+    what_happened: str
+    why_it_happened: str
+    impact_on_tomorrow: str
+    impact_scores: WorldlineImpactScores
+    confidence: str
+    caveats: list[str] = Field(default_factory=list)
+
+
+class WorldlineCausalLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str
+    target: str
+    description: str
+    strength: str
+    caveats: list[str] = Field(default_factory=list)
+
+
+class WorldlineState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sentiment_state: str
+    narrative_pressure: float = Field(ge=0, le=1)
+    leverage_pressure: float = Field(ge=0, le=1)
+    liquidity_pressure: float = Field(ge=0, le=1)
+    volatility_pressure: float = Field(ge=0, le=1)
+    stress_pressure: float = Field(ge=0, le=1)
+    regime_label: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class WorldlineDay(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    day_index: int
+    input_context_summary: str
+    world_state_before: WorldlineState
+    agent_events: list[WorldlineAgentEvent]
+    causal_links: list[WorldlineCausalLink]
+    next_day_update: str
+    world_state_after: WorldlineState
+    disclaimer: str
+
+
+class WorldlineSimulation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    mode: str
+    horizon_days: int
+    days: list[WorldlineDay] = Field(default_factory=list)
+    summary: str
+    caveats: list[str] = Field(default_factory=list)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+
 class ScenarioReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -212,6 +294,7 @@ class ScenarioReport(BaseModel):
     daily_timeline: list[DailyScenarioSnapshot] = Field(default_factory=list)
     coverage_summary: ScenarioCoverageSummary | None = None
     llm_report: LlmScenarioReport | None = None
+    worldline_simulation: WorldlineSimulation | None = None
     caveats: list[str]
     provenance: dict[str, Any]
     visibility: Visibility
@@ -230,5 +313,18 @@ class ScenarioLlmChunkResponse(BaseModel):
     chunk_start_date: date
     chunk_end_date: date
     llm_status: str
+    completed: bool
+    report: ScenarioReport
+
+
+class ScenarioWorldlineChunkResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str
+    chunk_index: int
+    total_chunks: int
+    chunk_start_date: date
+    chunk_end_date: date
+    worldline_status: str
     completed: bool
     report: ScenarioReport

@@ -6,28 +6,29 @@ import {
   createScenarioForProgressAction,
   generateScenarioLlmChunkAction,
   generateScenarioWorldlineChunkAction,
-} from "./actions";
+} from "../../scenarios/new/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewScenarioPage() {
+export default async function NewWorldlinePage() {
   try {
     const [agents, marketSeries] = await Promise.all([getAgents(), getAssets()]);
     return (
       <div className="page stack">
         <header>
           <h1>
-            <I18nText tKey="scenarioCreate.title" />
+            <I18nText tKey="worldline.create" />
           </h1>
           <p className="lead">
-            <I18nText tKey="scenarioCreate.lead" />
+            <I18nText tKey="worldline.createLead" />
           </p>
         </header>
         <ScenarioForm
+          agents={agents}
           chunkAction={generateScenarioLlmChunkAction}
           createAction={createScenarioForProgressAction}
-          agents={agents}
           marketSeries={marketSeries}
+          product="worldline"
           worldlineChunkAction={generateScenarioWorldlineChunkAction}
         />
       </div>
@@ -36,7 +37,7 @@ export default async function NewScenarioPage() {
     return (
       <div className="page stack">
         <h1>
-          <I18nText tKey="scenarioCreate.title" />
+          <I18nText tKey="worldline.create" />
         </h1>
         <div className="notice">
           <I18nText tKey="scenarioCreate.apiUnavailable" />

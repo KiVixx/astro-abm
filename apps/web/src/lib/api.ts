@@ -6,6 +6,8 @@ import type {
   ScenarioLlmChunkResponse,
   ScenarioReport,
   ScenarioSummary,
+  ScenarioWorldlineChunkRequest,
+  ScenarioWorldlineChunkResponse,
 } from "./types";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
@@ -90,6 +92,19 @@ export async function generateScenarioLlmChunk(
 ): Promise<ScenarioLlmChunkResponse> {
   return apiFetch<ScenarioLlmChunkResponse>(
     `/scenarios/${encodeURIComponent(scenarioId)}/llm-chunks`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function generateScenarioWorldlineChunk(
+  scenarioId: string,
+  payload: ScenarioWorldlineChunkRequest,
+): Promise<ScenarioWorldlineChunkResponse> {
+  return apiFetch<ScenarioWorldlineChunkResponse>(
+    `/scenarios/${encodeURIComponent(scenarioId)}/worldline-chunks`,
     {
       method: "POST",
       body: JSON.stringify(payload),
