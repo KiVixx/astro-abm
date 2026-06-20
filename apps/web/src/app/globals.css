@@ -660,6 +660,57 @@ pre {
   padding: 14px;
 }
 
+.worldline-panel {
+  border: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+}
+
+.worldline-panel-primary {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fafb 100%);
+  border-color: rgba(23, 107, 135, 0.3);
+  box-shadow: 0 12px 28px rgba(29, 37, 45, 0.08);
+}
+
+.worldline-panel summary {
+  cursor: pointer;
+}
+
+.worldline-panel-body {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 14px;
+}
+
+.worldline-score-grid {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  margin: 12px 0 0;
+}
+
+.worldline-score-grid dt {
+  color: var(--muted);
+}
+
+.worldline-score-grid dd {
+  font-weight: 700;
+  margin: 0;
+}
+
+.worldline-playback-bar {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 16px 0;
+  padding: 12px;
+}
+
 .coverage-summary-card {
   display: grid;
   gap: 16px;

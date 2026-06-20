@@ -118,18 +118,24 @@ browser. This translates product UI labels and safety text only. Generated
 scenario content is saved in the language it was generated with, so historical
 scenario summaries and Markdown reports are not machine-translated by the UI.
 
-Scenario Workbench:
+Worldline product experience:
 
-- Open a saved scenario at `/scenarios/{scenario_id}`, for example
-  `/scenarios/demo_2026q3_btc_eth` after `make scenario-demo`. This is the
-  default workbench view.
+- Scenario is still the local storage entity saved by the API. Worldline is the
+  primary product experience built from that scenario report.
+- Create a new worldline at `/worldlines/new`.
+- Explore saved worldlines at `/worldlines`.
+- Open the main Worldline Workbench at `/worldlines/{scenario_id}`, for example
+  `/worldlines/demo_2026q3_btc_eth` after `make scenario-demo`.
 - Open the full text report only when needed at
   `/scenarios/{scenario_id}/report`.
+- Older scenario routes remain compatible, including `/scenarios/{scenario_id}`
+  and `/scenarios/{scenario_id}/workbench`.
 - Run the backend and frontend with `make api` and `make web`.
-- The workbench visualizes the existing scenario report: agent group nodes,
-  daily research/context nodes, asset nodes, and daily risk-theme nodes.
-- The graph is a scenario visualization only. It is not a causal graph, not a
-  forecast, and not a trading signal.
+- The Worldline Workbench visualizes agent group nodes, daily research/context
+  nodes, asset nodes, risk-theme nodes, simulated agent events, simulated causal
+  links, pressure updates, and next-day setup.
+- Simulated causal links are internal to the scenario rehearsal. They are not
+  real-world causal proof, not forecasts, and not trading signals.
 
 `make bootstrap` creates a local `.env` from `.env.example` when needed, starts
 QuestDB plus the maintenance daemon, applies the hourly and daily research

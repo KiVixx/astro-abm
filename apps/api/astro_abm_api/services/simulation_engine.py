@@ -22,6 +22,7 @@ from astro_abm_api.services.llm_client import (
     generate_llm_scenario_report,
     provenance_for_llm,
 )
+from astro_abm_api.services.worldline_simulation import generate_worldline_simulation
 
 
 DISCLAIMER_BY_LANGUAGE: dict[ReportLanguage, str] = {
@@ -739,11 +740,115 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
 """
 
 
+def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguage) -> str:
+    worldline = report.worldline_simulation
+    if worldline is None:
+        return "此情境未包含模擬世界線。" if language == "zh-Hant" else "No simulated worldline is available."
+
+    if language == "zh-Hant":
+        day_lines = "\n\n".join(
+            (
+                f"### {day.date.isoformat()}\n"
+                f"- 輸入脈絡：{day.input_context_summary}\n"
+                f"- 推演前狀態：sentiment={day.world_state_before.sentiment_state}; "
+                f"narrative={day.world_state_before.narrative_pressure}; "
+                f"leverage={day.world_state_before.leverage_pressure}; "
+                f"liquidity={day.world_state_before.liquidity_pressure}; "
+                f"volatility={day.world_state_before.volatility_pressure}; "
+                f"stress={day.world_state_before.stress_pressure}\n"
+                "- 群體事件：\n"
+                + "\n".join(
+                    (
+                        f"  - {event.agent_name}: {event.what_happened} "
+                        f"對明天：{event.impact_on_tomorrow}"
+                    )
+                    for event in day.agent_events
+                )
+                + "\n"
+                "- 模擬因果鏈：\n"
+                + "\n".join(
+                    f"  - {link.source} -> {link.target}: {link.description}"
+                    for link in day.causal_links
+                )
+                + "\n"
+                f"- 明日情境鋪墊：{day.next_day_update}\n"
+                f"- 推演後狀態：sentiment={day.world_state_after.sentiment_state}; "
+                f"regime={day.world_state_after.regime_label}; "
+                f"narrative={day.world_state_after.narrative_pressure}; "
+                f"leverage={day.world_state_after.leverage_pressure}; "
+                f"liquidity={day.world_state_after.liquidity_pressure}; "
+                f"volatility={day.world_state_after.volatility_pressure}; "
+                f"stress={day.world_state_after.stress_pressure}\n"
+                f"- 免責：{day.disclaimer}"
+            )
+            for day in worldline.days
+        )
+        return f"""- 狀態：{worldline.status}
+- 模式：{worldline.mode}
+- 推演天數：{worldline.horizon_days}
+- 摘要：{worldline.summary}
+
+{day_lines}
+
+### 注意事項
+{chr(10).join(f'- {item}' for item in worldline.caveats) or '- 無'}
+"""
+
+    day_lines = "\n\n".join(
+        (
+            f"### {day.date.isoformat()}\n"
+            f"- Input context: {day.input_context_summary}\n"
+            f"- World state before: sentiment={day.world_state_before.sentiment_state}; "
+            f"narrative={day.world_state_before.narrative_pressure}; "
+            f"leverage={day.world_state_before.leverage_pressure}; "
+            f"liquidity={day.world_state_before.liquidity_pressure}; "
+            f"volatility={day.world_state_before.volatility_pressure}; "
+            f"stress={day.world_state_before.stress_pressure}\n"
+            "- Agent events:\n"
+            + "\n".join(
+                (
+                    f"  - {event.agent_name}: {event.what_happened} "
+                    f"Tomorrow setup: {event.impact_on_tomorrow}"
+                )
+                for event in day.agent_events
+            )
+            + "\n"
+            "- Simulated causal links:\n"
+            + "\n".join(
+                f"  - {link.source} -> {link.target}: {link.description}"
+                for link in day.causal_links
+            )
+            + "\n"
+            f"- Next-day setup: {day.next_day_update}\n"
+            f"- World state after: sentiment={day.world_state_after.sentiment_state}; "
+            f"regime={day.world_state_after.regime_label}; "
+            f"narrative={day.world_state_after.narrative_pressure}; "
+            f"leverage={day.world_state_after.leverage_pressure}; "
+            f"liquidity={day.world_state_after.liquidity_pressure}; "
+            f"volatility={day.world_state_after.volatility_pressure}; "
+            f"stress={day.world_state_after.stress_pressure}\n"
+            f"- Disclaimer: {day.disclaimer}"
+        )
+        for day in worldline.days
+    )
+    return f"""- Status: {worldline.status}
+- Mode: {worldline.mode}
+- Horizon days: {worldline.horizon_days}
+- Summary: {worldline.summary}
+
+{day_lines}
+
+### Caveats
+{chr(10).join(f'- {item}' for item in worldline.caveats) or '- none'}
+"""
+
+
 def render_markdown(report: ScenarioReport) -> str:
     language: ReportLanguage = report.language or "en"
     is_chinese = language == "zh-Hant"
     coverage_lines = render_coverage_markdown(report.coverage_summary, language=language)
     llm_lines = render_llm_report_markdown(report, language=language)
+    worldline_lines = render_worldline_markdown(report, language=language)
 
     if is_chinese:
         agent_lines = "\n".join(
@@ -848,6 +953,9 @@ def render_markdown(report: ScenarioReport) -> str:
 ## 情境資料覆蓋摘要
 {coverage_lines}
 
+## 模擬世界線
+{worldline_lines}
+
 ## LLM 情境報告
 {llm_lines}
 
@@ -923,6 +1031,9 @@ def render_markdown(report: ScenarioReport) -> str:
 
 ## Context Coverage Summary
 {coverage_lines}
+
+## Simulated Worldline
+{worldline_lines}
 
 ## LLM Scenario Report
 {llm_lines}
@@ -1033,4 +1144,6 @@ def generate_scenario_report(
     )
     llm_report = generate_llm_scenario_report(request, report)
     report = report.model_copy(update={"llm_report": llm_report})
+    worldline_simulation = generate_worldline_simulation(report)
+    report = report.model_copy(update={"worldline_simulation": worldline_simulation})
     return report.model_copy(update={"markdown_report": render_markdown(report)})

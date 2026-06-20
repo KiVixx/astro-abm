@@ -53,6 +53,7 @@ export function ScenarioForm({
   marketSeries,
   createAction,
   chunkAction,
+  product = "scenario",
 }: {
   agents: AgentProfile[];
   marketSeries: MarketSeriesProfile[];
@@ -61,6 +62,7 @@ export function ScenarioForm({
     scenarioId: string,
     payload: ScenarioLlmChunkRequest,
   ) => Promise<ScenarioLlmChunkResponse>;
+  product?: "scenario" | "worldline";
 }) {
   const router = useRouter();
   const { language: uiLanguage, t } = useI18n();
@@ -145,7 +147,9 @@ export function ScenarioForm({
           totalChunks: 1,
           message: t("scenarioCreate.progressComplete"),
         });
-        router.push(`/scenarios/${report.scenario_id}`);
+        router.push(
+          `${product === "worldline" ? "/worldlines" : "/scenarios"}/${report.scenario_id}`,
+        );
         return;
       }
 
@@ -203,7 +207,9 @@ export function ScenarioForm({
         totalChunks: chunks.length,
         message: t("scenarioCreate.progressComplete"),
       });
-      router.push(`/scenarios/${report.scenario_id}`);
+      router.push(
+        `${product === "worldline" ? "/worldlines" : "/scenarios"}/${report.scenario_id}`,
+      );
     } catch (error) {
       setProgress({
         active: true,
@@ -261,6 +267,13 @@ export function ScenarioForm({
 
   return (
     <form className="stack" onSubmit={handleSubmit} ref={formRef}>
+      {product === "worldline" ? (
+        <section className="notice">
+          <strong>{t("worldline.simulationMode")}: </strong>
+          {t("worldline.deterministicMock")}
+          <p>{t("worldline.modeHelp")}</p>
+        </section>
+      ) : null}
       <div className="form-grid">
         <label className="form-field full">
           <span>{t("scenarioCreate.formTitle")}</span>
@@ -481,7 +494,9 @@ export function ScenarioForm({
       <button disabled={progress.active && progress.phase !== "error"} type="submit">
         {progress.active && progress.phase !== "error"
           ? t("scenarioCreate.generating")
-          : t("scenarioCreate.generate")}
+          : product === "worldline"
+            ? t("worldline.generate")
+            : t("scenarioCreate.generate")}
       </button>
       {progress.active ? (
         <section className={`notice scenario-progress ${progress.phase}`}>

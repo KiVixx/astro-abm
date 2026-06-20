@@ -1,5 +1,6 @@
-import type { DailyScenarioSnapshot } from "@/lib/types";
+import type { DailyScenarioSnapshot, WorldlineDay } from "@/lib/types";
 import { SafetyPhrases } from "../SafetyPhrases";
+import { WorldlinePanel } from "./WorldlinePanel";
 import {
   getDailyDataCoverage,
   getDailyResearchSignals,
@@ -20,6 +21,8 @@ interface WorkbenchPanelProps {
   selectedNode: WorkbenchNode | null;
   selectedEdge?: WorkbenchEdge | null;
   graph?: WorkbenchGraph | null;
+  worldlineDay?: WorldlineDay | null;
+  worldlinePrimary?: boolean;
 }
 
 function hasKind<T extends string>(
@@ -317,6 +320,8 @@ export function WorkbenchPanel({
   selectedEdge,
   selectedNode,
   snapshot,
+  worldlineDay,
+  worldlinePrimary = false,
 }: WorkbenchPanelProps) {
   const { t } = useI18n();
   const payload = selectedNode?.payload;
@@ -328,13 +333,16 @@ export function WorkbenchPanel({
     <aside className="workbench-card workbench-panel">
       <div className="workbench-card-header">
         <div>
-          <h2>{t("workbench.panelTitle")}</h2>
+          <h2>{worldlinePrimary ? t("worldline.console") : t("workbench.panelTitle")}</h2>
           <p className="muted">
             {selectedNode || selectedEdge ? selectedLabel : t("workbench.dailyOverview")}{" "}
             {t("workbench.forDate")} {snapshot.date}
           </p>
         </div>
       </div>
+      {worldlinePrimary ? (
+        <WorldlinePanel primary worldlineDay={worldlineDay} />
+      ) : null}
       {selectedEdge ? (
         <EdgePanel edge={selectedEdge} graph={graph} />
       ) : payload && hasKind(payload, "agent") ? (
@@ -348,6 +356,7 @@ export function WorkbenchPanel({
       ) : (
         <OverviewPanel snapshot={snapshot} />
       )}
+      {!worldlinePrimary ? <WorldlinePanel worldlineDay={worldlineDay} /> : null}
       <div className="notice workbench-disclaimer">
         <SafetyPhrases />
         <p>{snapshot.disclaimer}</p>

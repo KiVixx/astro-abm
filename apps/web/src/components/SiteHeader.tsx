@@ -14,8 +14,9 @@ export function SiteHeader() {
       </Link>
       <div className="site-header-actions">
         <nav aria-label={t("nav.aria")}>
+          <Link href="/worldlines">{t("nav.worldlines")}</Link>
+          <Link href="/worldlines/new">{t("nav.createWorldline")}</Link>
           <Link href="/scenarios">{t("nav.scenarios")}</Link>
-          <Link href="/scenarios/new">{t("nav.create")}</Link>
           <Link href="/agents">{t("nav.agents")}</Link>
         </nav>
         <LanguageToggle />

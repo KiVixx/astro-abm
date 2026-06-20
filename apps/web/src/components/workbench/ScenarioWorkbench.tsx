@@ -16,6 +16,7 @@ import { useI18n } from "@/i18n/useI18n";
 interface ScenarioWorkbenchProps {
   report: ScenarioReport;
   initialDate?: string;
+  product?: "scenario" | "worldline";
 }
 
 function getInitialSnapshot(
@@ -31,8 +32,13 @@ function getInitialSnapshot(
   return timeline[0];
 }
 
-export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProps) {
+export function ScenarioWorkbench({
+  report,
+  initialDate,
+  product = "scenario",
+}: ScenarioWorkbenchProps) {
   const { t } = useI18n();
+  const isWorldline = product === "worldline";
   const timeline = report.daily_timeline || [];
   const initialSnapshot = getInitialSnapshot(timeline, initialDate);
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
@@ -61,6 +67,10 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
     graph?.nodes.find((node) => node.id === selectedNodeId) || null;
   const selectedEdge =
     graph?.edges.find((edge) => edge.id === selectedEdgeId) || null;
+  const selectedWorldlineDay =
+    report.worldline_simulation?.days.find(
+      (day) => day.date === selectedSnapshot?.date,
+    ) || null;
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
@@ -75,12 +85,17 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
           className="button secondary"
           href={`/scenarios/${report.scenario_id}/report`}
         >
-          {t("workbench.openReport")}
+          {isWorldline ? t("worldline.openReport") : t("workbench.openReport")}
         </Link>
+        {isWorldline ? (
+          <Link className="button secondary" href="/worldlines">
+            {t("worldline.backToWorldlines")}
+          </Link>
+        ) : null}
         <section className="notice">
-          <h1>{t("workbench.noTimelineTitle")}</h1>
+          <h1>{isWorldline ? t("worldline.workbench") : t("workbench.noTimelineTitle")}</h1>
           <p>
-            {t("workbench.noTimeline")}
+            {isWorldline ? t("worldline.noWorldline") : t("workbench.noTimeline")}
           </p>
         </section>
       </div>
@@ -91,10 +106,23 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
     <div className="workbench-page">
       <header className="workbench-header">
         <div>
-          <p className="muted">{t("workbench.productName")}</p>
+          <p className="muted">
+            {isWorldline ? t("worldline.workbench") : t("workbench.productName")}
+          </p>
           <h1>{report.title}</h1>
           <div className="tag-row">
             <span className="tag">{selectedSnapshot.date}</span>
+            {isWorldline && report.worldline_simulation ? (
+              <>
+                <span className="tag">
+                  {t("worldline.status")}: {report.worldline_simulation.status}
+                </span>
+                <span className="tag">
+                  {t("worldline.dayCount")}: {selectedIndex + 1}/
+                  {report.worldline_simulation.horizon_days}
+                </span>
+              </>
+            ) : null}
             <span className="tag">
               {report.start_date} {t("common.to")} {report.end_date}
             </span>
@@ -112,10 +140,10 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
             className="button secondary"
             href={`/scenarios/${report.scenario_id}/report`}
           >
-            {t("workbench.openReport")}
+            {t("worldline.openReport")}
           </Link>
-          <Link className="button secondary" href="/scenarios">
-            {t("common.scenarioList")}
+          <Link className="button secondary" href={isWorldline ? "/worldlines" : "/scenarios"}>
+            {isWorldline ? t("worldline.backToWorldlines") : t("common.scenarioList")}
           </Link>
         </div>
       </header>
@@ -125,7 +153,33 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
         coverageSummary={report.coverage_summary}
       />
 
-      <LlmScenarioReportCard compact llmReport={report.llm_report} />
+      {!isWorldline ? <LlmScenarioReportCard compact llmReport={report.llm_report} /> : null}
+
+      {isWorldline ? (
+        <section className="worldline-playback-bar">
+          <strong>{t("worldline.playback")}</strong>
+          <button
+            className="button secondary"
+            disabled={!previousSnapshot}
+            onClick={() => previousSnapshot && selectDate(previousSnapshot.date)}
+            type="button"
+          >
+            {t("workbench.previous")}
+          </button>
+          <span className="tag">{selectedSnapshot.date}</span>
+          <span className="tag">
+            {selectedIndex + 1}/{timeline.length}
+          </span>
+          <button
+            className="button secondary"
+            disabled={!nextSnapshot}
+            onClick={() => nextSnapshot && selectDate(nextSnapshot.date)}
+            type="button"
+          >
+            {t("workbench.next")}
+          </button>
+        </section>
+      ) : null}
 
       <DailyTimelineRail
         assetStressSeries={assetStressSeries}
@@ -151,6 +205,8 @@ export function ScenarioWorkbench({ report, initialDate }: ScenarioWorkbenchProp
           selectedEdge={selectedEdge}
           selectedNode={selectedNode}
           snapshot={selectedSnapshot}
+          worldlineDay={selectedWorldlineDay}
+          worldlinePrimary={isWorldline}
         />
       </main>
     </div>

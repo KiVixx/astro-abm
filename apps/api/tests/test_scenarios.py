@@ -104,6 +104,20 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
         report["daily_timeline"]
     )
     assert report["coverage_summary"]["asset_coverage"][0]["coverage_status"] == "missing"
+    assert report["worldline_simulation"]["status"] == "mock_completed"
+    assert report["worldline_simulation"]["mode"] == "deterministic_mock_v1"
+    assert report["worldline_simulation"]["horizon_days"] == len(report["daily_timeline"])
+    assert len(report["worldline_simulation"]["days"]) == len(report["daily_timeline"])
+    first_worldline_day = report["worldline_simulation"]["days"][0]
+    assert first_worldline_day["date"] == "2026-07-01"
+    assert len(first_worldline_day["agent_events"]) == len(scenario_payload()["agent_ids"])
+    assert first_worldline_day["causal_links"]
+    assert "Simulated worldline only" in first_worldline_day["disclaimer"]
+    for value in first_worldline_day["world_state_after"].values():
+        if isinstance(value, float):
+            assert 0 <= value <= 1
+    for event in first_worldline_day["agent_events"]:
+        assert all(-2 <= value <= 2 for value in event["impact_scores"].values())
     first_day = report["daily_timeline"][0]
     assert first_day["date"] == "2026-07-01"
     assert first_day["day_index"] == 1
@@ -132,6 +146,7 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert "not a trading signal" in report["disclaimer"]
     assert "association only" in report["markdown_report"]
     assert "## Context Coverage Summary" in report["markdown_report"]
+    assert "## Simulated Worldline" in report["markdown_report"]
     assert "not a point-in-time backtest" in report["markdown_report"]
     assert "## Daily Timeline" in report["markdown_report"]
     assert "## 2026-07-01" in report["markdown_report"]
@@ -425,6 +440,7 @@ def test_old_scenario_report_without_daily_timeline_loads(
     report.pop("language")
     report.pop("coverage_summary")
     report.pop("llm_report")
+    report.pop("worldline_simulation")
     (tmp_path / f"{scenario_id}.json").write_text(json.dumps(report), encoding="utf-8")
 
     get_response = client.get(f"/scenarios/{scenario_id}")
@@ -438,6 +454,7 @@ def test_old_scenario_report_without_daily_timeline_loads(
     assert loaded["language"] is None
     assert loaded["coverage_summary"] is None
     assert loaded["llm_report"] is None
+    assert loaded["worldline_simulation"] is None
 
 
 def test_old_daily_timeline_without_research_fields_loads(
