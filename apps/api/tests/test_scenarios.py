@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from astro_abm_api.main import app
 from astro_abm_api.models.report import ScenarioReport
+from astro_abm_api.services.llm_client import safety_check_text
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
 
@@ -32,6 +33,44 @@ def inclusive_day_count(start_date: str, end_date: str) -> int:
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
     return (end - start).days + 1
+
+
+def test_safety_checker_allows_benign_horizon_language() -> None:
+    benign_text = (
+        "Long-Term Holder reviews a long-term horizon with a longer-term view. "
+        "A short-horizon participant watches a short window for scenario rehearsal only."
+    )
+
+    assert safety_check_text(benign_text)
+
+
+@pytest.mark.parametrize(
+    "unsafe_text",
+    [
+        "go long",
+        "enter long",
+        "long BTC",
+        "go short",
+        "short ETH",
+        "buy BTC",
+        "sell ETH",
+        "price target",
+        "must buy",
+        "must sell",
+        "買入",
+        "賣出",
+        "做多",
+        "做空",
+        "目標價",
+        "保證",
+        "一定會漲",
+        "一定會跌",
+    ],
+)
+def test_safety_checker_rejects_explicit_trading_instruction_phrases(
+    unsafe_text: str,
+) -> None:
+    assert not safety_check_text(unsafe_text)
 
 
 @pytest.fixture(autouse=True)
@@ -802,6 +841,303 @@ def test_llm_chunk_endpoint_merges_and_saves_report(
     assert calls[0][3] == 77
     assert request_secret not in saved_text
     assert "## LLM Scenario Report" in body["report"]["markdown_report"]
+
+
+def test_worldline_chunk_disabled_returns_dry_run_without_network(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+
+    def fail_post(*args, **kwargs):
+        raise AssertionError("network call should not be performed when real LLM is disabled")
+
+    monkeypatch.setattr("astro_abm_api.services.worldline_llm_generator._call_openai_compatible", fail_post)
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": False,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-03",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 3,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    assert chunk_response.json()["worldline_status"] == "dry_run"
+    assert worldline["status"] == "dry_run"
+    assert worldline["mode"] == "llm_chunk_v1"
+    assert worldline["provenance"]["generation_mode"] == "dry_run"
+    assert worldline["provenance"]["network_call_performed"] is False
+
+
+def test_worldline_chunk_mocked_network_generates_structured_events(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    request_secret = "worldline-secret"
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "summary": "LLM simulated worldline chunk from supplied context.",
+                                    "days": [
+                                        {
+                                            "date": "2026-07-01",
+                                            "agent_events": [
+                                                {
+                                                    "agent_id": "crypto_retail_fomo",
+                                                    "what_happened": "Retail attention increased inside the simulated worldline.",
+                                                    "why_it_happened": "The provided context combined watchful stress and narrative sensitivity.",
+                                                    "impact_on_tomorrow": "Sets up more narrative review for tomorrow.",
+                                                    "impact_scores": {
+                                                        "sentiment_delta": 4,
+                                                        "narrative_pressure_delta": 3,
+                                                        "leverage_pressure_delta": 0,
+                                                        "liquidity_pressure_delta": 0,
+                                                        "volatility_pressure_delta": 1,
+                                                        "stress_pressure_delta": 1,
+                                                    },
+                                                    "confidence": "low_llm_context_confidence",
+                                                    "caveats": ["simulated worldline only"],
+                                                },
+                                                {
+                                                    "agent_id": "unknown_agent",
+                                                    "what_happened": "This should be ignored.",
+                                                    "why_it_happened": "Unknown agent.",
+                                                    "impact_on_tomorrow": "Ignored.",
+                                                    "impact_scores": {},
+                                                    "confidence": "low",
+                                                    "caveats": [],
+                                                },
+                                            ],
+                                            "causal_links": [
+                                                {
+                                                    "source": "retail_attention",
+                                                    "target": "next_day_narrative_pressure",
+                                                    "description": "A simulated link raises tomorrow's narrative pressure.",
+                                                    "strength": "medium",
+                                                    "caveats": ["simulated causal link only"],
+                                                }
+                                            ],
+                                            "next_day_update": "Tomorrow starts with narrative pressure under review.",
+                                            "world_state_after": {
+                                                "sentiment_state": "watchful",
+                                                "narrative_pressure": 1.5,
+                                                "leverage_pressure": -0.2,
+                                                "liquidity_pressure": 0.44,
+                                                "volatility_pressure": 0.55,
+                                                "stress_pressure": 0.66,
+                                                "regime_label": "llm_chunk_watch",
+                                                "notes": ["clamped by backend"],
+                                            },
+                                        }
+                                    ],
+                                    "caveats": ["does not invent external data"],
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append((url, headers, json, timeout))
+        return Response()
+
+    monkeypatch.setattr("astro_abm_api.services.llm_client.requests.post", fake_post)
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "llm_api_key": request_secret,
+            "llm_timeout_seconds": 88,
+            "llm_max_output_tokens": 2500,
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    body = chunk_response.json()
+    saved_text = (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
+    worldline = body["report"]["worldline_simulation"]
+    first_day = worldline["days"][0]
+    assert body["worldline_status"] == "completed"
+    assert worldline["mode"] == "llm_chunk_v1"
+    assert worldline["provenance"]["generation_mode"] == "llm_chunk_v1"
+    assert worldline["provenance"]["chunk_size_days"] == 1
+    assert worldline["provenance"]["chunk_count"] == 1
+    assert worldline["provenance"]["failed_chunk_count"] == 0
+    assert worldline["provenance"]["network_call_performed"] is True
+    assert worldline["provenance"]["safety_check_status"] == "passed"
+    assert first_day["agent_events"][0]["agent_id"] == "crypto_retail_fomo"
+    assert len(first_day["agent_events"]) == 1
+    assert first_day["agent_events"][0]["impact_scores"]["sentiment_delta"] == 2
+    assert first_day["world_state_after"]["narrative_pressure"] == 1
+    assert first_day["world_state_after"]["leverage_pressure"] == 0
+    assert first_day["causal_links"][0]["source"] == "retail_attention"
+    assert calls[0][0] == "http://llm.local/v1/chat/completions"
+    assert calls[0][1]["Authorization"] == f"Bearer {request_secret}"
+    assert calls[0][2]["max_tokens"] == 2500
+    assert calls[0][3] == 88
+    assert request_secret not in saved_text
+    assert "Generation mode: llm_chunk_v1" in body["report"]["markdown_report"]
+
+
+def test_worldline_chunk_invalid_json_falls_back_safely(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "not json"}}]}
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        lambda *args, **kwargs: Response(),
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    assert chunk_response.json()["worldline_status"] == "fallback"
+    assert worldline["provenance"]["output_validation_status"] == "invalid_json"
+    assert worldline["provenance"]["failed_chunk_count"] == 1
+    assert worldline["days"][0]["agent_events"]
+
+
+def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "summary": "unsafe",
+                                    "days": [
+                                        {
+                                            "date": "2026-07-01",
+                                            "agent_events": [
+                                                {
+                                                    "agent_id": "crypto_retail_fomo",
+                                                    "what_happened": "must buy BTC",
+                                                    "why_it_happened": "unsafe",
+                                                    "impact_on_tomorrow": "unsafe",
+                                                    "impact_scores": {},
+                                                    "confidence": "low",
+                                                    "caveats": [],
+                                                }
+                                            ],
+                                            "causal_links": [],
+                                            "next_day_update": "unsafe",
+                                            "world_state_after": {},
+                                        }
+                                    ],
+                                    "caveats": [],
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        lambda *args, **kwargs: Response(),
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    response_text = json.dumps(chunk_response.json())
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    assert chunk_response.json()["worldline_status"] == "fallback"
+    assert worldline["provenance"]["safety_check_status"] == "failed"
+    assert "must buy BTC" not in response_text
 
 
 def test_openai_compatible_invalid_json_marks_invalid_output(

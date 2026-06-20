@@ -39,6 +39,20 @@ DEFAULT_MAX_OUTPUT_TOKENS = 5000
 RAW_TEXT_PREVIEW_LIMIT = 800
 
 BANNED_SAFETY_PATTERNS = (
+    r"\bmust\s+buy\b",
+    r"\bmust\s+sell\b",
+    r"\byou\s+should\s+buy\b",
+    r"\byou\s+should\s+sell\b",
+    r"\byou\s+should\s+short\b",
+    r"\byou\s+should\s+go\s+long\b",
+    r"\bgo\s+long\b",
+    r"\benter\s+long\b",
+    r"\bgo\s+short\b",
+    r"\benter\s+short\b",
+    r"\blong\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
+    r"\bshort\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
+    r"\bbuy\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
+    r"\bsell\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
     r"you should buy",
     r"you should sell",
     r"you should short",
@@ -55,6 +69,14 @@ BANNED_SAFETY_PATTERNS = (
     r"\bcauses\b",
     r"will rise",
     r"will fall",
+    r"買入",
+    r"賣出",
+    r"做多",
+    r"做空",
+    r"目標價",
+    r"保證",
+    r"一定會漲",
+    r"一定會跌",
 )
 
 

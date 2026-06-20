@@ -1,7 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createScenario, generateScenarioLlmChunk } from "@/lib/api";
+import {
+  createScenario,
+  generateScenarioLlmChunk,
+  generateScenarioWorldlineChunk,
+} from "@/lib/api";
 import type {
   LlmProvider,
   ReportLanguage,
@@ -9,7 +13,10 @@ import type {
   ScenarioLlmChunkRequest,
   ScenarioLlmChunkResponse,
   ScenarioReport,
+  ScenarioWorldlineChunkRequest,
+  ScenarioWorldlineChunkResponse,
   Visibility,
+  WorldlineProvider,
 } from "@/lib/types";
 
 function getString(formData: FormData, name: string): string {
@@ -60,6 +67,11 @@ export async function createScenarioAction(formData: FormData): Promise<void> {
     visibility: visibility || "private",
     mode: "daily_association_only",
     language: language || "en",
+    worldline_provider: (
+      getString(formData, "worldline_provider") || "deterministic_mock"
+    ) as WorldlineProvider,
+    worldline_chunk_days: (optionalNumber(getString(formData, "llm_chunk_size_days")) ||
+      3) as 1 | 2 | 3 | 5,
   });
 
   redirect(`/scenarios/${report.scenario_id}`);
@@ -76,4 +88,11 @@ export async function generateScenarioLlmChunkAction(
   payload: ScenarioLlmChunkRequest,
 ): Promise<ScenarioLlmChunkResponse> {
   return generateScenarioLlmChunk(scenarioId, payload);
+}
+
+export async function generateScenarioWorldlineChunkAction(
+  scenarioId: string,
+  payload: ScenarioWorldlineChunkRequest,
+): Promise<ScenarioWorldlineChunkResponse> {
+  return generateScenarioWorldlineChunk(scenarioId, payload);
 }

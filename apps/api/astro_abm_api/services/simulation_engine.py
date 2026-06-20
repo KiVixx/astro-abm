@@ -22,7 +22,7 @@ from astro_abm_api.services.llm_client import (
     generate_llm_scenario_report,
     provenance_for_llm,
 )
-from astro_abm_api.services.worldline_simulation import generate_worldline_simulation
+from astro_abm_api.services.worldline_llm_generator import generate_worldline_for_request
 
 
 DISCLAIMER_BY_LANGUAGE: dict[ReportLanguage, str] = {
@@ -785,6 +785,13 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
         )
         return f"""- 狀態：{worldline.status}
 - 模式：{worldline.mode}
+- 生成模式：{worldline.provenance.get("generation_mode")}
+- Chunk size：{worldline.provenance.get("chunk_size_days")}
+- 是否使用 LLM 網路呼叫：{worldline.provenance.get("network_call_performed")}
+- Chunk count：{worldline.provenance.get("chunk_count")}
+- Failed chunk count：{worldline.provenance.get("failed_chunk_count")}
+- 輸出驗證：{worldline.provenance.get("output_validation_status")}
+- 安全檢查：{worldline.provenance.get("safety_check_status")}
 - 推演天數：{worldline.horizon_days}
 - 摘要：{worldline.summary}
 
@@ -833,6 +840,13 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
     )
     return f"""- Status: {worldline.status}
 - Mode: {worldline.mode}
+- Generation mode: {worldline.provenance.get("generation_mode")}
+- Chunk size: {worldline.provenance.get("chunk_size_days")}
+- LLM network call performed: {worldline.provenance.get("network_call_performed")}
+- Chunk count: {worldline.provenance.get("chunk_count")}
+- Failed chunk count: {worldline.provenance.get("failed_chunk_count")}
+- Output validation: {worldline.provenance.get("output_validation_status")}
+- Safety check: {worldline.provenance.get("safety_check_status")}
 - Horizon days: {worldline.horizon_days}
 - Summary: {worldline.summary}
 
@@ -1144,6 +1158,6 @@ def generate_scenario_report(
     )
     llm_report = generate_llm_scenario_report(request, report)
     report = report.model_copy(update={"llm_report": llm_report})
-    worldline_simulation = generate_worldline_simulation(report)
+    worldline_simulation = generate_worldline_for_request(request, report)
     report = report.model_copy(update={"worldline_simulation": worldline_simulation})
     return report.model_copy(update={"markdown_report": render_markdown(report)})

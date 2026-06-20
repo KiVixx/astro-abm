@@ -2,6 +2,7 @@ export type Visibility = "private" | "public";
 export type ScenarioMode = "daily_association_only";
 export type LlmProvider = "mock" | "openai_compatible";
 export type ReportLanguage = "en" | "zh-Hant";
+export type WorldlineProvider = "deterministic_mock" | "llm";
 
 export interface AgentProfile {
   agent_id: string;
@@ -269,6 +270,8 @@ export interface ScenarioCreateRequest {
   visibility: Visibility;
   mode?: ScenarioMode;
   language?: ReportLanguage;
+  worldline_provider?: WorldlineProvider;
+  worldline_chunk_days?: 1 | 2 | 3 | 5;
 }
 
 export interface ScenarioLlmChunkRequest {
@@ -294,6 +297,34 @@ export interface ScenarioLlmChunkResponse {
   chunk_start_date: string;
   chunk_end_date: string;
   llm_status: string;
+  completed: boolean;
+  report: ScenarioReport;
+}
+
+export interface ScenarioWorldlineChunkRequest {
+  llm_provider: LlmProvider;
+  llm_real_enabled?: boolean | null;
+  llm_base_url?: string | null;
+  llm_model?: string | null;
+  llm_api_key?: string | null;
+  llm_user_prompt?: string | null;
+  llm_timeout_seconds?: number | null;
+  llm_max_output_tokens?: number | null;
+  language?: ReportLanguage;
+  chunk_start_date: string;
+  chunk_end_date: string;
+  chunk_index: number;
+  total_chunks: number;
+  worldline_chunk_days?: 1 | 2 | 3 | 5;
+}
+
+export interface ScenarioWorldlineChunkResponse {
+  scenario_id: string;
+  chunk_index: number;
+  total_chunks: number;
+  chunk_start_date: string;
+  chunk_end_date: string;
+  worldline_status: string;
   completed: boolean;
   report: ScenarioReport;
 }

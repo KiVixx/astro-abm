@@ -206,6 +206,7 @@ export function ScenarioWorkbench({
           selectedNode={selectedNode}
           snapshot={selectedSnapshot}
           worldlineDay={selectedWorldlineDay}
+          worldlineSimulation={report.worldline_simulation}
           worldlinePrimary={isWorldline}
         />
       </main>

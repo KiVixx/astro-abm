@@ -15,7 +15,10 @@ import type {
   ScenarioLlmChunkRequest,
   ScenarioLlmChunkResponse,
   ScenarioReport,
+  ScenarioWorldlineChunkRequest,
+  ScenarioWorldlineChunkResponse,
   Visibility,
+  WorldlineProvider,
 } from "@/lib/types";
 
 interface GenerationProgress {
@@ -39,6 +42,7 @@ interface LlmSettingsPreset {
   timeoutSeconds: string;
   maxOutputTokens: string;
   userPrompt: string;
+  worldlineProvider?: WorldlineProvider;
   apiKey?: string | null;
 }
 
@@ -53,6 +57,7 @@ export function ScenarioForm({
   marketSeries,
   createAction,
   chunkAction,
+  worldlineChunkAction,
   product = "scenario",
 }: {
   agents: AgentProfile[];
@@ -62,6 +67,10 @@ export function ScenarioForm({
     scenarioId: string,
     payload: ScenarioLlmChunkRequest,
   ) => Promise<ScenarioLlmChunkResponse>;
+  worldlineChunkAction?: (
+    scenarioId: string,
+    payload: ScenarioWorldlineChunkRequest,
+  ) => Promise<ScenarioWorldlineChunkResponse>;
   product?: "scenario" | "worldline";
 }) {
   const router = useRouter();
@@ -109,15 +118,18 @@ export function ScenarioForm({
     const chunkSizeDays = clampNumber(
       optionalNumber(getString(formData, "llm_chunk_size_days")) ?? 3,
       1,
-      3,
-    );
+      5,
+    ) as 1 | 2 | 3 | 5;
     const callDelaySeconds = clampNumber(
       optionalNumber(getString(formData, "llm_call_delay_seconds")) ??
         DEFAULT_LLM_CALL_DELAY_SECONDS,
       0,
       120,
     );
+    const shouldChunkWorldline =
+      product === "worldline" && payload.worldline_provider === "llm";
     const shouldChunkLlm =
+      product !== "worldline" &&
       payload.llm_provider === "openai_compatible" && payload.llm_real_enabled === true;
 
     try {
@@ -129,17 +141,18 @@ export function ScenarioForm({
         message: t("scenarioCreate.progressBase"),
       });
 
-      const basePayload: ScenarioCreateRequest = shouldChunkLlm
+      const basePayload: ScenarioCreateRequest = shouldChunkLlm || shouldChunkWorldline
         ? {
             ...payload,
             llm_provider: "mock",
             llm_real_enabled: false,
             llm_api_key: null,
+            worldline_provider: "deterministic_mock",
           }
         : payload;
       const report = await createAction(basePayload);
 
-      if (!shouldChunkLlm) {
+      if (!shouldChunkLlm && !shouldChunkWorldline) {
         setProgress({
           active: true,
           phase: "done",
@@ -155,30 +168,60 @@ export function ScenarioForm({
 
       const chunks = buildDateChunks(payload.start_date, payload.end_date, chunkSizeDays);
       for (const [index, chunk] of chunks.entries()) {
+        const chunkLabel = shouldChunkWorldline
+          ? t("scenarioCreate.progressWorldlineChunk")
+          : t("scenarioCreate.progressLlmChunk");
         setProgress({
           active: true,
           phase: "llm",
           currentChunk: index,
           totalChunks: chunks.length,
-          message: `${t("scenarioCreate.progressLlmChunk")} ${index + 1}/${chunks.length}: ${chunk.start} → ${chunk.end}`,
+          message: `${chunkLabel} ${index + 1}/${chunks.length}: ${chunk.start} → ${chunk.end}`,
         });
-        const response = await chunkAction(report.scenario_id, {
-          llm_provider: payload.llm_provider,
-          llm_real_enabled: payload.llm_real_enabled,
-          llm_base_url: payload.llm_base_url,
-          llm_model: payload.llm_model,
-          llm_api_key: payload.llm_api_key,
-          llm_user_prompt: payload.llm_user_prompt,
-          llm_timeout_seconds: payload.llm_timeout_seconds,
-          llm_max_output_tokens: payload.llm_max_output_tokens,
-          language: payload.language,
-          chunk_start_date: chunk.start,
-          chunk_end_date: chunk.end,
-          chunk_index: index + 1,
-          total_chunks: chunks.length,
-        });
-        if (response.llm_status !== "completed") {
-          throw new Error(`${t("scenarioCreate.progressChunkFailed")}: ${response.llm_status}`);
+        if (shouldChunkWorldline) {
+          if (!worldlineChunkAction) {
+            throw new Error("Worldline chunk action is not configured.");
+          }
+          const response = await worldlineChunkAction(report.scenario_id, {
+            llm_provider: payload.llm_provider,
+            llm_real_enabled: payload.llm_real_enabled,
+            llm_base_url: payload.llm_base_url,
+            llm_model: payload.llm_model,
+            llm_api_key: payload.llm_api_key,
+            llm_user_prompt: payload.llm_user_prompt,
+            llm_timeout_seconds: payload.llm_timeout_seconds,
+            llm_max_output_tokens: payload.llm_max_output_tokens,
+            language: payload.language,
+            chunk_start_date: chunk.start,
+            chunk_end_date: chunk.end,
+            chunk_index: index + 1,
+            total_chunks: chunks.length,
+            worldline_chunk_days: chunkSizeDays,
+          });
+          if (!["completed", "fallback", "dry_run"].includes(response.worldline_status)) {
+            throw new Error(
+              `${t("scenarioCreate.progressChunkFailed")}: ${response.worldline_status}`,
+            );
+          }
+        } else {
+          const response = await chunkAction(report.scenario_id, {
+            llm_provider: payload.llm_provider,
+            llm_real_enabled: payload.llm_real_enabled,
+            llm_base_url: payload.llm_base_url,
+            llm_model: payload.llm_model,
+            llm_api_key: payload.llm_api_key,
+            llm_user_prompt: payload.llm_user_prompt,
+            llm_timeout_seconds: payload.llm_timeout_seconds,
+            llm_max_output_tokens: payload.llm_max_output_tokens,
+            language: payload.language,
+            chunk_start_date: chunk.start,
+            chunk_end_date: chunk.end,
+            chunk_index: index + 1,
+            total_chunks: chunks.length,
+          });
+          if (response.llm_status !== "completed") {
+            throw new Error(`${t("scenarioCreate.progressChunkFailed")}: ${response.llm_status}`);
+          }
         }
         setProgress({
           active: true,
@@ -311,6 +354,16 @@ export function ScenarioForm({
             </option>
           </select>
         </label>
+        {product === "worldline" ? (
+          <label className="form-field">
+            <span>{t("worldline.modeSelect")}</span>
+            <select name="worldline_provider" defaultValue="deterministic_mock">
+              <option value="deterministic_mock">{t("worldline.deterministicMock")}</option>
+              <option value="llm">{t("worldline.llmChunk")}</option>
+            </select>
+            <span className="muted">{t("worldline.llmChunkHelp")}</span>
+          </label>
+        ) : null}
         <label className="checkbox-card">
           <input defaultChecked name="llm_real_enabled" type="checkbox" />
           <span>
@@ -366,6 +419,7 @@ export function ScenarioForm({
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
+            <option value="5">5</option>
           </select>
         </label>
         <label className="form-field">
@@ -541,6 +595,14 @@ function payloadFromFormData(formData: FormData): ScenarioCreateRequest {
     visibility: (getString(formData, "visibility") || "private") as Visibility,
     mode: "daily_association_only",
     language: (getString(formData, "language") || "en") as ReportLanguage,
+    worldline_provider: (
+      getString(formData, "worldline_provider") || "deterministic_mock"
+    ) as WorldlineProvider,
+    worldline_chunk_days: clampNumber(
+      optionalNumber(getString(formData, "llm_chunk_size_days")) ?? 3,
+      1,
+      5,
+    ) as 1 | 2 | 3 | 5,
   };
 }
 
@@ -660,6 +722,8 @@ function readLlmPresetFromForm(
     timeoutSeconds: getString(formData, "llm_timeout_seconds") || "120",
     maxOutputTokens: getString(formData, "llm_max_output_tokens") || "5000",
     userPrompt: getString(formData, "llm_user_prompt"),
+    worldlineProvider: (getString(formData, "worldline_provider") ||
+      "deterministic_mock") as WorldlineProvider,
     apiKey: includeApiKey ? getString(formData, "llm_api_key") : null,
   };
 }
@@ -678,6 +742,7 @@ function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmSettingsPreset) 
   setFormValue(form, "llm_timeout_seconds", preset.timeoutSeconds);
   setFormValue(form, "llm_max_output_tokens", preset.maxOutputTokens);
   setFormValue(form, "llm_user_prompt", preset.userPrompt || "");
+  setFormValue(form, "worldline_provider", preset.worldlineProvider || "deterministic_mock");
   setFormValue(form, "llm_api_key", preset.apiKey || "");
 }
 
@@ -717,6 +782,9 @@ function isLlmSettingsPreset(value: unknown): value is LlmSettingsPreset {
     typeof preset.timeoutSeconds === "string" &&
     typeof preset.maxOutputTokens === "string" &&
     (preset.userPrompt === undefined || typeof preset.userPrompt === "string") &&
+    (preset.worldlineProvider === undefined ||
+      preset.worldlineProvider === "deterministic_mock" ||
+      preset.worldlineProvider === "llm") &&
     (preset.apiKey === undefined ||
       preset.apiKey === null ||
       typeof preset.apiKey === "string")

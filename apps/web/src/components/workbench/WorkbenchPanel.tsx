@@ -1,4 +1,8 @@
-import type { DailyScenarioSnapshot, WorldlineDay } from "@/lib/types";
+import type {
+  DailyScenarioSnapshot,
+  WorldlineDay,
+  WorldlineSimulation,
+} from "@/lib/types";
 import { SafetyPhrases } from "../SafetyPhrases";
 import { WorldlinePanel } from "./WorldlinePanel";
 import {
@@ -22,6 +26,7 @@ interface WorkbenchPanelProps {
   selectedEdge?: WorkbenchEdge | null;
   graph?: WorkbenchGraph | null;
   worldlineDay?: WorldlineDay | null;
+  worldlineSimulation?: WorldlineSimulation | null;
   worldlinePrimary?: boolean;
 }
 
@@ -321,6 +326,7 @@ export function WorkbenchPanel({
   selectedNode,
   snapshot,
   worldlineDay,
+  worldlineSimulation,
   worldlinePrimary = false,
 }: WorkbenchPanelProps) {
   const { t } = useI18n();
@@ -341,7 +347,11 @@ export function WorkbenchPanel({
         </div>
       </div>
       {worldlinePrimary ? (
-        <WorldlinePanel primary worldlineDay={worldlineDay} />
+        <WorldlinePanel
+          primary
+          worldlineDay={worldlineDay}
+          worldlineSimulation={worldlineSimulation}
+        />
       ) : null}
       {selectedEdge ? (
         <EdgePanel edge={selectedEdge} graph={graph} />
@@ -356,7 +366,12 @@ export function WorkbenchPanel({
       ) : (
         <OverviewPanel snapshot={snapshot} />
       )}
-      {!worldlinePrimary ? <WorldlinePanel worldlineDay={worldlineDay} /> : null}
+      {!worldlinePrimary ? (
+        <WorldlinePanel
+          worldlineDay={worldlineDay}
+          worldlineSimulation={worldlineSimulation}
+        />
+      ) : null}
       <div className="notice workbench-disclaimer">
         <SafetyPhrases />
         <p>{snapshot.disclaimer}</p>

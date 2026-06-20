@@ -4,6 +4,7 @@ import type {
   WorldlineAgentEvent,
   WorldlineDay,
   WorldlineImpactScores,
+  WorldlineSimulation,
   WorldlineState,
 } from "@/lib/types";
 import { formatAgentName } from "@/i18n/labels";
@@ -12,6 +13,7 @@ import { useI18n } from "@/i18n/useI18n";
 interface WorldlinePanelProps {
   primary?: boolean;
   worldlineDay?: WorldlineDay | null;
+  worldlineSimulation?: WorldlineSimulation | null;
 }
 
 const IMPACT_SCORE_KEYS: Array<keyof WorldlineImpactScores> = [
@@ -23,7 +25,11 @@ const IMPACT_SCORE_KEYS: Array<keyof WorldlineImpactScores> = [
   "stress_pressure_delta",
 ];
 
-export function WorldlinePanel({ primary = false, worldlineDay }: WorldlinePanelProps) {
+export function WorldlinePanel({
+  primary = false,
+  worldlineDay,
+  worldlineSimulation,
+}: WorldlinePanelProps) {
   const { t } = useI18n();
   if (!worldlineDay) {
     return primary ? (
@@ -36,6 +42,10 @@ export function WorldlinePanel({ primary = false, worldlineDay }: WorldlinePanel
 
   const body = (
     <div className="stack worldline-panel-body">
+      {worldlineSimulation ? (
+        <WorldlineProvenanceTags simulation={worldlineSimulation} />
+      ) : null}
+
       <section>
         <h3>{t("worldline.whatHappenedToday")}</h3>
         <p>{worldlineDay.input_context_summary}</p>
@@ -116,6 +126,34 @@ export function WorldlinePanel({ primary = false, worldlineDay }: WorldlinePanel
       </summary>
       {body}
     </details>
+  );
+}
+
+function WorldlineProvenanceTags({
+  simulation,
+}: {
+  simulation: WorldlineSimulation;
+}) {
+  const { t } = useI18n();
+  const provenance = simulation.provenance || {};
+  return (
+    <div className="tag-row">
+      <span className="tag">
+        {t("worldline.generationMode")}:{" "}
+        {String(provenance.generation_mode || simulation.mode)}
+      </span>
+      <span className="tag">
+        {t("worldline.chunkSize")}:{" "}
+        {String(provenance.chunk_size_days || "n/a")}
+      </span>
+      <span className="tag">
+        {t("worldline.chunkStatus")}: {simulation.status}
+      </span>
+      <span className="tag">
+        {t("worldline.failedChunks")}:{" "}
+        {String(provenance.failed_chunk_count || 0)}
+      </span>
+    </div>
   );
 }
 

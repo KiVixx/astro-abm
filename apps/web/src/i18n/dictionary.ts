@@ -106,9 +106,17 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.mode": "generation mode",
     "worldline.dayCount": "worldline days",
     "worldline.simulationMode": "Simulation mode",
+    "worldline.modeSelect": "Worldline mode",
     "worldline.deterministicMock": "Deterministic mock worldline",
+    "worldline.llmChunk": "LLM worldline",
+    "worldline.llmChunkHelp":
+      "LLM worldline generation simulates agent events and next-day setup. It is not a trading signal.",
     "worldline.modeHelp":
-      "This PR uses deterministic scenario mechanics only. LLM worldline generation and statistical models come later.",
+      "Deterministic mock is the safe default. LLM worldline mode is optional and still uses the same no-trading-signal safety boundary.",
+    "worldline.generationMode": "Generation mode",
+    "worldline.chunkSize": "Chunk size",
+    "worldline.chunkStatus": "Chunk status",
+    "worldline.failedChunks": "Failed chunks",
 
     "scenarioCreate.title": "Create scenario",
     "scenarioCreate.lead":
@@ -192,6 +200,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressTitle": "Generation progress",
     "scenarioCreate.progressBase": "Creating deterministic scenario context...",
     "scenarioCreate.progressLlmChunk": "Generating LLM chunk",
+    "scenarioCreate.progressWorldlineChunk": "Generating worldline chunk",
     "scenarioCreate.progressLlmChunkDone": "Completed LLM chunk",
     "scenarioCreate.progressLlmDelay": "Waiting before next LLM call",
     "scenarioCreate.progressChunkFailed": "LLM chunk failed",
@@ -554,9 +563,17 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.mode": "生成模式",
     "worldline.dayCount": "世界線天數",
     "worldline.simulationMode": "推演模式",
+    "worldline.modeSelect": "世界線模式",
     "worldline.deterministicMock": "確定性 mock 世界線",
+    "worldline.llmChunk": "LLM 世界線",
+    "worldline.llmChunkHelp":
+      "LLM 世界線會模擬群體事件與明日情境鋪墊；它不是交易訊號。",
     "worldline.modeHelp":
-      "此 PR 只使用確定性情境機械規則。LLM 世界線生成與統計模型會在後續加入。",
+      "確定性 mock 是安全預設。LLM 世界線為可選模式，仍受不是交易訊號的安全邊界限制。",
+    "worldline.generationMode": "生成模式",
+    "worldline.chunkSize": "Chunk 大小",
+    "worldline.chunkStatus": "Chunk 狀態",
+    "worldline.failedChunks": "失敗 Chunk 數",
 
     "scenarioCreate.title": "建立情境",
     "scenarioCreate.lead": "透過 FastAPI 產品 API 生成本地 mock 情境報告。",
@@ -637,6 +654,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressTitle": "生成進度",
     "scenarioCreate.progressBase": "正在建立 deterministic 情境脈絡...",
     "scenarioCreate.progressLlmChunk": "正在生成 LLM 分段",
+    "scenarioCreate.progressWorldlineChunk": "正在生成世界線分段",
     "scenarioCreate.progressLlmChunkDone": "已完成 LLM 分段",
     "scenarioCreate.progressLlmDelay": "等待後再呼叫下一段 LLM",
     "scenarioCreate.progressChunkFailed": "LLM 分段失敗",

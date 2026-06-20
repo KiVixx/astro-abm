@@ -5,6 +5,7 @@ import { getAgents, getAssets } from "@/lib/api";
 import {
   createScenarioForProgressAction,
   generateScenarioLlmChunkAction,
+  generateScenarioWorldlineChunkAction,
 } from "../../scenarios/new/actions";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function NewWorldlinePage() {
           createAction={createScenarioForProgressAction}
           marketSeries={marketSeries}
           product="worldline"
+          worldlineChunkAction={generateScenarioWorldlineChunkAction}
         />
       </div>
     );
