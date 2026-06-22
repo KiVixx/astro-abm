@@ -201,6 +201,9 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert len(report["worldline_simulation"]["days"]) == len(report["daily_timeline"])
     first_worldline_day = report["worldline_simulation"]["days"][0]
     assert first_worldline_day["date"] == "2026-07-01"
+    assert first_worldline_day["generation_source"] == "deterministic_mock"
+    assert first_worldline_day["chunk_status"] == "mock_completed"
+    assert first_worldline_day["quality_notes"]
     assert len(first_worldline_day["agent_events"]) == len(scenario_payload()["agent_ids"])
     assert first_worldline_day["causal_links"]
     assert "Simulated worldline only" in first_worldline_day["disclaimer"]
@@ -1056,6 +1059,12 @@ def test_worldline_chunk_mocked_network_generates_structured_events(
     assert worldline["provenance"]["failed_chunk_count"] == 0
     assert worldline["provenance"]["network_call_performed"] is True
     assert worldline["provenance"]["safety_check_status"] == "passed"
+    assert worldline["provenance"]["llm_output_quality_notes"]
+    assert worldline["provenance"]["chunk_history"][0]["status"] == "completed"
+    assert first_day["generation_source"] == "llm_chunk"
+    assert first_day["chunk_index"] == 1
+    assert first_day["chunk_status"] == "completed"
+    assert first_day["quality_notes"]
     assert first_day["agent_events"][0]["agent_id"] == "crypto_retail_fomo"
     assert len(first_day["agent_events"]) == 1
     assert first_day["agent_events"][0]["impact_scores"]["sentiment_delta"] == 2
@@ -1068,6 +1077,90 @@ def test_worldline_chunk_mocked_network_generates_structured_events(
     assert calls[0][3] == 88
     assert request_secret not in saved_text
     assert "Generation mode: llm_chunk_v1" in body["report"]["markdown_report"]
+
+
+def test_worldline_chunk_retries_before_fallback(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+
+    valid_payload = {
+        "summary": "Recovered chunk.",
+        "days": [
+            {
+                "date": "2026-07-01",
+                "agent_events": [
+                    {
+                        "agent_id": "crypto_retail_fomo",
+                        "what_happened": "Retail attention was reviewed inside the simulated worldline.",
+                        "why_it_happened": "The supplied context remained bounded and scenario-internal.",
+                        "impact_on_tomorrow": "Tomorrow starts with narrative pressure under review.",
+                        "impact_scores": {
+                            "sentiment_delta": 1,
+                            "narrative_pressure_delta": 1,
+                            "leverage_pressure_delta": 0,
+                            "liquidity_pressure_delta": 0,
+                            "volatility_pressure_delta": 1,
+                            "stress_pressure_delta": 0,
+                        },
+                        "confidence": "low",
+                        "caveats": ["simulated worldline only"],
+                    }
+                ],
+                "causal_links": [],
+                "next_day_update": "The next simulated day remains under review.",
+                "world_state_after": {},
+            }
+        ],
+        "caveats": [],
+    }
+    calls = 0
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                return {"choices": [{"message": {"content": "not json"}}]}
+            return {"choices": [{"message": {"content": json.dumps(valid_payload)}}]}
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        lambda *args, **kwargs: Response(),
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    assert calls == 3
+    assert chunk_response.json()["worldline_status"] == "completed"
+    assert worldline["provenance"]["attempt_count"] == 3
+    assert worldline["provenance"]["failed_chunk_count"] == 0
+    assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
+    assert worldline["days"][0]["generation_source"] == "llm_chunk"
+    assert "attempt 3" in " ".join(worldline["days"][0]["quality_notes"])
 
 
 def test_worldline_chunk_invalid_json_falls_back_safely(
@@ -1112,6 +1205,13 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert chunk_response.json()["worldline_status"] == "fallback"
     assert worldline["provenance"]["output_validation_status"] == "invalid_json"
     assert worldline["provenance"]["failed_chunk_count"] == 1
+    assert worldline["provenance"]["attempt_count"] == 3
+    assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
+    assert worldline["provenance"]["llm_output_quality_notes"]
+    assert worldline["provenance"]["chunk_history"][0]["status"] == "fallback"
+    assert worldline["days"][0]["generation_source"] == "fallback"
+    assert worldline["days"][0]["chunk_status"] == "invalid_json"
+    assert worldline["days"][0]["quality_notes"]
     assert worldline["days"][0]["agent_events"]
 
 

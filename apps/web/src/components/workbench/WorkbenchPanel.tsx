@@ -28,6 +28,10 @@ interface WorkbenchPanelProps {
   worldlineDay?: WorldlineDay | null;
   worldlineSimulation?: WorldlineSimulation | null;
   worldlinePrimary?: boolean;
+  onRegenerateWorldline?: () => void;
+  regenerationActive?: boolean;
+  regenerationMessage?: string;
+  regenerationError?: string | null;
 }
 
 function hasKind<T extends string>(
@@ -328,6 +332,10 @@ export function WorkbenchPanel({
   worldlineDay,
   worldlineSimulation,
   worldlinePrimary = false,
+  onRegenerateWorldline,
+  regenerationActive = false,
+  regenerationMessage = "",
+  regenerationError = null,
 }: WorkbenchPanelProps) {
   const { t } = useI18n();
   const payload = selectedNode?.payload;
@@ -348,7 +356,11 @@ export function WorkbenchPanel({
       </div>
       {worldlinePrimary ? (
         <WorldlinePanel
+          onRegenerateWorldline={onRegenerateWorldline}
           primary
+          regenerationActive={regenerationActive}
+          regenerationError={regenerationError}
+          regenerationMessage={regenerationMessage}
           worldlineDay={worldlineDay}
           worldlineSimulation={worldlineSimulation}
         />
@@ -368,6 +380,10 @@ export function WorkbenchPanel({
       )}
       {!worldlinePrimary ? (
         <WorldlinePanel
+          onRegenerateWorldline={onRegenerateWorldline}
+          regenerationActive={regenerationActive}
+          regenerationError={regenerationError}
+          regenerationMessage={regenerationMessage}
           worldlineDay={worldlineDay}
           worldlineSimulation={worldlineSimulation}
         />

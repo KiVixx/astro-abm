@@ -7,7 +7,13 @@ import { LlmScenarioReportCard } from "../LlmScenarioReportCard";
 import { DailyGraphCanvas } from "./DailyGraphCanvas";
 import { DailyTimelineRail } from "./DailyTimelineRail";
 import { WorkbenchPanel } from "./WorkbenchPanel";
-import type { DailyScenarioSnapshot, ScenarioReport } from "@/lib/types";
+import type {
+  DailyScenarioSnapshot,
+  LlmProvider,
+  ReportLanguage,
+  ScenarioReport,
+} from "@/lib/types";
+import { generateScenarioWorldlineChunk } from "@/lib/api";
 import { buildAssetStressSeries } from "@/lib/assetStressSentiment";
 import { buildWorkbenchGraph } from "@/lib/workbenchGraph";
 import { formatEnumLabel } from "@/i18n/labels";
@@ -39,7 +45,13 @@ export function ScenarioWorkbench({
 }: ScenarioWorkbenchProps) {
   const { t } = useI18n();
   const isWorldline = product === "worldline";
-  const timeline = report.daily_timeline || [];
+  const [currentReport, setCurrentReport] = useState(report);
+  const [regeneration, setRegeneration] = useState<{
+    active: boolean;
+    message: string;
+    error: string | null;
+  }>({ active: false, message: "", error: null });
+  const timeline = currentReport.daily_timeline || [];
   const initialSnapshot = getInitialSnapshot(timeline, initialDate);
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -56,11 +68,11 @@ export function ScenarioWorkbench({
       : undefined;
 
   const graph = useMemo(() => {
-    return selectedSnapshot ? buildWorkbenchGraph(report, selectedSnapshot) : null;
-  }, [report, selectedSnapshot]);
+    return selectedSnapshot ? buildWorkbenchGraph(currentReport, selectedSnapshot) : null;
+  }, [currentReport, selectedSnapshot]);
   const assetStressSeries = useMemo(
-    () => buildAssetStressSeries(report, timeline),
-    [report, timeline],
+    () => buildAssetStressSeries(currentReport, timeline),
+    [currentReport, timeline],
   );
 
   const selectedNode =
@@ -68,7 +80,7 @@ export function ScenarioWorkbench({
   const selectedEdge =
     graph?.edges.find((edge) => edge.id === selectedEdgeId) || null;
   const selectedWorldlineDay =
-    report.worldline_simulation?.days.find(
+    currentReport.worldline_simulation?.days.find(
       (day) => day.date === selectedSnapshot?.date,
     ) || null;
 
@@ -78,12 +90,74 @@ export function ScenarioWorkbench({
     setSelectedEdgeId(null);
   };
 
+  const regenerateWorldline = async () => {
+    if (!timeline.length || regeneration.active) {
+      return;
+    }
+    const provenance = currentReport.worldline_simulation?.provenance || {};
+    const storedWorldline =
+      typeof currentReport.provenance.worldline === "object" &&
+      currentReport.provenance.worldline !== null
+        ? (currentReport.provenance.worldline as Record<string, unknown>)
+        : {};
+    const chunkSizeDays = normalizeChunkSize(provenance.chunk_size_days);
+    const chunks = buildDateChunks(currentReport.start_date, currentReport.end_date, chunkSizeDays);
+    const provider = normalizeLlmProvider(provenance.provider || storedWorldline.provider);
+    const model = stringOrNull(provenance.model || storedWorldline.model);
+    const baseUrl = stringOrNull(storedWorldline.base_url);
+    let latestReport = currentReport;
+    setRegeneration({
+      active: true,
+      message: `${t("worldline.regenerateRunning")} 0/${chunks.length}`,
+      error: null,
+    });
+    try {
+      for (const [index, chunk] of chunks.entries()) {
+        setRegeneration({
+          active: true,
+          message: `${t("worldline.regenerateRunning")} ${index + 1}/${chunks.length}: ${chunk.start} → ${chunk.end}`,
+          error: null,
+        });
+        const response = await generateScenarioWorldlineChunk(currentReport.scenario_id, {
+          llm_provider: provider,
+          llm_real_enabled: true,
+          llm_base_url: baseUrl,
+          llm_model: model,
+          llm_api_key: null,
+          llm_user_prompt: null,
+          language: (currentReport.language || "en") as ReportLanguage,
+          chunk_start_date: chunk.start,
+          chunk_end_date: chunk.end,
+          chunk_index: index + 1,
+          total_chunks: chunks.length,
+          worldline_chunk_days: chunkSizeDays,
+        });
+        latestReport = response.report;
+        setCurrentReport(response.report);
+      }
+      setRegeneration({
+        active: false,
+        message: t("worldline.regenerateDone"),
+        error: null,
+      });
+      if (!latestReport.daily_timeline?.some((snapshot) => snapshot.date === selectedDate)) {
+        setSelectedDate(latestReport.daily_timeline?.[0]?.date || "");
+      }
+    } catch (error) {
+      setRegeneration({
+        active: false,
+        message: "",
+        error: error instanceof Error ? error.message : t("common.unknownError"),
+      });
+    }
+  };
+
   if (!selectedSnapshot || !graph) {
     return (
       <div className="page stack">
         <Link
           className="button secondary"
-          href={`/scenarios/${report.scenario_id}/report`}
+          href={`/scenarios/${currentReport.scenario_id}/report`}
         >
           {isWorldline ? t("worldline.openReport") : t("workbench.openReport")}
         </Link>
@@ -109,36 +183,36 @@ export function ScenarioWorkbench({
           <p className="muted">
             {isWorldline ? t("worldline.workbench") : t("workbench.productName")}
           </p>
-          <h1>{report.title}</h1>
+          <h1>{currentReport.title}</h1>
           <div className="tag-row">
             <span className="tag">{selectedSnapshot.date}</span>
-            {isWorldline && report.worldline_simulation ? (
+            {isWorldline && currentReport.worldline_simulation ? (
               <>
                 <span className="tag">
-                  {t("worldline.status")}: {report.worldline_simulation.status}
+                  {t("worldline.status")}: {currentReport.worldline_simulation.status}
                 </span>
                 <span className="tag">
                   {t("worldline.dayCount")}: {selectedIndex + 1}/
-                  {report.worldline_simulation.horizon_days}
+                  {currentReport.worldline_simulation.horizon_days}
                 </span>
               </>
             ) : null}
             <span className="tag">
-              {report.start_date} {t("common.to")} {report.end_date}
+              {currentReport.start_date} {t("common.to")} {currentReport.end_date}
             </span>
             <span className="tag">
-              {formatEnumLabel(t, "scenario_mode", report.mode)}
+              {formatEnumLabel(t, "scenario_mode", currentReport.mode)}
             </span>
             <span className="tag">
               {t("report.generatedLanguage")}:{" "}
-              {formatEnumLabel(t, "report_language", report.language || "legacy")}
+              {formatEnumLabel(t, "report_language", currentReport.language || "legacy")}
             </span>
           </div>
         </div>
         <div className="button-row">
           <Link
             className="button secondary"
-            href={`/scenarios/${report.scenario_id}/report`}
+            href={`/scenarios/${currentReport.scenario_id}/report`}
           >
             {t("worldline.openReport")}
           </Link>
@@ -150,10 +224,10 @@ export function ScenarioWorkbench({
 
       <ContextCoverageSummaryCard
         compact
-        coverageSummary={report.coverage_summary}
+        coverageSummary={currentReport.coverage_summary}
       />
 
-      {!isWorldline ? <LlmScenarioReportCard compact llmReport={report.llm_report} /> : null}
+      {!isWorldline ? <LlmScenarioReportCard compact llmReport={currentReport.llm_report} /> : null}
 
       {isWorldline ? (
         <section className="worldline-playback-bar">
@@ -206,10 +280,54 @@ export function ScenarioWorkbench({
           selectedNode={selectedNode}
           snapshot={selectedSnapshot}
           worldlineDay={selectedWorldlineDay}
-          worldlineSimulation={report.worldline_simulation}
+          worldlineSimulation={currentReport.worldline_simulation}
+          onRegenerateWorldline={isWorldline ? regenerateWorldline : undefined}
+          regenerationError={regeneration.error}
+          regenerationMessage={regeneration.message}
+          regenerationActive={regeneration.active}
           worldlinePrimary={isWorldline}
         />
       </main>
     </div>
   );
+}
+
+function normalizeChunkSize(value: unknown): 1 | 2 | 3 | 5 {
+  return value === 1 || value === 2 || value === 3 || value === 5 ? value : 3;
+}
+
+function normalizeLlmProvider(value: unknown): LlmProvider {
+  return value === "mock" || value === "openai_compatible"
+    ? value
+    : "openai_compatible";
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function buildDateChunks(startDate: string, endDate: string, chunkSizeDays: number) {
+  const chunks: Array<{ start: string; end: string }> = [];
+  let current = parseDate(startDate);
+  const end = parseDate(endDate);
+  while (current <= end) {
+    const chunkStart = current;
+    const chunkEnd = new Date(current);
+    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + chunkSizeDays - 1);
+    if (chunkEnd > end) {
+      chunkEnd.setTime(end.getTime());
+    }
+    chunks.push({ start: formatDate(chunkStart), end: formatDate(chunkEnd) });
+    current = new Date(chunkEnd);
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return chunks;
+}
+
+function parseDate(value: string) {
+  return new Date(`${value}T00:00:00Z`);
+}
+
+function formatDate(value: Date) {
+  return value.toISOString().slice(0, 10);
 }
