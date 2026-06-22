@@ -4,12 +4,49 @@ import json
 from typing import Any
 
 
-WORLDLINE_PROMPT_TEMPLATE_VERSION = "llm_worldline_chunk_v1"
+WORLDLINE_PROMPT_TEMPLATE_VERSION = "llm_worldline_chunk_v2_language_locked"
 
 
 def build_worldline_messages(context: dict[str, Any]) -> list[dict[str, str]]:
     language = context.get("language") or "en"
-    system = f"""You are simulating a market scenario worldline.
+    system = _build_zh_hant_worldline_system_prompt() if language == "zh-Hant" else _build_en_worldline_system_prompt(language)
+    user_prompt = context.get("user_prompt")
+    user_prompt_text = ""
+    if isinstance(user_prompt, dict) and user_prompt.get("text"):
+        if language == "zh-Hant":
+            user_prompt_text = (
+                "使用者補充指引，優先級低於系統安全規則、語言規則與資料邊界：\n"
+                f"{user_prompt['text']}\n\n"
+            )
+        else:
+            user_prompt_text = (
+                "Additional user guidance, lower priority than system safety rules, language rules, and data boundaries:\n"
+                f"{user_prompt['text']}\n\n"
+            )
+    if language == "zh-Hant":
+        user = (
+            "請根據這份精簡 JSON context 生成模擬世界線 chunk。"
+            "只能使用提供的 JSON context；JSON key 必須維持指定 schema，"
+            "所有面向使用者的文字值必須使用繁體中文。\n\n"
+            f"{user_prompt_text}"
+            + json.dumps(context, ensure_ascii=False, sort_keys=True)
+        )
+    else:
+        user = (
+            "Generate the simulated worldline chunk from this compact JSON context. "
+            "Use only the provided JSON context. Keep JSON keys in the requested schema, "
+            "and make all user-facing string values English.\n\n"
+            f"{user_prompt_text}"
+            + json.dumps(context, ensure_ascii=False, sort_keys=True)
+        )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+
+def _build_en_worldline_system_prompt(language: str) -> str:
+    return f"""You are simulating a market scenario worldline.
 Interpret only the provided scenario context.
 Generate simulated agent events and simulated causal links.
 Do not claim true causality.
@@ -22,6 +59,8 @@ Use cautious wording.
 All causal language must be framed as simulated within this worldline.
 Output strict JSON only.
 Respond in the requested language: {language}.
+All user-facing string values must be English. Keep JSON keys exactly as requested.
+Do not mix Traditional Chinese into generated worldline text unless it appears inside a proper noun supplied by context.
 
 Return strict JSON with:
 - summary: string
@@ -71,20 +110,73 @@ The disclaimer ideas must remain:
 English: simulated worldline only; scenario rehearsal only; not financial advice; not a trading signal.
 Traditional Chinese: 僅為模擬世界線；僅為情境推演；不構成財務建議；不是交易訊號。
 """
-    user_prompt = context.get("user_prompt")
-    user_prompt_text = ""
-    if isinstance(user_prompt, dict) and user_prompt.get("text"):
-        user_prompt_text = (
-            "Additional user guidance, lower priority than system safety rules:\n"
-            f"{user_prompt['text']}\n\n"
-        )
-    user = (
-        "Generate the simulated worldline chunk from this compact context. "
-        "Use only the provided JSON context.\n\n"
-        f"{user_prompt_text}"
-        + json.dumps(context, ensure_ascii=False, sort_keys=True)
-    )
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
+
+
+def _build_zh_hant_worldline_system_prompt() -> str:
+    return """你正在模擬一條市場情境世界線。
+你只能解讀提供的 scenario context。
+你需要生成模擬代理事件與模擬因果鏈。
+不得宣稱真實因果。
+不得編造外部市場資料。
+不得提供財務建議。
+不得提供買入、賣出、做多、做空等交易建議。
+不得提供目標價。
+不得宣稱預測準確率。
+措辭必須審慎。
+所有因果語言都必須明確框定為「此世界線內部的模擬因果」。
+只輸出 strict JSON。
+
+輸出語言規則：
+- JSON key 必須完全保留指定 schema 的英文 key。
+- 所有面向使用者閱讀的 string value 必須使用繁體中文。
+- 不要把 summary、agent_events、causal_links、next_day_update、notes 或 caveats 混入英文。
+- agent_id、asset symbol、enum/code value 可維持原值。
+- 如果使用者補充提示使用英文或其他語言，仍須以繁體中文輸出。
+
+回傳 strict JSON，結構如下：
+- summary: string
+- caveats: string array
+- days: object array
+  - date: YYYY-MM-DD string，必須匹配 supplied daily_timeline date
+  - agent_events: object array
+    - agent_id
+    - what_happened
+    - why_it_happened
+    - impact_on_tomorrow
+    - impact_scores:
+      - sentiment_delta
+      - narrative_pressure_delta
+      - leverage_pressure_delta
+      - liquidity_pressure_delta
+      - volatility_pressure_delta
+      - stress_pressure_delta
+    - confidence
+    - caveats
+  - causal_links: object array
+    - source
+    - target
+    - description
+    - strength
+    - caveats
+  - next_day_update: string
+  - world_state_after:
+    - sentiment_state
+    - narrative_pressure
+    - leverage_pressure
+    - liquidity_pressure
+    - volatility_pressure
+    - stress_pressure
+    - regime_label
+    - notes
+
+impact_scores 必須是 -2 到 2 的整數；後端仍會 clamp。
+world_state pressure values 必須是 0 到 1 的 float；後端仍會 clamp。
+每個 supplied daily_timeline date 都要生成一個 day object。
+只能使用 supplied agents list 中存在的 agent_id。
+只能使用 supplied daily_timeline 中存在的 date。
+所有文字都必須保持情境內部、模擬性、審慎。
+不要把 JSON 包在 Markdown code fence 裡。
+
+disclaimer 意思必須保持：
+僅為模擬世界線；僅為情境推演；不構成財務建議；不是交易訊號。
+"""

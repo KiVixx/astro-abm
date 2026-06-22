@@ -14,6 +14,7 @@ from astro_abm_api.models.report import ScenarioReport
 from astro_abm_api.services.llm_client import safety_check_text
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
+from astro_abm_api.services.worldline_llm_prompts import build_worldline_messages
 
 
 def scenario_payload() -> dict[str, object]:
@@ -71,6 +72,57 @@ def test_safety_checker_rejects_explicit_trading_instruction_phrases(
     unsafe_text: str,
 ) -> None:
     assert not safety_check_text(unsafe_text)
+
+
+def test_scenario_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant() -> None:
+    messages = build_messages(
+        {
+            "language": "zh-Hant",
+            "title": "測試情境",
+            "daily_timeline": [],
+            "user_prompt": {"text": "Focus on liquidity, but keep it concise."},
+        }
+    )
+
+    system = messages[0]["content"]
+    user = messages[1]["content"]
+    assert "你是情境推演系統的分析員" in system
+    assert "所有面向使用者閱讀的 string value 必須使用繁體中文" in system
+    assert "JSON key 必須完全保留指定 schema 的英文 key" in system
+    assert "You are an analyst for a scenario rehearsal system" not in system
+    assert user.startswith("請根據這份精簡 JSON context")
+    assert "使用者補充指引" in user
+
+
+def test_worldline_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant() -> None:
+    messages = build_worldline_messages(
+        {
+            "language": "zh-Hant",
+            "title": "測試世界線",
+            "agents": [],
+            "daily_timeline": [],
+            "user_prompt": {"text": "Focus on liquidity, but keep it concise."},
+        }
+    )
+
+    system = messages[0]["content"]
+    user = messages[1]["content"]
+    assert "你正在模擬一條市場情境世界線" in system
+    assert "所有面向使用者閱讀的 string value 必須使用繁體中文" in system
+    assert "所有因果語言都必須明確框定為「此世界線內部的模擬因果」" in system
+    assert "You are simulating a market scenario worldline" not in system
+    assert user.startswith("請根據這份精簡 JSON context")
+    assert "使用者補充指引" in user
+
+
+def test_llm_prompts_keep_english_instructions_for_english_reports() -> None:
+    scenario_messages = build_messages({"language": "en", "daily_timeline": []})
+    worldline_messages = build_worldline_messages({"language": "en", "daily_timeline": []})
+
+    assert "All user-facing string values must be English" in scenario_messages[0]["content"]
+    assert "All user-facing string values must be English" in worldline_messages[0]["content"]
+    assert scenario_messages[1]["content"].startswith("Build a cautious scenario narrative")
+    assert worldline_messages[1]["content"].startswith("Generate the simulated worldline chunk")
 
 
 @pytest.fixture(autouse=True)
