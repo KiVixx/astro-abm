@@ -63,6 +63,7 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
         <input
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t("worldline.searchPlaceholder")}
+          suppressHydrationWarning
           value={query}
         />
       </label>

@@ -62,6 +62,7 @@ export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) 
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t("scenarios.searchPlaceholder")}
+          suppressHydrationWarning
         />
       </label>
       <div className="stack">
