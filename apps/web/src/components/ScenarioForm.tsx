@@ -84,6 +84,10 @@ export function ScenarioForm({
   const [presetName, setPresetName] = useState("Gemini default");
   const [includeApiKeyInPreset, setIncludeApiKeyInPreset] = useState(false);
   const [presetMessage, setPresetMessage] = useState("");
+  const [llmProvider, setLlmProvider] = useState<LlmProvider>(DEFAULT_LLM_PROVIDER);
+  const [worldlineProvider, setWorldlineProvider] =
+    useState<WorldlineProvider>("deterministic_mock");
+  const [realLlmEnabled, setRealLlmEnabled] = useState(true);
   const [progress, setProgress] = useState<GenerationProgress>({
     active: false,
     phase: "idle",
@@ -110,6 +114,24 @@ export function ScenarioForm({
         : progress.phase === "done"
           ? 100
           : 0;
+  const realLlmCanCall = llmProvider === "openai_compatible" && realLlmEnabled;
+  const reportNarrativeLabel =
+    product === "worldline" && worldlineProvider === "llm"
+      ? t("scenarioCreate.callPlanReportMockDuringWorldline")
+      : realLlmCanCall
+        ? t("scenarioCreate.callPlanReportLlm")
+        : t("scenarioCreate.callPlanReportMock");
+  const worldlinePlaybackLabel =
+    product === "worldline"
+      ? worldlineProvider === "llm"
+        ? realLlmCanCall
+          ? t("scenarioCreate.callPlanWorldlineLlm")
+          : t("scenarioCreate.callPlanWorldlineDryRun")
+        : t("scenarioCreate.callPlanWorldlineMock")
+      : t("scenarioCreate.callPlanWorldlineNotUsed");
+  const realCallLabel = realLlmCanCall
+    ? t("scenarioCreate.callPlanWillCall")
+    : t("scenarioCreate.callPlanNoCall");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -294,6 +316,9 @@ export function ScenarioForm({
     applyLlmPresetToForm(form, preset);
     setPresetName(preset.name);
     setIncludeApiKeyInPreset(Boolean(preset.apiKey));
+    setLlmProvider(preset.provider);
+    setWorldlineProvider(preset.worldlineProvider || "deterministic_mock");
+    setRealLlmEnabled(preset.realEnabled);
     setPresetMessage(t("scenarioCreate.llmPresetRecalled"));
   }
 
@@ -313,24 +338,29 @@ export function ScenarioForm({
       {product === "worldline" ? (
         <section className="notice">
           <strong>{t("worldline.simulationMode")}: </strong>
-          {t("worldline.deterministicMock")}
+          {worldlinePlaybackLabel}
           <p>{t("worldline.modeHelp")}</p>
         </section>
       ) : null}
+      <section className="form-section">
+        <div>
+          <h2>{t("scenarioCreate.basicSettings")}</h2>
+          <p className="muted">{t("scenarioCreate.basicSettingsHelp")}</p>
+        </div>
       <div className="form-grid">
         <label className="form-field full">
           <span>{t("scenarioCreate.formTitle")}</span>
           <input
             name="title"
             required
-            defaultValue="2026 Q3 BTC ETH Daily Scenario"
+            defaultValue={getDefaultScenarioTitle(uiLanguage)}
           />
         </label>
         <label className="form-field full">
           <span>{t("scenarioCreate.formDescription")}</span>
           <textarea
             name="description"
-            defaultValue="Local mock scenario rehearsal using daily association context."
+            defaultValue={getDefaultScenarioDescription(uiLanguage)}
           />
         </label>
         <label className="form-field">
@@ -347,7 +377,11 @@ export function ScenarioForm({
         </div>
         <label className="form-field">
           <span>{t("scenarioCreate.llmProvider")}</span>
-          <select name="llm_provider" defaultValue={DEFAULT_LLM_PROVIDER}>
+          <select
+            name="llm_provider"
+            onChange={(event) => setLlmProvider(event.target.value as LlmProvider)}
+            value={llmProvider}
+          >
             <option value="mock">{formatEnumLabel(t, "llm_provider", "mock")}</option>
             <option value="openai_compatible">
               {formatEnumLabel(t, "llm_provider", "openai_compatible")}
@@ -357,7 +391,13 @@ export function ScenarioForm({
         {product === "worldline" ? (
           <label className="form-field">
             <span>{t("worldline.modeSelect")}</span>
-            <select name="worldline_provider" defaultValue="deterministic_mock">
+            <select
+              name="worldline_provider"
+              onChange={(event) =>
+                setWorldlineProvider(event.target.value as WorldlineProvider)
+              }
+              value={worldlineProvider}
+            >
               <option value="deterministic_mock">{t("worldline.deterministicMock")}</option>
               <option value="llm">{t("worldline.llmChunk")}</option>
             </select>
@@ -365,7 +405,12 @@ export function ScenarioForm({
           </label>
         ) : null}
         <label className="checkbox-card">
-          <input defaultChecked name="llm_real_enabled" type="checkbox" />
+          <input
+            checked={realLlmEnabled}
+            name="llm_real_enabled"
+            onChange={(event) => setRealLlmEnabled(event.target.checked)}
+            type="checkbox"
+          />
           <span>
             <strong>{t("scenarioCreate.llmRealEnabled")}</strong>
             <br />
@@ -397,6 +442,37 @@ export function ScenarioForm({
             </option>
           </select>
         </label>
+        <section className="generation-plan full">
+          <div>
+            <h3>{t("scenarioCreate.callPlanTitle")}</h3>
+            <p className="muted">{t("scenarioCreate.callPlanHelp")}</p>
+          </div>
+          <div className="generation-plan-grid">
+            <div>
+              <span>{t("scenarioCreate.callPlanReport")}</span>
+              <strong>{reportNarrativeLabel}</strong>
+            </div>
+            <div>
+              <span>{t("scenarioCreate.callPlanWorldline")}</span>
+              <strong>{worldlinePlaybackLabel}</strong>
+            </div>
+            <div>
+              <span>{t("scenarioCreate.callPlanNetwork")}</span>
+              <strong>{realCallLabel}</strong>
+            </div>
+          </div>
+        </section>
+      </div>
+      </section>
+
+      <details className="advanced-settings-panel">
+        <summary>
+          <span>
+            <strong>{t("scenarioCreate.advancedSettings")}</strong>
+            <small>{t("scenarioCreate.advancedSettingsHelp")}</small>
+          </span>
+        </summary>
+        <div className="form-grid">
         <label className="form-field">
           <span>{t("scenarioCreate.llmBaseUrl")}</span>
           <input
@@ -541,6 +617,7 @@ export function ScenarioForm({
           <p>{t("scenarioCreate.realLlmEnablementNote")}</p>
         </div>
       </div>
+      </details>
       <section className="stack">
         <h2>{t("scenarioCreate.agentGroups")}</h2>
         <AgentSelector agents={agents} />
@@ -655,6 +732,16 @@ function clampNumber(value: number, min: number, max: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function getDefaultScenarioTitle(language: string): string {
+  return language === "zh-Hant" ? "未來 30 日市場世界線推演" : "30-Day Market Worldline";
+}
+
+function getDefaultScenarioDescription(language: string): string {
+  return language === "zh-Hant"
+    ? "使用日線研究脈絡、代理群體與安全邊界，生成本地世界線推演。"
+    : "Local worldline rehearsal using daily research context, agent groups, and safety boundaries.";
 }
 
 function getDefaultScenarioDateRange() {
