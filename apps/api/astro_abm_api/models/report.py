@@ -252,6 +252,10 @@ class WorldlineDay(BaseModel):
 
     date: date
     day_index: int
+    generation_source: str = "unknown"
+    chunk_index: int | None = None
+    chunk_status: str | None = None
+    quality_notes: list[str] = Field(default_factory=list)
     input_context_summary: str
     world_state_before: WorldlineState
     agent_events: list[WorldlineAgentEvent]

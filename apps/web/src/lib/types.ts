@@ -233,6 +233,10 @@ export interface WorldlineState {
 export interface WorldlineDay {
   date: string;
   day_index: number;
+  generation_source?: string;
+  chunk_index?: number | null;
+  chunk_status?: string | null;
+  quality_notes?: string[];
   input_context_summary: string;
   world_state_before: WorldlineState;
   agent_events: WorldlineAgentEvent[];

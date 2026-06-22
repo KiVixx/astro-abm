@@ -12,6 +12,10 @@ import { useI18n } from "@/i18n/useI18n";
 
 interface WorldlinePanelProps {
   primary?: boolean;
+  onRegenerateWorldline?: () => void;
+  regenerationActive?: boolean;
+  regenerationMessage?: string;
+  regenerationError?: string | null;
   worldlineDay?: WorldlineDay | null;
   worldlineSimulation?: WorldlineSimulation | null;
 }
@@ -26,7 +30,11 @@ const IMPACT_SCORE_KEYS: Array<keyof WorldlineImpactScores> = [
 ];
 
 export function WorldlinePanel({
+  onRegenerateWorldline,
   primary = false,
+  regenerationActive = false,
+  regenerationError = null,
+  regenerationMessage = "",
   worldlineDay,
   worldlineSimulation,
 }: WorldlinePanelProps) {
@@ -43,7 +51,14 @@ export function WorldlinePanel({
   const body = (
     <div className="stack worldline-panel-body">
       {worldlineSimulation ? (
-        <WorldlineProvenanceTags simulation={worldlineSimulation} />
+        <WorldlineReviewHeader
+          onRegenerateWorldline={onRegenerateWorldline}
+          regenerationActive={regenerationActive}
+          regenerationError={regenerationError}
+          regenerationMessage={regenerationMessage}
+          selectedDay={worldlineDay}
+          simulation={worldlineSimulation}
+        />
       ) : null}
 
       <section>
@@ -157,6 +172,129 @@ function WorldlineProvenanceTags({
   );
 }
 
+function WorldlineReviewHeader({
+  onRegenerateWorldline,
+  regenerationActive,
+  regenerationError,
+  regenerationMessage,
+  selectedDay,
+  simulation,
+}: {
+  onRegenerateWorldline?: () => void;
+  regenerationActive: boolean;
+  regenerationError: string | null;
+  regenerationMessage: string;
+  selectedDay: WorldlineDay;
+  simulation: WorldlineSimulation;
+}) {
+  const { t } = useI18n();
+  const provenance = simulation.provenance || {};
+  const failedChunks = numberFromUnknown(provenance.failed_chunk_count);
+  const chunkHistory = arrayOfRecords(provenance.chunk_history);
+  const qualityNotes = stringArray(provenance.llm_output_quality_notes);
+  const sourceCounts = countDaySources(simulation.days);
+  return (
+    <section className="nested-panel worldline-review-panel">
+      <div className="scenario-progress-header">
+        <div>
+          <h3>{t("worldline.reviewTitle")}</h3>
+          <p className="muted">{t("worldline.reviewHelp")}</p>
+        </div>
+        {onRegenerateWorldline ? (
+          <button
+            className="button secondary"
+            disabled={regenerationActive}
+            onClick={onRegenerateWorldline}
+            type="button"
+          >
+            {regenerationActive
+              ? t("worldline.regenerateRunning")
+              : t("worldline.regenerateChunks")}
+          </button>
+        ) : null}
+      </div>
+      {regenerationMessage ? <p className="muted">{regenerationMessage}</p> : null}
+      {regenerationError ? (
+        <p className="notice warning">{regenerationError}</p>
+      ) : null}
+      {failedChunks > 0 ? (
+        <p className="notice warning">
+          {t("worldline.failedChunkWarning")}: {failedChunks}
+        </p>
+      ) : null}
+      <WorldlineProvenanceTags simulation={simulation} />
+      <div className="tag-row">
+        {Object.entries(sourceCounts).map(([source, count]) => (
+          <span className="tag" key={source}>
+            {t("worldline.daysFrom")} {source}: {count}
+          </span>
+        ))}
+      </div>
+      <div className="tag-row">
+        <span className="tag">
+          {t("worldline.selectedDaySource")}: {selectedDay.generation_source || "unknown"}
+        </span>
+        {selectedDay.chunk_index ? (
+          <span className="tag">
+            {t("worldline.chunkIndex")}: {selectedDay.chunk_index}
+          </span>
+        ) : null}
+        {selectedDay.chunk_status ? (
+          <span className="tag">
+            {t("worldline.chunkStatus")}: {selectedDay.chunk_status}
+          </span>
+        ) : null}
+        {provenance.attempt_count ? (
+          <span className="tag">
+            {t("worldline.attemptCount")}: {String(provenance.attempt_count)}/
+            {String(provenance.max_attempts || "3")}
+          </span>
+        ) : null}
+      </div>
+      {chunkHistory.length ? (
+        <details>
+          <summary>{t("worldline.chunkProvenance")}</summary>
+          <div className="stack">
+            {chunkHistory.map((chunk, index) => (
+              <div className="tag-row" key={`${chunk.chunk_index || index}-${chunk.chunk_start_date || ""}`}>
+                <span className="tag">
+                  #{String(chunk.chunk_index || index + 1)}
+                </span>
+                <span className="tag">
+                  {String(chunk.chunk_start_date || "?")} → {String(chunk.chunk_end_date || "?")}
+                </span>
+                <span className="tag">{String(chunk.status || "unknown")}</span>
+                <span className="tag">
+                  {String(chunk.output_validation_status || "unknown")}
+                </span>
+                <span className="tag">
+                  {String(chunk.safety_check_status || "unknown")}
+                </span>
+                <span className="tag">
+                  {t("worldline.attemptCount")}: {String(chunk.attempt_count || "n/a")}/
+                  {String(chunk.max_attempts || "3")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
+      <details>
+        <summary>{t("worldline.qualityNotes")}</summary>
+        <ul>
+          {[...qualityNotes, ...(selectedDay.quality_notes || [])].length ? (
+            [...qualityNotes, ...(selectedDay.quality_notes || [])].map((note, index) => (
+              <li key={`${note}-${index}`}>{note}</li>
+            ))
+          ) : (
+            <li>{t("worldline.noQualityNotes")}</li>
+          )}
+        </ul>
+      </details>
+    </section>
+  );
+}
+
 function WorldlineStateCard({
   label,
   state,
@@ -223,4 +361,33 @@ function AgentEventCard({ event }: { event: WorldlineAgentEvent }) {
       </details>
     </div>
   );
+}
+
+function numberFromUnknown(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+}
+
+function arrayOfRecords(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null && !Array.isArray(item),
+  );
+}
+
+function countDaySources(days: WorldlineDay[]): Record<string, number> {
+  return days.reduce<Record<string, number>>((counts, day) => {
+    const source = day.generation_source || "unknown";
+    counts[source] = (counts[source] || 0) + 1;
+    return counts;
+  }, {});
 }

@@ -6,17 +6,38 @@ import { deleteScenario } from "@/lib/api";
 import type { ScenarioReport } from "@/lib/types";
 import { useI18n } from "@/i18n/useI18n";
 
+type WorldlineFilter = "all" | "ready" | "llm" | "deterministic" | "failed" | "legacy";
+
 export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
   const { t } = useI18n();
   const [items, setItems] = useState(reports);
   const [query, setQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<WorldlineFilter>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
+  const filterOptions = useMemo(
+    () =>
+      ([
+        "all",
+        "ready",
+        "llm",
+        "deterministic",
+        "failed",
+        "legacy",
+      ] satisfies WorldlineFilter[]).map((filter) => ({
+        filter,
+        count: items.filter((report) => matchesWorldlineFilter(report, filter)).length,
+      })),
+    [items],
+  );
   const filtered = useMemo(() => {
-    if (!normalizedQuery) {
-      return items;
-    }
     return items.filter((report) => {
+      if (!matchesWorldlineFilter(report, activeFilter)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
       const haystack = [
         report.title,
         report.description || "",
@@ -30,7 +51,7 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
         .toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [items, normalizedQuery]);
+  }, [activeFilter, items, normalizedQuery]);
 
   const confirmAndDelete = async (report: ScenarioReport) => {
     const confirmed = window.confirm(
@@ -63,9 +84,23 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
         <input
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t("worldline.searchPlaceholder")}
+          suppressHydrationWarning
           value={query}
         />
       </label>
+      <div className="filter-row" role="list" aria-label={t("worldline.filterLabel")}>
+        {filterOptions.map(({ count, filter }) => (
+          <button
+            aria-pressed={activeFilter === filter}
+            className={`filter-chip ${activeFilter === filter ? "is-active" : ""}`}
+            key={filter}
+            onClick={() => setActiveFilter(filter)}
+            type="button"
+          >
+            {t(`worldline.filter.${filter}`)} <span>{count}</span>
+          </button>
+        ))}
+      </div>
       <div className="stack">
         {filtered.length ? (
           filtered.map((report) => (
@@ -82,4 +117,37 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
       </div>
     </section>
   );
+}
+
+function matchesWorldlineFilter(report: ScenarioReport, filter: WorldlineFilter): boolean {
+  const worldline = report.worldline_simulation;
+  if (filter === "all") {
+    return true;
+  }
+  if (filter === "legacy") {
+    return !worldline;
+  }
+  if (!worldline) {
+    return false;
+  }
+  const generationMode = String(worldline.provenance?.generation_mode || worldline.mode || "");
+  const failedChunks = Number(worldline.provenance?.failed_chunk_count || 0);
+  if (filter === "failed") {
+    return (
+      worldline.status === "failed" ||
+      report.llm_report?.status === "failed" ||
+      report.llm_report?.status === "invalid_output" ||
+      failedChunks > 0
+    );
+  }
+  if (filter === "llm") {
+    return generationMode.includes("llm_chunk") || worldline.mode.includes("llm_chunk");
+  }
+  if (filter === "deterministic") {
+    return generationMode.includes("deterministic") || worldline.mode.includes("deterministic");
+  }
+  if (filter === "ready") {
+    return ["completed", "mock_completed"].includes(worldline.status);
+  }
+  return true;
 }

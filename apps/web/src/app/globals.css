@@ -392,6 +392,63 @@ pre {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.form-section,
+.advanced-settings-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.form-section h2,
+.form-section p {
+  margin: 0;
+}
+
+.advanced-settings-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+}
+
+.advanced-settings-panel summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+  padding: 16px 18px;
+}
+
+.advanced-settings-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-settings-panel summary::after {
+  color: var(--muted);
+  content: "▾";
+  font-size: 13px;
+  transition: transform 120ms ease;
+}
+
+.advanced-settings-panel[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.advanced-settings-panel summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.advanced-settings-panel summary small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.advanced-settings-panel > .form-grid {
+  border-top: 1px solid var(--border);
+  padding: 18px;
+}
+
 .form-field {
   display: grid;
   gap: 7px;
@@ -445,6 +502,77 @@ pre {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.generation-plan {
+  background: #f7fbfc;
+  border: 1px solid #cfe2e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.generation-plan h3,
+.generation-plan p {
+  margin: 0;
+}
+
+.generation-plan-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.generation-plan-grid > div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.generation-plan-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.generation-plan-grid strong {
+  color: var(--accent-dark);
+  font-size: 14px;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.filter-chip:hover,
+.filter-chip.is-active,
+.filter-chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.filter-chip span {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  margin-left: 4px;
+  padding: 1px 6px;
 }
 
 .asset-picker {
