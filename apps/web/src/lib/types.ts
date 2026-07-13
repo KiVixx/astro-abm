@@ -246,6 +246,22 @@ export interface WorldlineDay {
   disclaimer: string;
 }
 
+export interface WorldlineGenerationConfig {
+  worldline_provider: string;
+  worldline_chunk_days: number;
+  llm_provider?: string | null;
+  llm_real_enabled?: boolean | null;
+  llm_base_url?: string | null;
+  llm_model?: string | null;
+  llm_timeout_seconds?: number | null;
+  llm_max_output_tokens?: number | null;
+  llm_call_delay_seconds?: number | null;
+  report_language?: string | null;
+  custom_user_prompt?: string | null;
+  preset_name?: string | null;
+  credential_status: string;
+}
+
 export interface WorldlineSimulation {
   status: string;
   mode: string;
@@ -254,6 +270,9 @@ export interface WorldlineSimulation {
   summary: string;
   caveats: string[];
   provenance: Record<string, unknown>;
+  generation_config?: WorldlineGenerationConfig | null;
+  continuity_status?: string;
+  last_regeneration?: Record<string, unknown> | null;
 }
 
 export interface ScenarioCreateRequest {
@@ -271,6 +290,7 @@ export interface ScenarioCreateRequest {
   llm_user_prompt?: string | null;
   llm_timeout_seconds?: number | null;
   llm_max_output_tokens?: number | null;
+  llm_call_delay_seconds?: number | null;
   visibility: Visibility;
   mode?: ScenarioMode;
   language?: ReportLanguage;
@@ -287,6 +307,7 @@ export interface ScenarioLlmChunkRequest {
   llm_user_prompt?: string | null;
   llm_timeout_seconds?: number | null;
   llm_max_output_tokens?: number | null;
+  llm_call_delay_seconds?: number | null;
   language?: ReportLanguage;
   chunk_start_date: string;
   chunk_end_date: string;
@@ -314,6 +335,7 @@ export interface ScenarioWorldlineChunkRequest {
   llm_user_prompt?: string | null;
   llm_timeout_seconds?: number | null;
   llm_max_output_tokens?: number | null;
+  llm_call_delay_seconds?: number | null;
   language?: ReportLanguage;
   chunk_start_date: string;
   chunk_end_date: string;
@@ -330,6 +352,19 @@ export interface ScenarioWorldlineChunkResponse {
   chunk_end_date: string;
   worldline_status: string;
   completed: boolean;
+  report: ScenarioReport;
+}
+
+export interface ScenarioWorldlineRegenerateFromRequest {
+  start_chunk_index: number;
+  note?: string | null;
+}
+
+export interface ScenarioWorldlineRegenerateFromResponse {
+  scenario_id: string;
+  start_chunk_index: number;
+  rebuilt_chunk_count: number;
+  continuity_status: string;
   report: ScenarioReport;
 }
 

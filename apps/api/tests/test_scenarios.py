@@ -197,6 +197,8 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert report["coverage_summary"]["asset_coverage"][0]["coverage_status"] == "missing"
     assert report["worldline_simulation"]["status"] == "mock_completed"
     assert report["worldline_simulation"]["mode"] == "deterministic_mock_v1"
+    assert report["worldline_simulation"]["continuity_status"] == "consistent"
+    assert report["worldline_simulation"]["generation_config"]["worldline_provider"] == "deterministic_mock"
     assert report["worldline_simulation"]["horizon_days"] == len(report["daily_timeline"])
     assert len(report["worldline_simulation"]["days"]) == len(report["daily_timeline"])
     first_worldline_day = report["worldline_simulation"]["days"][0]
@@ -1077,6 +1079,129 @@ def test_worldline_chunk_mocked_network_generates_structured_events(
     assert calls[0][3] == 88
     assert request_secret not in saved_text
     assert "Generation mode: llm_chunk_v1" in body["report"]["markdown_report"]
+
+
+def test_worldline_regenerate_from_middle_chunk_rebuilds_downstream_only(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    create_response = client.post("/scenarios", json=payload)
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+    original_days = create_response.json()["worldline_simulation"]["days"]
+    original_prefix = original_days[:3]
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 1},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    worldline = body["report"]["worldline_simulation"]
+    assert body["rebuilt_chunk_count"] == 1
+    assert body["continuity_status"] == "consistent"
+    assert worldline["continuity_status"] == "consistent"
+    assert worldline["days"][:3] == original_prefix
+    assert {day["chunk_index"] for day in worldline["days"][3:]} == {2}
+    assert all(day["chunk_status"] == "mock_completed" for day in worldline["days"][3:])
+    assert worldline["last_regeneration"]["start_chunk_index"] == 1
+    assert worldline["provenance"]["chunk_history"][-1]["upstream_state_hash"]
+    assert worldline["provenance"]["chunk_history"][-1]["output_state_hash"]
+    assert "Continuity status: consistent" in body["report"]["markdown_report"]
+
+
+def test_worldline_regenerate_from_zero_rebuilds_all_chunks(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    create_response = client.post("/scenarios", json=payload)
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    worldline = body["report"]["worldline_simulation"]
+    assert body["rebuilt_chunk_count"] == 2
+    assert {day["chunk_index"] for day in worldline["days"]} == {1, 2}
+    history = worldline["provenance"]["chunk_history"]
+    assert history[0]["chunk_index"] == 1
+    assert history[1]["chunk_index"] == 2
+    assert history[1]["upstream_state_hash"] == history[0]["output_state_hash"]
+
+
+def test_worldline_regenerate_invalid_chunk_returns_400(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    create_response = client.post("/scenarios", json=payload)
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 99},
+    )
+
+    assert response.status_code == 400
+    assert "out of range" in response.json()["detail"]
+
+
+def test_worldline_regenerate_missing_scenario_returns_404(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+
+    response = client.post(
+        "/scenarios/missing_scenario/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 404
+
+
+def test_worldline_regenerate_missing_generation_config_falls_back_safely(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    create_response = client.post("/scenarios", json=payload)
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    scenario_path = tmp_path / f"{scenario_id}.json"
+    legacy_report = json.loads(scenario_path.read_text(encoding="utf-8"))
+    legacy_report["worldline_simulation"].pop("generation_config", None)
+    legacy_report["worldline_simulation"].pop("last_regeneration", None)
+    scenario_path.write_text(json.dumps(legacy_report), encoding="utf-8")
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 1},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    assert worldline["generation_config"]["worldline_provider"] == "deterministic_mock"
+    assert "Original generation preset was unavailable" in " ".join(worldline["caveats"])
+    assert worldline["last_regeneration"]["preset_note"]
 
 
 def test_worldline_chunk_retries_before_fallback(

@@ -6,6 +6,8 @@ from astro_abm_api.models.report import (
     ScenarioLlmChunkResponse,
     ScenarioReport,
     ScenarioWorldlineChunkResponse,
+    ScenarioWorldlineRegenerateFromRequest,
+    ScenarioWorldlineRegenerateFromResponse,
 )
 from astro_abm_api.models.scenario import (
     ScenarioCreateRequest,
@@ -23,6 +25,7 @@ from astro_abm_api.services.llm_client import (
 )
 from astro_abm_api.services.simulation_engine import generate_scenario_report, render_markdown
 from astro_abm_api.services.worldline_llm_generator import generate_worldline_chunk
+from astro_abm_api.services.worldline_regeneration import regenerate_worldline_from_chunk
 
 
 router = APIRouter()
@@ -179,5 +182,45 @@ def generate_scenario_worldline_chunk(
             worldline_simulation.status == "completed"
             and request.chunk_index == request.total_chunks
         ),
+        report=saved_report,
+    )
+
+
+@router.post(
+    "/scenarios/{scenario_id}/worldline/regenerate-from",
+    response_model=ScenarioWorldlineRegenerateFromResponse,
+)
+def regenerate_scenario_worldline_from_chunk(
+    scenario_id: str,
+    request: ScenarioWorldlineRegenerateFromRequest,
+) -> ScenarioWorldlineRegenerateFromResponse:
+    store = ScenarioStore()
+    try:
+        report = store.load(scenario_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ScenarioNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="scenario not found") from exc
+
+    try:
+        result = regenerate_worldline_from_chunk(
+            report,
+            start_chunk_index=request.start_chunk_index,
+            note=request.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    updated_report = result.report.model_copy(
+        update={"markdown_report": render_markdown(result.report)}
+    )
+    saved_report = store.save(updated_report)
+    return ScenarioWorldlineRegenerateFromResponse(
+        scenario_id=scenario_id,
+        start_chunk_index=request.start_chunk_index,
+        rebuilt_chunk_count=result.rebuilt_chunk_count,
+        continuity_status=saved_report.worldline_simulation.continuity_status
+        if saved_report.worldline_simulation
+        else "legacy_unknown",
         report=saved_report,
     )

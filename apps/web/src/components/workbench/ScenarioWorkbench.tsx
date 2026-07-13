@@ -9,11 +9,9 @@ import { DailyTimelineRail } from "./DailyTimelineRail";
 import { WorkbenchPanel } from "./WorkbenchPanel";
 import type {
   DailyScenarioSnapshot,
-  LlmProvider,
-  ReportLanguage,
   ScenarioReport,
 } from "@/lib/types";
-import { generateScenarioWorldlineChunk } from "@/lib/api";
+import { regenerateScenarioWorldlineFromChunk } from "@/lib/api";
 import { buildAssetStressSeries } from "@/lib/assetStressSentiment";
 import { buildWorkbenchGraph } from "@/lib/workbenchGraph";
 import { formatEnumLabel } from "@/i18n/labels";
@@ -90,54 +88,45 @@ export function ScenarioWorkbench({
     setSelectedEdgeId(null);
   };
 
-  const regenerateWorldline = async () => {
-    if (!timeline.length || regeneration.active) {
+  const selectedChunkIndex = useMemo(() => {
+    if (!selectedSnapshot || selectedIndex < 0) {
+      return null;
+    }
+    const explicitChunkIndex = selectedWorldlineDay?.chunk_index;
+    if (typeof explicitChunkIndex === "number" && explicitChunkIndex > 0) {
+      return explicitChunkIndex - 1;
+    }
+    const chunkSize = normalizeChunkSize(
+      currentReport.worldline_simulation?.generation_config?.worldline_chunk_days ??
+        currentReport.worldline_simulation?.provenance?.chunk_size_days,
+    );
+    return Math.floor(selectedIndex / chunkSize);
+  }, [currentReport.worldline_simulation, selectedIndex, selectedSnapshot, selectedWorldlineDay]);
+
+  const regenerateWorldlineFromSelectedChunk = async () => {
+    if (!timeline.length || regeneration.active || selectedChunkIndex === null) {
       return;
     }
-    const provenance = currentReport.worldline_simulation?.provenance || {};
-    const storedWorldline =
-      typeof currentReport.provenance.worldline === "object" &&
-      currentReport.provenance.worldline !== null
-        ? (currentReport.provenance.worldline as Record<string, unknown>)
-        : {};
-    const chunkSizeDays = normalizeChunkSize(provenance.chunk_size_days);
-    const chunks = buildDateChunks(currentReport.start_date, currentReport.end_date, chunkSizeDays);
-    const provider = normalizeLlmProvider(provenance.provider || storedWorldline.provider);
-    const model = stringOrNull(provenance.model || storedWorldline.model);
-    const baseUrl = stringOrNull(storedWorldline.base_url);
-    let latestReport = currentReport;
+    const confirmed = window.confirm(
+      `${t("worldline.regenerateFromHereConfirm")}\n\n${t("worldline.regenerateDownstreamWarning")}\n${t("worldline.originalPresetReused")}`,
+    );
+    if (!confirmed) {
+      return;
+    }
     setRegeneration({
       active: true,
-      message: `${t("worldline.regenerateRunning")} 0/${chunks.length}`,
+      message: t("worldline.regenerationInProgress"),
       error: null,
     });
     try {
-      for (const [index, chunk] of chunks.entries()) {
-        setRegeneration({
-          active: true,
-          message: `${t("worldline.regenerateRunning")} ${index + 1}/${chunks.length}: ${chunk.start} → ${chunk.end}`,
-          error: null,
-        });
-        const response = await generateScenarioWorldlineChunk(currentReport.scenario_id, {
-          llm_provider: provider,
-          llm_real_enabled: true,
-          llm_base_url: baseUrl,
-          llm_model: model,
-          llm_api_key: null,
-          llm_user_prompt: null,
-          language: (currentReport.language || "en") as ReportLanguage,
-          chunk_start_date: chunk.start,
-          chunk_end_date: chunk.end,
-          chunk_index: index + 1,
-          total_chunks: chunks.length,
-          worldline_chunk_days: chunkSizeDays,
-        });
-        latestReport = response.report;
-        setCurrentReport(response.report);
-      }
+      const response = await regenerateScenarioWorldlineFromChunk(currentReport.scenario_id, {
+        start_chunk_index: selectedChunkIndex,
+      });
+      const latestReport = response.report;
+      setCurrentReport(latestReport);
       setRegeneration({
         active: false,
-        message: t("worldline.regenerateDone"),
+        message: `${t("worldline.regenerationCompleted")} (${response.rebuilt_chunk_count})`,
         error: null,
       });
       if (!latestReport.daily_timeline?.some((snapshot) => snapshot.date === selectedDate)) {
@@ -281,7 +270,8 @@ export function ScenarioWorkbench({
           snapshot={selectedSnapshot}
           worldlineDay={selectedWorldlineDay}
           worldlineSimulation={currentReport.worldline_simulation}
-          onRegenerateWorldline={isWorldline ? regenerateWorldline : undefined}
+          onRegenerateWorldline={isWorldline ? regenerateWorldlineFromSelectedChunk : undefined}
+          canRegenerateWorldline={isWorldline && selectedChunkIndex !== null}
           regenerationError={regeneration.error}
           regenerationMessage={regeneration.message}
           regenerationActive={regeneration.active}
@@ -294,40 +284,4 @@ export function ScenarioWorkbench({
 
 function normalizeChunkSize(value: unknown): 1 | 2 | 3 | 5 {
   return value === 1 || value === 2 || value === 3 || value === 5 ? value : 3;
-}
-
-function normalizeLlmProvider(value: unknown): LlmProvider {
-  return value === "mock" || value === "openai_compatible"
-    ? value
-    : "openai_compatible";
-}
-
-function stringOrNull(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value : null;
-}
-
-function buildDateChunks(startDate: string, endDate: string, chunkSizeDays: number) {
-  const chunks: Array<{ start: string; end: string }> = [];
-  let current = parseDate(startDate);
-  const end = parseDate(endDate);
-  while (current <= end) {
-    const chunkStart = current;
-    const chunkEnd = new Date(current);
-    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + chunkSizeDays - 1);
-    if (chunkEnd > end) {
-      chunkEnd.setTime(end.getTime());
-    }
-    chunks.push({ start: formatDate(chunkStart), end: formatDate(chunkEnd) });
-    current = new Date(chunkEnd);
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-  return chunks;
-}
-
-function parseDate(value: string) {
-  return new Date(`${value}T00:00:00Z`);
-}
-
-function formatDate(value: Date) {
-  return value.toISOString().slice(0, 10);
 }
