@@ -8,10 +8,10 @@ from typing import Any
 import requests
 
 NOAA_SPACE_WEATHER_ENDPOINTS = {
-    "plasma": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
-    "mag": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+    "plasma": "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
+    "mag": "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json",
     "xray": "https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json",
-    "kp": "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json",
+    "kp": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
 }
 
 
@@ -19,7 +19,10 @@ def _parse_noaa_time(value: str) -> datetime:
     if value.endswith("Z"):
         return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
     if "T" in value:
-        return datetime.fromisoformat(value).astimezone(UTC)
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
     return datetime.strptime(value, "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=UTC)
 
 
@@ -49,6 +52,62 @@ def parse_noaa_table_feed(payload: list[list[Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def parse_rtsw_wind_feed(payload: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in payload:
+        time_tag = item.get("time_tag")
+        if not isinstance(time_tag, str):
+            continue
+        speed = _try_float(item.get("proton_speed"))
+        if speed is None:
+            continue
+        rows.append(
+            {
+                "time_tag": _parse_noaa_time(time_tag),
+                "speed": speed,
+                "source": item.get("source"),
+                "overall_quality": item.get("overall_quality"),
+            }
+        )
+    return rows
+
+
+def parse_rtsw_mag_feed(payload: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in payload:
+        time_tag = item.get("time_tag")
+        if not isinstance(time_tag, str):
+            continue
+        bz_gsm = _try_float(item.get("bz_gsm"))
+        if bz_gsm is None:
+            continue
+        rows.append(
+            {
+                "time_tag": _parse_noaa_time(time_tag),
+                "bz_gsm": bz_gsm,
+                "source": item.get("source"),
+                "overall_quality": item.get("overall_quality"),
+            }
+        )
+    return rows
+
+
+def parse_plasma_feed(payload: Any) -> list[dict[str, Any]]:
+    if _looks_like_table_feed(payload):
+        return parse_noaa_table_feed(payload)
+    if isinstance(payload, list):
+        return parse_rtsw_wind_feed([item for item in payload if isinstance(item, dict)])
+    return []
+
+
+def parse_magnetometer_feed(payload: Any) -> list[dict[str, Any]]:
+    if _looks_like_table_feed(payload):
+        return parse_noaa_table_feed(payload)
+    if isinstance(payload, list):
+        return parse_rtsw_mag_feed([item for item in payload if isinstance(item, dict)])
+    return []
+
+
 def parse_xray_flux_feed(payload: list[dict[str, Any]], energy_channel: str = "0.1-0.8nm") -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in payload:
@@ -71,7 +130,7 @@ def expand_kp_index_to_hourly(payload: list[dict[str, Any]]) -> list[dict[str, A
     rows: list[dict[str, Any]] = []
     for item in payload:
         start = _parse_noaa_time(item["time_tag"])
-        kp_value = _try_float(item.get("kp_index"))
+        kp_value = _try_float(item.get("kp_index", item.get("Kp")))
         if kp_value is None:
             continue
         for offset in range(3):
@@ -84,6 +143,14 @@ def _try_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _looks_like_table_feed(payload: Any) -> bool:
+    return (
+        isinstance(payload, list)
+        and bool(payload)
+        and isinstance(payload[0], list)
+    )
 
 
 def build_space_weather_feature_rows(
@@ -154,10 +221,10 @@ class SpaceWeatherClient:
         raise last_error
 
     def fetch_plasma(self) -> list[dict[str, Any]]:
-        return parse_noaa_table_feed(self.fetch_json("plasma"))
+        return parse_plasma_feed(self.fetch_json("plasma"))
 
     def fetch_magnetometer(self) -> list[dict[str, Any]]:
-        return parse_noaa_table_feed(self.fetch_json("mag"))
+        return parse_magnetometer_feed(self.fetch_json("mag"))
 
     def fetch_xray_flux(self) -> list[dict[str, Any]]:
         return parse_xray_flux_feed(self.fetch_json("xray"))
