@@ -11,6 +11,7 @@ from astro_abm_api.models.report import (
     WorldlineAgentEvent,
     WorldlineCausalLink,
     WorldlineDay,
+    WorldlineGenerationConfig,
     WorldlineImpactScores,
     WorldlineSimulation,
     WorldlineState,
@@ -55,6 +56,20 @@ def generate_worldline_for_request(
     fallback = generate_worldline_simulation(report)
     if fallback is None:
         return None
+    generation_config = _generation_config_from_request(
+        worldline_provider="llm",
+        chunk_days=request.worldline_chunk_days,
+        llm_provider=request.llm_provider,
+        llm_real_enabled=request.llm_real_enabled,
+        llm_base_url=request.llm_base_url,
+        llm_model=request.llm_model,
+        llm_timeout_seconds=request.llm_timeout_seconds,
+        llm_max_output_tokens=request.llm_max_output_tokens,
+        llm_call_delay_seconds=request.llm_call_delay_seconds,
+        report_language=request.language,
+        custom_user_prompt=request.llm_user_prompt,
+        credential_status_value=credential_status(config),
+    )
     if not config.real_calls_enabled:
         return _with_provenance(
             fallback,
@@ -71,6 +86,7 @@ def generate_worldline_for_request(
             chunk_count=0,
             failed_chunk_count=0,
             caveat="Real LLM worldline calls are disabled; deterministic fallback worldline was used.",
+            generation_config=generation_config,
         )
     return _with_provenance(
         fallback,
@@ -87,6 +103,7 @@ def generate_worldline_for_request(
         chunk_count=0,
         failed_chunk_count=0,
         caveat="LLM worldline mode selected; call the chunk endpoint to replace deterministic fallback days.",
+        generation_config=generation_config,
     )
 
 
@@ -104,6 +121,20 @@ def generate_worldline_chunk(
         max_output_tokens=request.llm_max_output_tokens,
     )
     fallback = generate_worldline_simulation(report)
+    generation_config = _generation_config_from_request(
+        worldline_provider="llm",
+        chunk_days=request.worldline_chunk_days,
+        llm_provider=request.llm_provider,
+        llm_real_enabled=request.llm_real_enabled,
+        llm_base_url=request.llm_base_url,
+        llm_model=request.llm_model,
+        llm_timeout_seconds=request.llm_timeout_seconds,
+        llm_max_output_tokens=request.llm_max_output_tokens,
+        llm_call_delay_seconds=request.llm_call_delay_seconds,
+        report_language=request.language,
+        custom_user_prompt=request.llm_user_prompt,
+        credential_status_value=credential_status(config),
+    )
     if fallback is None:
         return WorldlineSimulation(
             status="failed",
@@ -126,6 +157,8 @@ def generate_worldline_chunk(
                 attempt_count=0,
                 last_error="daily_timeline is missing",
             ),
+            generation_config=generation_config,
+            continuity_status="consistent",
         )
 
     if not config.real_calls_enabled:
@@ -144,6 +177,7 @@ def generate_worldline_chunk(
             chunk_count=_previous_chunk_count(report),
             failed_chunk_count=_previous_failed_chunk_count(report),
             caveat="Real LLM worldline calls are disabled; deterministic fallback worldline was used.",
+            generation_config=generation_config,
         )
     if not config.base_url or not config.model:
         return _fallback_chunk(
@@ -159,6 +193,7 @@ def generate_worldline_chunk(
             safety_check_status="not_run",
             reason="OpenAI-compatible worldline provider is missing base_url or model.",
             attempt_count=0,
+            generation_config=generation_config,
         )
 
     previous_state = _previous_state_for_chunk(report, fallback, request.chunk_start_date)
@@ -219,6 +254,8 @@ def generate_worldline_chunk(
                     attempt_count=attempt_count,
                     last_error=None,
                 ),
+                generation_config=generation_config,
+                continuity_status="consistent",
             )
         last_failure = {
             "output_validation_status": str(attempt["output_validation_status"]),
@@ -239,6 +276,7 @@ def generate_worldline_chunk(
         safety_check_status=last_failure["safety_check_status"],
         reason=last_failure["reason"],
         attempt_count=MAX_WORLDLINE_CHUNK_ATTEMPTS,
+        generation_config=generation_config,
     )
 
 
@@ -478,6 +516,7 @@ def _fallback_chunk(
     safety_check_status: str,
     reason: str,
     attempt_count: int,
+    generation_config: WorldlineGenerationConfig,
 ) -> WorldlineSimulation:
     chunk_days = [
         _mark_day(
@@ -520,6 +559,8 @@ def _fallback_chunk(
             attempt_count=attempt_count,
             last_error=reason,
         ),
+        generation_config=generation_config,
+        continuity_status="consistent",
     )
 
 
@@ -566,6 +607,7 @@ def _with_provenance(
     chunk_count: int,
     failed_chunk_count: int,
     caveat: str,
+    generation_config: WorldlineGenerationConfig,
 ) -> WorldlineSimulation:
     return simulation.model_copy(
         update={
@@ -608,7 +650,40 @@ def _with_provenance(
                     None,
                 ),
             },
+            "generation_config": generation_config,
+            "continuity_status": "consistent",
         }
+    )
+
+
+def _generation_config_from_request(
+    *,
+    worldline_provider: str,
+    chunk_days: int,
+    llm_provider: str | None,
+    llm_real_enabled: bool | None,
+    llm_base_url: str | None,
+    llm_model: str | None,
+    llm_timeout_seconds: float | None,
+    llm_max_output_tokens: int | None,
+    llm_call_delay_seconds: float | None,
+    report_language: str | None,
+    custom_user_prompt: str | None,
+    credential_status_value: str,
+) -> WorldlineGenerationConfig:
+    return WorldlineGenerationConfig(
+        worldline_provider=worldline_provider,
+        worldline_chunk_days=chunk_days,
+        llm_provider=llm_provider,
+        llm_real_enabled=llm_real_enabled,
+        llm_base_url=llm_base_url,
+        llm_model=llm_model,
+        llm_timeout_seconds=llm_timeout_seconds,
+        llm_max_output_tokens=llm_max_output_tokens,
+        llm_call_delay_seconds=llm_call_delay_seconds,
+        report_language=report_language,
+        custom_user_prompt=custom_user_prompt,
+        credential_status=credential_status_value,
     )
 
 

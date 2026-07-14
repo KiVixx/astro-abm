@@ -8,6 +8,8 @@ import type {
   ScenarioSummary,
   ScenarioWorldlineChunkRequest,
   ScenarioWorldlineChunkResponse,
+  ScenarioWorldlineRegenerateFromRequest,
+  ScenarioWorldlineRegenerateFromResponse,
 } from "./types";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
@@ -105,6 +107,19 @@ export async function generateScenarioWorldlineChunk(
 ): Promise<ScenarioWorldlineChunkResponse> {
   return apiFetch<ScenarioWorldlineChunkResponse>(
     `/scenarios/${encodeURIComponent(scenarioId)}/worldline-chunks`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function regenerateScenarioWorldlineFromChunk(
+  scenarioId: string,
+  payload: ScenarioWorldlineRegenerateFromRequest,
+): Promise<ScenarioWorldlineRegenerateFromResponse> {
+  return apiFetch<ScenarioWorldlineRegenerateFromResponse>(
+    `/scenarios/${encodeURIComponent(scenarioId)}/worldline/regenerate-from`,
     {
       method: "POST",
       body: JSON.stringify(payload),

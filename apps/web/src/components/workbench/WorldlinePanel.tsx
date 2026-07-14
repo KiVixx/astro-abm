@@ -13,6 +13,7 @@ import { useI18n } from "@/i18n/useI18n";
 interface WorldlinePanelProps {
   primary?: boolean;
   onRegenerateWorldline?: () => void;
+  canRegenerateWorldline?: boolean;
   regenerationActive?: boolean;
   regenerationMessage?: string;
   regenerationError?: string | null;
@@ -30,6 +31,7 @@ const IMPACT_SCORE_KEYS: Array<keyof WorldlineImpactScores> = [
 ];
 
 export function WorldlinePanel({
+  canRegenerateWorldline = true,
   onRegenerateWorldline,
   primary = false,
   regenerationActive = false,
@@ -53,6 +55,7 @@ export function WorldlinePanel({
       {worldlineSimulation ? (
         <WorldlineReviewHeader
           onRegenerateWorldline={onRegenerateWorldline}
+          canRegenerateWorldline={canRegenerateWorldline}
           regenerationActive={regenerationActive}
           regenerationError={regenerationError}
           regenerationMessage={regenerationMessage}
@@ -165,6 +168,12 @@ function WorldlineProvenanceTags({
         {t("worldline.chunkStatus")}: {simulation.status}
       </span>
       <span className="tag">
+        {t("worldline.continuityStatus")}:{" "}
+        {simulation.continuity_status === "consistent"
+          ? t("worldline.consistent")
+          : String(simulation.continuity_status || "legacy_unknown")}
+      </span>
+      <span className="tag">
         {t("worldline.failedChunks")}:{" "}
         {String(provenance.failed_chunk_count || 0)}
       </span>
@@ -173,6 +182,7 @@ function WorldlineProvenanceTags({
 }
 
 function WorldlineReviewHeader({
+  canRegenerateWorldline,
   onRegenerateWorldline,
   regenerationActive,
   regenerationError,
@@ -180,6 +190,7 @@ function WorldlineReviewHeader({
   selectedDay,
   simulation,
 }: {
+  canRegenerateWorldline: boolean;
   onRegenerateWorldline?: () => void;
   regenerationActive: boolean;
   regenerationError: string | null;
@@ -203,16 +214,26 @@ function WorldlineReviewHeader({
         {onRegenerateWorldline ? (
           <button
             className="button secondary"
-            disabled={regenerationActive}
+            disabled={regenerationActive || !canRegenerateWorldline}
             onClick={onRegenerateWorldline}
+            title={!canRegenerateWorldline ? t("worldline.chunkInfoUnavailable") : undefined}
             type="button"
           >
             {regenerationActive
-              ? t("worldline.regenerateRunning")
-              : t("worldline.regenerateChunks")}
+              ? t("worldline.regenerationInProgress")
+              : t("worldline.regenerateFromHere")}
           </button>
         ) : null}
       </div>
+      {onRegenerateWorldline && !canRegenerateWorldline ? (
+        <p className="muted">{t("worldline.chunkInfoUnavailable")}</p>
+      ) : null}
+      {simulation.last_regeneration ? (
+        <p className="muted">
+          {t("worldline.regenerationCompleted")}:{" "}
+          {String(simulation.last_regeneration.regenerated_at || "unknown")}
+        </p>
+      ) : null}
       {regenerationMessage ? <p className="muted">{regenerationMessage}</p> : null}
       {regenerationError ? (
         <p className="notice warning">{regenerationError}</p>

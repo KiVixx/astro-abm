@@ -745,6 +745,14 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
     if worldline is None:
         return "此情境未包含模擬世界線。" if language == "zh-Hant" else "No simulated worldline is available."
 
+    config = worldline.generation_config
+    last_regeneration = worldline.last_regeneration or {}
+    preset_note = last_regeneration.get("preset_note")
+    regenerated_from = last_regeneration.get("start_chunk_index")
+    rebuilt_count = last_regeneration.get("rebuilt_chunk_count")
+    regenerated_at = last_regeneration.get("regenerated_at")
+    chunk_history_count = len(worldline.provenance.get("chunk_history") or [])
+
     if language == "zh-Hant":
         day_lines = "\n\n".join(
             (
@@ -792,6 +800,11 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
 - Failed chunk count：{worldline.provenance.get("failed_chunk_count")}
 - 輸出驗證：{worldline.provenance.get("output_validation_status")}
 - 安全檢查：{worldline.provenance.get("safety_check_status")}
+- 連續性狀態：{worldline.continuity_status}
+- 原始生成 preset：{config.worldline_provider if config else "legacy_unknown"} / chunk_days={config.worldline_chunk_days if config else "unknown"}
+- 最近重建：from_chunk={regenerated_from}; rebuilt_chunks={rebuilt_count}; regenerated_at={regenerated_at}
+- Preset 註記：{preset_note or "無"}
+- Chunk status summary：{chunk_history_count} entries
 - 推演天數：{worldline.horizon_days}
 - 摘要：{worldline.summary}
 
@@ -847,6 +860,11 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
 - Failed chunk count: {worldline.provenance.get("failed_chunk_count")}
 - Output validation: {worldline.provenance.get("output_validation_status")}
 - Safety check: {worldline.provenance.get("safety_check_status")}
+- Continuity status: {worldline.continuity_status}
+- Generation preset: {config.worldline_provider if config else "legacy_unknown"} / chunk_days={config.worldline_chunk_days if config else "unknown"}
+- Last regeneration: from_chunk={regenerated_from}; rebuilt_chunks={rebuilt_count}; regenerated_at={regenerated_at}
+- Preset note: {preset_note or "none"}
+- Chunk status summary: {chunk_history_count} entries
 - Horizon days: {worldline.horizon_days}
 - Summary: {worldline.summary}
 

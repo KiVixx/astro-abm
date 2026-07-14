@@ -32,6 +32,7 @@ class ScenarioCreateRequest(BaseModel):
     llm_user_prompt: str | None = Field(default=None, max_length=4000)
     llm_timeout_seconds: float | None = Field(default=None, ge=1, le=600)
     llm_max_output_tokens: int | None = Field(default=None, ge=512, le=32000)
+    llm_call_delay_seconds: float | None = Field(default=None, ge=0, le=120)
     visibility: Visibility = "private"
     mode: ScenarioMode = "daily_association_only"
     language: ReportLanguage = "en"
@@ -96,6 +97,7 @@ class ScenarioLlmChunkRequest(BaseModel):
     llm_user_prompt: str | None = Field(default=None, max_length=4000)
     llm_timeout_seconds: float | None = Field(default=None, ge=1, le=600)
     llm_max_output_tokens: int | None = Field(default=None, ge=512, le=32000)
+    llm_call_delay_seconds: float | None = Field(default=None, ge=0, le=120)
     language: ReportLanguage = "en"
     chunk_start_date: date
     chunk_end_date: date
@@ -130,6 +132,7 @@ class ScenarioWorldlineChunkRequest(BaseModel):
     llm_user_prompt: str | None = Field(default=None, max_length=4000)
     llm_timeout_seconds: float | None = Field(default=None, ge=1, le=600)
     llm_max_output_tokens: int | None = Field(default=None, ge=512, le=32000)
+    llm_call_delay_seconds: float | None = Field(default=None, ge=0, le=120)
     language: ReportLanguage = "en"
     chunk_start_date: date
     chunk_end_date: date

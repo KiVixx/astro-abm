@@ -265,6 +265,24 @@ class WorldlineDay(BaseModel):
     disclaimer: str
 
 
+class WorldlineGenerationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    worldline_provider: str
+    worldline_chunk_days: int
+    llm_provider: str | None = None
+    llm_real_enabled: bool | None = None
+    llm_base_url: str | None = None
+    llm_model: str | None = None
+    llm_timeout_seconds: float | None = None
+    llm_max_output_tokens: int | None = None
+    llm_call_delay_seconds: float | None = None
+    report_language: str | None = None
+    custom_user_prompt: str | None = None
+    preset_name: str | None = None
+    credential_status: str = "not_configured"
+
+
 class WorldlineSimulation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -275,6 +293,9 @@ class WorldlineSimulation(BaseModel):
     summary: str
     caveats: list[str] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
+    generation_config: WorldlineGenerationConfig | None = None
+    continuity_status: str = "legacy_unknown"
+    last_regeneration: dict[str, Any] | None = None
 
 
 class ScenarioReport(BaseModel):
@@ -331,4 +352,21 @@ class ScenarioWorldlineChunkResponse(BaseModel):
     chunk_end_date: date
     worldline_status: str
     completed: bool
+    report: ScenarioReport
+
+
+class ScenarioWorldlineRegenerateFromRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_chunk_index: int = Field(ge=0)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class ScenarioWorldlineRegenerateFromResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str
+    start_chunk_index: int
+    rebuilt_chunk_count: int
+    continuity_status: str
     report: ScenarioReport

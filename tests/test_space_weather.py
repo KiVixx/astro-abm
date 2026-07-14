@@ -21,6 +21,60 @@ def test_parse_noaa_table_feed_returns_typed_rows():
     ]
 
 
+def test_parse_rtsw_wind_feed_normalizes_proton_speed():
+    from astro_abm.features.space_weather import parse_plasma_feed
+
+    payload = [
+        {
+            "time_tag": "2026-07-13T04:35:00",
+            "source": "ACE",
+            "proton_speed": 450.94,
+            "overall_quality": 0,
+        },
+        {
+            "time_tag": "2026-07-13T04:36:00",
+            "source": "ACE",
+            "proton_speed": None,
+            "overall_quality": 0,
+        },
+    ]
+
+    rows = parse_plasma_feed(payload)
+
+    assert rows == [
+        {
+            "time_tag": datetime(2026, 7, 13, 4, 35, tzinfo=UTC),
+            "speed": 450.94,
+            "source": "ACE",
+            "overall_quality": 0,
+        }
+    ]
+
+
+def test_parse_rtsw_mag_feed_normalizes_bz_gsm():
+    from astro_abm.features.space_weather import parse_magnetometer_feed
+
+    payload = [
+        {
+            "time_tag": "2026-07-13T04:34:00",
+            "source": "ACE",
+            "bz_gsm": -0.38,
+            "overall_quality": 0,
+        }
+    ]
+
+    rows = parse_magnetometer_feed(payload)
+
+    assert rows == [
+        {
+            "time_tag": datetime(2026, 7, 13, 4, 34, tzinfo=UTC),
+            "bz_gsm": -0.38,
+            "source": "ACE",
+            "overall_quality": 0,
+        }
+    ]
+
+
 def test_parse_xray_feed_filters_to_primary_channel():
     from astro_abm.features.space_weather import parse_xray_flux_feed
 
@@ -57,7 +111,7 @@ def test_expand_kp_to_hourly_repeats_each_three_hour_value_across_bucket_hours()
     from astro_abm.features.space_weather import expand_kp_index_to_hourly
 
     payload = [
-        {"time_tag": "2026-04-15T00:00:00Z", "kp_index": 2.33},
+        {"time_tag": "2026-04-15T00:00:00Z", "Kp": 2.33},
         {"time_tag": "2026-04-15T01:00:00Z", "kp_index": None},
         {"time_tag": "2026-04-15T03:00:00Z", "kp_index": 4.67},
     ]
