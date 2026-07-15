@@ -69,15 +69,23 @@ BANNED_SAFETY_PATTERNS = (
     r"\bcauses\b",
     r"will rise",
     r"will fall",
-    r"買入",
-    r"賣出",
-    r"做多",
-    r"做空",
-    r"目標價",
-    r"保證",
-    r"一定會漲",
-    r"一定會跌",
 )
+
+CHINESE_TRADING_INSTRUCTION_TERMS = (
+    "買入",
+    "賣出",
+    "做多",
+    "做空",
+    "目標價",
+    "保證",
+    "一定會漲",
+    "一定會跌",
+)
+CHINESE_SAFETY_CONTEXT_PATTERN = re.compile(
+    r"不構成|不得(?:提供)?|不應(?:提供)?|不會|不能|不提供|未提供|"
+    r"沒有|並非|不是|勿|禁止|避免|不保證"
+)
+CHINESE_CLAUSE_SPLIT_PATTERN = re.compile(r"[，,；;。.!?\n]|但|然而|可是")
 
 
 @dataclass(frozen=True)
@@ -602,7 +610,35 @@ def build_report_from_payload(
 
 def safety_check_text(text: str) -> bool:
     lowered = text.lower()
-    return not any(re.search(pattern, lowered) for pattern in BANNED_SAFETY_PATTERNS)
+    if any(re.search(pattern, lowered) for pattern in BANNED_SAFETY_PATTERNS):
+        return False
+    return not _contains_unsafe_chinese_trading_language(text)
+
+
+def _contains_unsafe_chinese_trading_language(text: str) -> bool:
+    for clause in CHINESE_CLAUSE_SPLIT_PATTERN.split(text):
+        matched_terms = [
+            (clause.find(term), term)
+            for term in CHINESE_TRADING_INSTRUCTION_TERMS
+            if term in clause
+        ]
+        if not matched_terms:
+            continue
+
+        stripped_clause = clause.strip()
+        if stripped_clause in CHINESE_TRADING_INSTRUCTION_TERMS:
+            return True
+
+        first_term_index = min(index for index, _ in matched_terms)
+        safety_contexts = list(CHINESE_SAFETY_CONTEXT_PATTERN.finditer(clause))
+        has_nearby_safety_context = any(
+            context.start() <= first_term_index
+            and first_term_index - context.end() <= 24
+            for context in safety_contexts
+        )
+        if not has_nearby_safety_context:
+            return True
+    return False
 
 
 def credential_status(config: LLMConfig) -> str:

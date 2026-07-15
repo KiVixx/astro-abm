@@ -46,6 +46,21 @@ def test_safety_checker_allows_benign_horizon_language() -> None:
 
 
 @pytest.mark.parametrize(
+    "safe_text",
+    [
+        "不得提供買入、賣出、做多、做空等交易建議。",
+        "這不是買入或賣出建議，也不構成做多或做空訊號。",
+        "本報告不提供目標價，也不保證任何情境一定會漲或一定會跌。",
+        "請避免把模擬結果解讀成買入訊號。",
+    ],
+)
+def test_safety_checker_allows_traditional_chinese_safety_disclaimers(
+    safe_text: str,
+) -> None:
+    assert safety_check_text(safe_text)
+
+
+@pytest.mark.parametrize(
     "unsafe_text",
     [
         "go long",
@@ -66,6 +81,12 @@ def test_safety_checker_allows_benign_horizon_language() -> None:
         "保證",
         "一定會漲",
         "一定會跌",
+        "建議立即買入 BTC",
+        "可以考慮賣出 ETH",
+        "這是做多訊號",
+        "BTC 的目標價是 100000",
+        "保證 BTC 一定會漲",
+        "不建議買入 BTC，但建議賣出 ETH",
     ],
 )
 def test_safety_checker_rejects_explicit_trading_instruction_phrases(
