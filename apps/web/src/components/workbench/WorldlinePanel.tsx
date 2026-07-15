@@ -301,24 +301,27 @@ function WorldlineReviewHeader({
           <summary>{t("worldline.chunkProvenance")}</summary>
           <div className="stack">
             {chunkHistory.map((chunk, index) => (
-              <div className="tag-row" key={`${chunk.chunk_index || index}-${chunk.chunk_start_date || ""}`}>
-                <span className="tag">
-                  #{String(chunk.chunk_index || index + 1)}
-                </span>
-                <span className="tag">
-                  {String(chunk.chunk_start_date || "?")} → {String(chunk.chunk_end_date || "?")}
-                </span>
-                <span className="tag">{String(chunk.status || "unknown")}</span>
-                <span className="tag">
-                  {String(chunk.output_validation_status || "unknown")}
-                </span>
-                <span className="tag">
-                  {String(chunk.safety_check_status || "unknown")}
-                </span>
-                <span className="tag">
-                  {t("worldline.attemptCount")}: {String(chunk.attempt_count || "n/a")}/
-                  {String(chunk.max_attempts || "3")}
-                </span>
+              <div className="stack" key={`${chunk.chunk_index || index}-${chunk.chunk_start_date || ""}`}>
+                <div className="tag-row">
+                  <span className="tag">
+                    #{String(chunk.chunk_index || index + 1)}
+                  </span>
+                  <span className="tag">
+                    {String(chunk.chunk_start_date || "?")} → {String(chunk.chunk_end_date || "?")}
+                  </span>
+                  <span className="tag">{String(chunk.status || "unknown")}</span>
+                  <span className="tag">
+                    {String(chunk.output_validation_status || "unknown")}
+                  </span>
+                  <span className="tag">
+                    {String(chunk.safety_check_status || "unknown")}
+                  </span>
+                  <span className="tag">
+                    {t("worldline.attemptCount")}: {String(chunk.attempt_count || "n/a")}/
+                    {String(chunk.max_attempts || "3")}
+                  </span>
+                </div>
+                <ChunkResponseDiagnostics value={chunk.response_diagnostics} />
               </div>
             ))}
           </div>
@@ -337,6 +340,48 @@ function WorldlineReviewHeader({
         </ul>
       </details>
     </section>
+  );
+}
+
+function ChunkResponseDiagnostics({ value }: { value: unknown }) {
+  const { t } = useI18n();
+  const diagnostics = recordFromUnknown(value);
+  if (!diagnostics || diagnostics.response_char_count === undefined) {
+    return null;
+  }
+  const errorLine = numberFromUnknown(diagnostics.parse_error_line);
+  const errorColumn = numberFromUnknown(diagnostics.parse_error_column);
+  const parseErrorType = diagnostics.parse_error_type
+    ? String(diagnostics.parse_error_type)
+    : t("worldline.noParseError");
+  return (
+    <details>
+      <summary>{t("worldline.responseDiagnostics")}</summary>
+      <div className="tag-row">
+        <span className="tag">
+          {t("worldline.responseLength")}: {String(diagnostics.response_char_count)} {t("worldline.characters")}
+        </span>
+        <span className="tag">
+          {t("worldline.parseResult")}: {parseErrorType}
+        </span>
+        {errorLine > 0 && errorColumn > 0 ? (
+          <span className="tag">
+            {t("worldline.errorLocation")}: {errorLine}:{errorColumn}
+          </span>
+        ) : null}
+        {diagnostics.markdown_fence_detected === true ? (
+          <span className="tag">{t("worldline.markdownFenceDetected")}</span>
+        ) : null}
+      </div>
+      {diagnostics.probable_truncation === true ? (
+        <p className="notice warning">
+          <strong>{t("worldline.probableTruncation")}</strong>
+          <br />
+          {t("worldline.probableTruncationHelp")}
+        </p>
+      ) : null}
+      <p className="muted">{t("worldline.diagnosticsPrivacyNote")}</p>
+    </details>
   );
 }
 
@@ -427,6 +472,12 @@ function arrayOfRecords(value: unknown): Array<Record<string, unknown>> {
     (item): item is Record<string, unknown> =>
       typeof item === "object" && item !== null && !Array.isArray(item),
   );
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function countDaySources(days: WorldlineDay[]): Record<string, number> {
