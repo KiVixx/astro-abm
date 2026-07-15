@@ -673,6 +673,11 @@ def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
         payload, _ = json.JSONDecoder().raw_decode(text)
     except (json.JSONDecodeError, TypeError):
         return None
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            return None
     return payload if isinstance(payload, dict) else None
 
 
@@ -691,16 +696,17 @@ def diagnose_llm_json(raw_text: str) -> dict[str, object]:
         "parse_error_message": None,
         "leading_text_ignored": leading_text_ignored,
         "trailing_text_ignored": outer_trailing_text_ignored,
+        "json_string_wrapped": False,
     }
     if not stripped:
         diagnostics["parse_error_type"] = "empty_response"
         return diagnostics
-    if "{" not in text:
-        diagnostics["parse_error_type"] = "no_json_object"
-        return diagnostics
     try:
         payload, end_index = json.JSONDecoder().raw_decode(text)
     except json.JSONDecodeError as exc:
+        if "{" not in text:
+            diagnostics["parse_error_type"] = "no_json_object"
+            return diagnostics
         probable_truncation = text.lstrip().startswith("{") and _has_unclosed_json_delimiters(text)
         diagnostics.update(
             {
@@ -716,6 +722,12 @@ def diagnose_llm_json(raw_text: str) -> dict[str, object]:
     diagnostics["trailing_text_ignored"] = bool(
         diagnostics["trailing_text_ignored"] or text[end_index:].strip()
     )
+    if isinstance(payload, str):
+        diagnostics["json_string_wrapped"] = True
+        try:
+            payload = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            payload = None
     if not isinstance(payload, dict):
         diagnostics["parse_error_type"] = "non_object_json"
     return diagnostics
@@ -730,6 +742,8 @@ def _extract_llm_json_text(raw_text: str) -> tuple[str, bool, bool]:
             bool(text[: fenced.start()].strip()),
             bool(text[fenced.end() :].strip()),
         )
+    if text.startswith('"'):
+        return text, False, False
     start = text.find("{")
     if start > 0:
         return text[start:].strip(), True, False

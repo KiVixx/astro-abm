@@ -192,6 +192,27 @@ def test_llm_json_parser_accepts_complete_object_with_surrounding_text() -> None
     assert raw_text not in json.dumps(diagnostics)
 
 
+def test_llm_json_parser_accepts_json_object_wrapped_in_json_string() -> None:
+    from astro_abm_api.services.llm_client import parse_llm_json
+
+    payload = {"days": [], "summary": "ok"}
+    raw_text = json.dumps(json.dumps(payload))
+
+    assert parse_llm_json(raw_text) == payload
+    assert diagnose_llm_json(raw_text)["json_string_wrapped"] is True
+
+
+def test_llm_json_parser_rejects_plain_json_string() -> None:
+    from astro_abm_api.services.llm_client import parse_llm_json
+
+    raw_text = json.dumps("not a report object")
+    diagnostics = diagnose_llm_json(raw_text)
+
+    assert parse_llm_json(raw_text) is None
+    assert diagnostics["json_string_wrapped"] is True
+    assert diagnostics["parse_error_type"] == "non_object_json"
+
+
 def test_llm_request_diagnostics_classify_timeout_without_retaining_details() -> None:
     secret_detail = "https://llm.example/v1?api_key=secret-value"
 
