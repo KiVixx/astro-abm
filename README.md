@@ -73,6 +73,10 @@ make api API_PORT=18000
 make web WEB_PORT=13000 API_PORT=18000
 ```
 
+Both commands check their local listening port before startup and print the
+matching override command instead of leaving newcomers with only a low-level
+`Address already in use` error.
+
 The product MVP adds a local-first scenario API under `apps/api/`. It creates
 AI scenario rehearsals from daily context and saves JSON plus Markdown reports
 under `astro_research/output/scenarios/`. These generated reports are
