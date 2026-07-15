@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ScenarioForm } from "@/components/ScenarioForm";
 import { I18nText } from "@/i18n/useI18n";
-import { getAgents, getAssets } from "@/lib/api";
+import { getAgents, getAssets, getLlmPresets } from "@/lib/api";
 import {
   createScenarioForProgressAction,
   generateScenarioLlmChunkAction,
@@ -12,7 +12,11 @@ export const dynamic = "force-dynamic";
 
 export default async function NewWorldlinePage() {
   try {
-    const [agents, marketSeries] = await Promise.all([getAgents(), getAssets()]);
+    const [agents, marketSeries, llmPresets] = await Promise.all([
+      getAgents(),
+      getAssets(),
+      getLlmPresets(),
+    ]);
     return (
       <div className="page stack">
         <header>
@@ -28,6 +32,7 @@ export default async function NewWorldlinePage() {
           chunkAction={generateScenarioLlmChunkAction}
           createAction={createScenarioForProgressAction}
           marketSeries={marketSeries}
+          initialLlmPresets={llmPresets}
           product="worldline"
           worldlineChunkAction={generateScenarioWorldlineChunkAction}
         />

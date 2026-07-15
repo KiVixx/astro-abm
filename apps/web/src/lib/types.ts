@@ -4,6 +4,53 @@ export type LlmProvider = "mock" | "openai_compatible";
 export type ReportLanguage = "en" | "zh-Hant";
 export type WorldlineProvider = "deterministic_mock" | "llm";
 
+export interface LlmPresetSummary {
+  preset_id: string;
+  name: string;
+  provider: LlmProvider;
+  real_enabled: boolean;
+  base_url?: string | null;
+  model?: string | null;
+  has_api_key: boolean;
+  worldline_provider: string;
+  chunk_size_days: number;
+  call_delay_seconds: number;
+  timeout_seconds: number;
+  max_output_tokens: number;
+  custom_user_prompt?: string | null;
+  default_language: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LlmPresetSaveRequest {
+  name: string;
+  provider: LlmProvider;
+  real_enabled: boolean;
+  base_url?: string | null;
+  model?: string | null;
+  api_key?: string | null;
+  keep_existing_api_key?: boolean;
+  worldline_provider?: string;
+  chunk_size_days?: number;
+  call_delay_seconds?: number;
+  timeout_seconds?: number;
+  max_output_tokens?: number;
+  custom_user_prompt?: string | null;
+  default_language?: string;
+}
+
+export interface LlmPresetTestResponse {
+  preset_id: string;
+  reachable: boolean;
+  dry_run: boolean;
+  status: string;
+  message: string;
+  provider: LlmProvider;
+  model?: string | null;
+  credential_status: string;
+}
+
 export interface AgentProfile {
   agent_id: string;
   name: string;
@@ -258,6 +305,7 @@ export interface WorldlineGenerationConfig {
   llm_call_delay_seconds?: number | null;
   report_language?: string | null;
   custom_user_prompt?: string | null;
+  preset_id?: string | null;
   preset_name?: string | null;
   credential_status: string;
 }
@@ -283,6 +331,7 @@ export interface ScenarioCreateRequest {
   assets: string[];
   agent_ids: string[];
   llm_provider: LlmProvider;
+  llm_preset_id?: string | null;
   llm_real_enabled?: boolean | null;
   llm_base_url?: string | null;
   llm_model?: string | null;
@@ -300,6 +349,7 @@ export interface ScenarioCreateRequest {
 
 export interface ScenarioLlmChunkRequest {
   llm_provider: LlmProvider;
+  llm_preset_id?: string | null;
   llm_real_enabled?: boolean | null;
   llm_base_url?: string | null;
   llm_model?: string | null;
@@ -328,6 +378,7 @@ export interface ScenarioLlmChunkResponse {
 
 export interface ScenarioWorldlineChunkRequest {
   llm_provider: LlmProvider;
+  llm_preset_id?: string | null;
   llm_real_enabled?: boolean | null;
   llm_base_url?: string | null;
   llm_model?: string | null;
@@ -361,6 +412,19 @@ export interface ScenarioWorldlineChunkResponse {
 export interface ScenarioWorldlineRegenerateFromRequest {
   start_chunk_index: number;
   note?: string | null;
+  regeneration_id?: string | null;
+  progressive?: boolean;
+  preset_id?: string | null;
+  llm_overrides?: {
+    real_enabled?: boolean | null;
+    base_url?: string | null;
+    model?: string | null;
+    api_key?: string | null;
+    timeout_seconds?: number | null;
+    max_output_tokens?: number | null;
+    call_delay_seconds?: number | null;
+    custom_user_prompt?: string | null;
+  } | null;
 }
 
 export interface ScenarioWorldlineRegenerateFromResponse {
@@ -368,6 +432,10 @@ export interface ScenarioWorldlineRegenerateFromResponse {
   start_chunk_index: number;
   rebuilt_chunk_count: number;
   continuity_status: string;
+  regeneration_status: "completed" | "partial_fallback" | "failed_fallback" | string;
+  llm_completed_chunk_count: number;
+  fallback_chunk_count: number;
+  skipped_chunk_count: number;
   report: ScenarioReport;
 }
 

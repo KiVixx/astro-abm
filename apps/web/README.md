@@ -34,7 +34,13 @@ Primary product routes:
 - `/worldlines` explores saved simulated worldlines.
 - `/worldlines/new` creates a worldline through the existing scenario API.
 - `/worldlines/{id}` opens the Worldline Workbench and daily playback console.
+- `/worldlines/{id}/regenerate` adjusts local LLM call settings and rebuilds the
+  selected chunk plus every downstream chunk.
 - `/scenarios/{id}/report` opens the full saved report.
+
+LLM presets are served by the local API from the git-ignored local config store.
+The frontend receives only redacted preset metadata and a `has_api_key` flag;
+it never reads a stored API key back from the API.
 
 Scenario remains the API/storage entity. Worldline is the primary product
 experience layered on top of the saved scenario report. Simulated causal links

@@ -1,5 +1,8 @@
 import type {
   AgentProfile,
+  LlmPresetSaveRequest,
+  LlmPresetSummary,
+  LlmPresetTestResponse,
   MarketSeriesProfile,
   ScenarioCreateRequest,
   ScenarioLlmChunkRequest,
@@ -60,6 +63,42 @@ export async function getAgents(): Promise<AgentProfile[]> {
 
 export async function getAssets(): Promise<MarketSeriesProfile[]> {
   return apiFetch<MarketSeriesProfile[]>("/assets");
+}
+
+export async function getLlmPresets(): Promise<LlmPresetSummary[]> {
+  return apiFetch<LlmPresetSummary[]>("/llm/presets");
+}
+
+export async function createLlmPreset(
+  payload: LlmPresetSaveRequest,
+): Promise<LlmPresetSummary> {
+  return apiFetch<LlmPresetSummary>("/llm/presets", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLlmPreset(
+  presetId: string,
+  payload: LlmPresetSaveRequest,
+): Promise<LlmPresetSummary> {
+  return apiFetch<LlmPresetSummary>(`/llm/presets/${encodeURIComponent(presetId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteLlmPreset(
+  presetId: string,
+): Promise<{ preset_id: string; deleted: boolean }> {
+  return apiFetch(`/llm/presets/${encodeURIComponent(presetId)}`, { method: "DELETE" });
+}
+
+export async function testLlmPreset(presetId: string): Promise<LlmPresetTestResponse> {
+  return apiFetch<LlmPresetTestResponse>(
+    `/llm/presets/${encodeURIComponent(presetId)}/test`,
+    { method: "POST", body: "{}" },
+  );
 }
 
 export async function getScenarios(): Promise<ScenarioSummary[]> {

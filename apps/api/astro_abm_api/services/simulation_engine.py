@@ -751,6 +751,11 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
     regenerated_from = last_regeneration.get("start_chunk_index")
     rebuilt_count = last_regeneration.get("rebuilt_chunk_count")
     regenerated_at = last_regeneration.get("regenerated_at")
+    regeneration_status = last_regeneration.get("status")
+    regeneration_completed = last_regeneration.get("llm_completed_chunk_count")
+    regeneration_fallback = last_regeneration.get("fallback_chunk_count")
+    regeneration_skipped = last_regeneration.get("skipped_chunk_count")
+    regeneration_error = last_regeneration.get("error_summary")
     chunk_history_count = len(worldline.provenance.get("chunk_history") or [])
 
     if language == "zh-Hant":
@@ -805,6 +810,8 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
 - 連續性狀態：{worldline.continuity_status}
 - 原始生成 preset：{config.worldline_provider if config else "legacy_unknown"} / chunk_days={config.worldline_chunk_days if config else "unknown"}
 - 最近重建：from_chunk={regenerated_from}; rebuilt_chunks={rebuilt_count}; regenerated_at={regenerated_at}
+- 最近重建結果：status={regeneration_status}; llm_completed={regeneration_completed}; fallback={regeneration_fallback}; skipped={regeneration_skipped}
+- 最近重建錯誤：{regeneration_error or "無"}
 - Preset 註記：{preset_note or "無"}
 - Chunk status summary：{chunk_history_count} entries
 - 推演天數：{worldline.horizon_days}
@@ -867,6 +874,8 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
 - Continuity status: {worldline.continuity_status}
 - Generation preset: {config.worldline_provider if config else "legacy_unknown"} / chunk_days={config.worldline_chunk_days if config else "unknown"}
 - Last regeneration: from_chunk={regenerated_from}; rebuilt_chunks={rebuilt_count}; regenerated_at={regenerated_at}
+- Last regeneration result: status={regeneration_status}; llm_completed={regeneration_completed}; fallback={regeneration_fallback}; skipped={regeneration_skipped}
+- Last regeneration error: {regeneration_error or "none"}
 - Preset note: {preset_note or "none"}
 - Chunk status summary: {chunk_history_count} entries
 - Horizon days: {worldline.horizon_days}

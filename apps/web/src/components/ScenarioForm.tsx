@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { createLlmPreset, deleteLlmPreset, updateLlmPreset } from "@/lib/api";
 import { AgentSelector } from "./AgentSelector";
 import { AssetSelector } from "./AssetSelector";
 import { formatEnumLabel } from "@/i18n/labels";
@@ -9,6 +10,8 @@ import { useI18n } from "@/i18n/useI18n";
 import type {
   AgentProfile,
   LlmProvider,
+  LlmPresetSaveRequest,
+  LlmPresetSummary,
   MarketSeriesProfile,
   ReportLanguage,
   ScenarioCreateRequest,
@@ -29,28 +32,10 @@ interface GenerationProgress {
   message: string;
 }
 
-interface LlmSettingsPreset {
-  id: string;
-  name: string;
-  createdAt: string;
-  provider: LlmProvider;
-  realEnabled: boolean;
-  baseUrl: string;
-  model: string;
-  chunkSizeDays: string;
-  callDelaySeconds: string;
-  timeoutSeconds: string;
-  maxOutputTokens: string;
-  userPrompt: string;
-  worldlineProvider?: WorldlineProvider;
-  apiKey?: string | null;
-}
-
 const DEFAULT_LLM_PROVIDER: LlmProvider = "openai_compatible";
 const DEFAULT_LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 const DEFAULT_LLM_MODEL = "gemini-3.5-flash";
 const DEFAULT_LLM_CALL_DELAY_SECONDS = 2;
-const LLM_PRESETS_STORAGE_KEY = "astro_abm_llm_presets_v1";
 
 export function ScenarioForm({
   agents,
@@ -58,6 +43,7 @@ export function ScenarioForm({
   createAction,
   chunkAction,
   worldlineChunkAction,
+  initialLlmPresets = [],
   product = "scenario",
 }: {
   agents: AgentProfile[];
@@ -71,6 +57,7 @@ export function ScenarioForm({
     scenarioId: string,
     payload: ScenarioWorldlineChunkRequest,
   ) => Promise<ScenarioWorldlineChunkResponse>;
+  initialLlmPresets?: LlmPresetSummary[];
   product?: "scenario" | "worldline";
 }) {
   const router = useRouter();
@@ -79,7 +66,7 @@ export function ScenarioForm({
   const [defaultDateRange] = useState(() => getDefaultScenarioDateRange());
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>(uiLanguage);
   const [hasManualLanguageOverride, setHasManualLanguageOverride] = useState(false);
-  const [llmPresets, setLlmPresets] = useState<LlmSettingsPreset[]>([]);
+  const [llmPresets, setLlmPresets] = useState<LlmPresetSummary[]>(initialLlmPresets);
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [presetName, setPresetName] = useState("Gemini default");
   const [includeApiKeyInPreset, setIncludeApiKeyInPreset] = useState(false);
@@ -101,10 +88,6 @@ export function ScenarioForm({
       setReportLanguage(uiLanguage);
     }
   }, [hasManualLanguageOverride, uiLanguage]);
-
-  useEffect(() => {
-    setLlmPresets(loadLlmPresets());
-  }, []);
 
   const progressPct =
     progress.totalChunks > 0
@@ -167,6 +150,7 @@ export function ScenarioForm({
         ? {
             ...payload,
             llm_provider: "mock",
+            llm_preset_id: null,
             llm_real_enabled: false,
             llm_api_key: null,
             worldline_provider: "deterministic_mock",
@@ -207,6 +191,7 @@ export function ScenarioForm({
           }
           const response = await worldlineChunkAction(report.scenario_id, {
             llm_provider: payload.llm_provider,
+            llm_preset_id: payload.llm_preset_id,
             llm_real_enabled: payload.llm_real_enabled,
             llm_base_url: payload.llm_base_url,
             llm_model: payload.llm_model,
@@ -248,6 +233,7 @@ export function ScenarioForm({
         } else {
           const response = await chunkAction(report.scenario_id, {
             llm_provider: payload.llm_provider,
+            llm_preset_id: payload.llm_preset_id,
             llm_real_enabled: payload.llm_real_enabled,
             llm_base_url: payload.llm_base_url,
             llm_model: payload.llm_model,
@@ -307,51 +293,59 @@ export function ScenarioForm({
     }
   }
 
-  function saveCurrentLlmPreset() {
+  async function saveCurrentLlmPreset() {
     const form = formRef.current;
     if (!form) {
       return;
     }
     const trimmedName = presetName.trim() || t("scenarioCreate.llmPresetUntitled");
-    const nextPreset = readLlmPresetFromForm(form, trimmedName, includeApiKeyInPreset);
-    const nextPresets = [
-      nextPreset,
-      ...llmPresets.filter((preset) => preset.name !== trimmedName),
-    ].slice(0, 12);
-    setLlmPresets(nextPresets);
-    persistLlmPresets(nextPresets);
-    setSelectedPresetId(nextPreset.id);
-    setPresetMessage(
-      includeApiKeyInPreset
-        ? t("scenarioCreate.llmPresetSavedWithKey")
-        : t("scenarioCreate.llmPresetSaved"),
-    );
+    try {
+      const payload = readLlmPresetFromForm(form, trimmedName, includeApiKeyInPreset);
+      const existing = llmPresets.find((preset) => preset.preset_id === selectedPresetId);
+      const saved = existing
+        ? await updateLlmPreset(existing.preset_id, payload)
+        : await createLlmPreset(payload);
+      const nextPresets = [saved, ...llmPresets.filter((preset) => preset.preset_id !== saved.preset_id)];
+      setLlmPresets(nextPresets);
+      setSelectedPresetId(saved.preset_id);
+      setPresetMessage(
+        saved.has_api_key
+          ? t("scenarioCreate.llmPresetSavedWithKey")
+          : t("scenarioCreate.llmPresetSaved"),
+      );
+      setFormValue(form, "llm_api_key", "");
+    } catch (error) {
+      setPresetMessage(error instanceof Error ? error.message : t("common.unknownError"));
+    }
   }
 
   function recallSelectedLlmPreset() {
     const form = formRef.current;
-    const preset = llmPresets.find((candidate) => candidate.id === selectedPresetId);
+    const preset = llmPresets.find((candidate) => candidate.preset_id === selectedPresetId);
     if (!form || !preset) {
       return;
     }
     applyLlmPresetToForm(form, preset);
     setPresetName(preset.name);
-    setIncludeApiKeyInPreset(Boolean(preset.apiKey));
+    setIncludeApiKeyInPreset(preset.has_api_key);
     setLlmProvider(preset.provider);
-    setWorldlineProvider(preset.worldlineProvider || "deterministic_mock");
-    setRealLlmEnabled(preset.realEnabled);
+    setWorldlineProvider((preset.worldline_provider as WorldlineProvider) || "deterministic_mock");
+    setRealLlmEnabled(preset.real_enabled);
     setPresetMessage(t("scenarioCreate.llmPresetRecalled"));
   }
 
-  function deleteSelectedLlmPreset() {
+  async function deleteSelectedLlmPreset() {
     if (!selectedPresetId) {
       return;
     }
-    const nextPresets = llmPresets.filter((preset) => preset.id !== selectedPresetId);
-    setLlmPresets(nextPresets);
-    persistLlmPresets(nextPresets);
-    setSelectedPresetId("");
-    setPresetMessage(t("scenarioCreate.llmPresetDeleted"));
+    try {
+      await deleteLlmPreset(selectedPresetId);
+      setLlmPresets((current) => current.filter((preset) => preset.preset_id !== selectedPresetId));
+      setSelectedPresetId("");
+      setPresetMessage(t("scenarioCreate.llmPresetDeleted"));
+    } catch (error) {
+      setPresetMessage(error instanceof Error ? error.message : t("common.unknownError"));
+    }
   }
 
   return (
@@ -586,12 +580,13 @@ export function ScenarioForm({
             <label className="form-field">
               <span>{t("scenarioCreate.llmPresetRecall")}</span>
               <select
+                name="llm_preset_id"
                 onChange={(event) => setSelectedPresetId(event.target.value)}
                 value={selectedPresetId}
               >
                 <option value="">{t("scenarioCreate.llmPresetSelect")}</option>
                 {llmPresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
+                  <option key={preset.preset_id} value={preset.preset_id}>
                     {preset.name}
                   </option>
                 ))}
@@ -683,6 +678,7 @@ function payloadFromFormData(formData: FormData): ScenarioCreateRequest {
     assets,
     agent_ids: agentIds,
     llm_provider: (getString(formData, "llm_provider") || DEFAULT_LLM_PROVIDER) as LlmProvider,
+    llm_preset_id: optionalString(getString(formData, "llm_preset_id")),
     llm_real_enabled: formData.get("llm_real_enabled") === "on",
     llm_base_url: optionalString(getString(formData, "llm_base_url")),
     llm_model: optionalString(getString(formData, "llm_model")),
@@ -784,75 +780,46 @@ function formatLocalDate(value: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function loadLlmPresets(): LlmSettingsPreset[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-  try {
-    const raw = window.localStorage.getItem(LLM_PRESETS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter(isLlmSettingsPreset);
-  } catch {
-    return [];
-  }
-}
-
-function persistLlmPresets(presets: LlmSettingsPreset[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(LLM_PRESETS_STORAGE_KEY, JSON.stringify(presets));
-}
-
 function readLlmPresetFromForm(
   form: HTMLFormElement,
   name: string,
   includeApiKey: boolean,
-): LlmSettingsPreset {
+): LlmPresetSaveRequest {
   const formData = new FormData(form);
   return {
-    id: `llm_${Date.now().toString(36)}`,
     name,
-    createdAt: new Date().toISOString(),
     provider: (getString(formData, "llm_provider") || DEFAULT_LLM_PROVIDER) as LlmProvider,
-    realEnabled: formData.get("llm_real_enabled") === "on",
-    baseUrl: getString(formData, "llm_base_url"),
+    real_enabled: formData.get("llm_real_enabled") === "on",
+    base_url: optionalString(getString(formData, "llm_base_url")),
     model: getString(formData, "llm_model"),
-    chunkSizeDays: getString(formData, "llm_chunk_size_days") || "3",
-    callDelaySeconds:
-      getString(formData, "llm_call_delay_seconds") ||
-      String(DEFAULT_LLM_CALL_DELAY_SECONDS),
-    timeoutSeconds: getString(formData, "llm_timeout_seconds") || "120",
-    maxOutputTokens: getString(formData, "llm_max_output_tokens") || "5000",
-    userPrompt: getString(formData, "llm_user_prompt"),
-    worldlineProvider: (getString(formData, "worldline_provider") ||
-      "deterministic_mock") as WorldlineProvider,
-    apiKey: includeApiKey ? getString(formData, "llm_api_key") : null,
+    chunk_size_days: Number(getString(formData, "llm_chunk_size_days") || "3"),
+    call_delay_seconds: Number(getString(formData, "llm_call_delay_seconds") || DEFAULT_LLM_CALL_DELAY_SECONDS),
+    timeout_seconds: Number(getString(formData, "llm_timeout_seconds") || "120"),
+    max_output_tokens: Number(getString(formData, "llm_max_output_tokens") || "5000"),
+    custom_user_prompt: optionalString(getString(formData, "llm_user_prompt")),
+    worldline_provider: getString(formData, "worldline_provider") || "deterministic_mock",
+    api_key: includeApiKey ? optionalString(getString(formData, "llm_api_key")) : null,
+    keep_existing_api_key: true,
+    default_language: getString(formData, "language") || "en",
   };
 }
 
-function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmSettingsPreset) {
+function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmPresetSummary) {
   setFormValue(form, "llm_provider", preset.provider);
-  setFormChecked(form, "llm_real_enabled", preset.realEnabled);
-  setFormValue(form, "llm_base_url", preset.baseUrl);
-  setFormValue(form, "llm_model", preset.model);
-  setFormValue(form, "llm_chunk_size_days", preset.chunkSizeDays);
+  setFormChecked(form, "llm_real_enabled", preset.real_enabled);
+  setFormValue(form, "llm_base_url", preset.base_url || "");
+  setFormValue(form, "llm_model", preset.model || "");
+  setFormValue(form, "llm_chunk_size_days", String(preset.chunk_size_days));
   setFormValue(
     form,
     "llm_call_delay_seconds",
-    preset.callDelaySeconds || String(DEFAULT_LLM_CALL_DELAY_SECONDS),
+    String(preset.call_delay_seconds ?? DEFAULT_LLM_CALL_DELAY_SECONDS),
   );
-  setFormValue(form, "llm_timeout_seconds", preset.timeoutSeconds);
-  setFormValue(form, "llm_max_output_tokens", preset.maxOutputTokens);
-  setFormValue(form, "llm_user_prompt", preset.userPrompt || "");
-  setFormValue(form, "worldline_provider", preset.worldlineProvider || "deterministic_mock");
-  setFormValue(form, "llm_api_key", preset.apiKey || "");
+  setFormValue(form, "llm_timeout_seconds", String(preset.timeout_seconds));
+  setFormValue(form, "llm_max_output_tokens", String(preset.max_output_tokens));
+  setFormValue(form, "llm_user_prompt", preset.custom_user_prompt || "");
+  setFormValue(form, "worldline_provider", preset.worldline_provider || "deterministic_mock");
+  setFormValue(form, "llm_api_key", "");
 }
 
 function setFormValue(form: HTMLFormElement, name: string, value: string) {
@@ -871,31 +838,4 @@ function setFormChecked(form: HTMLFormElement, name: string, checked: boolean) {
   if (control instanceof HTMLInputElement) {
     control.checked = checked;
   }
-}
-
-function isLlmSettingsPreset(value: unknown): value is LlmSettingsPreset {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const preset = value as Partial<LlmSettingsPreset>;
-  return (
-    typeof preset.id === "string" &&
-    typeof preset.name === "string" &&
-    typeof preset.createdAt === "string" &&
-    (preset.provider === "mock" || preset.provider === "openai_compatible") &&
-    typeof preset.realEnabled === "boolean" &&
-    typeof preset.baseUrl === "string" &&
-    typeof preset.model === "string" &&
-    typeof preset.chunkSizeDays === "string" &&
-    (preset.callDelaySeconds === undefined || typeof preset.callDelaySeconds === "string") &&
-    typeof preset.timeoutSeconds === "string" &&
-    typeof preset.maxOutputTokens === "string" &&
-    (preset.userPrompt === undefined || typeof preset.userPrompt === "string") &&
-    (preset.worldlineProvider === undefined ||
-      preset.worldlineProvider === "deterministic_mock" ||
-      preset.worldlineProvider === "llm") &&
-    (preset.apiKey === undefined ||
-      preset.apiKey === null ||
-      typeof preset.apiKey === "string")
-  );
 }
