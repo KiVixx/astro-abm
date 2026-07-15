@@ -118,6 +118,53 @@ def test_safety_checker_reports_categories_without_retaining_input() -> None:
     assert unsafe_text not in json.dumps(codes)
 
 
+@pytest.mark.parametrize(
+    "safe_text",
+    [
+        "Within this simulated worldline, liquidity pressure causes a simulated agent reaction.",
+        "This scenario rehearsal does not claim that astro activity causes market moves.",
+        "在這條模擬世界線中，流動性壓力造成群體事件的模擬變化。",
+        "本報告不代表天象導致市場變動。",
+    ],
+)
+def test_safety_checker_allows_simulated_or_negated_causal_language(
+    safe_text: str,
+) -> None:
+    assert safety_check_text(safe_text)
+
+
+@pytest.mark.parametrize(
+    "unsafe_text",
+    [
+        "Astro activity causes market prices to fall.",
+        "This event caused the market crash.",
+        "This scenario proves that astro activity causes the market crash.",
+        "This scenario rehearsal says astro activity causes the market crash.",
+        "The simulation proves that liquidity pressure causes prices to fall.",
+        "We do not claim that astro causes markets, but liquidity causes the crash.",
+        "天象導致市場下跌。",
+        "這個事件造成金融危機。",
+        "這個情境證明天象導致市場下跌。",
+        "情境推演證明天象導致市場下跌。",
+    ],
+)
+def test_safety_checker_rejects_unqualified_real_world_causal_claims(
+    unsafe_text: str,
+) -> None:
+    assert safety_violation_codes(unsafe_text) == ["causal_claim"]
+
+
+def test_safety_checker_does_not_let_json_disclaimer_mask_causal_claim() -> None:
+    payload = json.dumps(
+        {
+            "caveat": "Scenario rehearsal only.",
+            "summary": "Astro activity causes the market crash.",
+        }
+    )
+
+    assert safety_violation_codes(payload) == ["causal_claim"]
+
+
 def test_llm_json_diagnostics_identify_truncation_without_retaining_content() -> None:
     raw_text = '{"days": [{"date": "2026-07-01"}'
 

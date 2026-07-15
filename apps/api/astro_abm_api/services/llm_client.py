@@ -145,21 +145,26 @@ CERTAINTY_PATTERNS = (
     r"predicts with certainty",
 )
 
-CAUSAL_CLAIM_PATTERNS = (
-    r"\bcaused\b",
-    r"\bcauses\b",
+CAUSAL_CLAIM_PATTERN = re.compile(r"\b(?:caused|causes)\b", re.IGNORECASE)
+CAUSAL_SAFE_CONTEXT_PATTERN = re.compile(
+    r"(?:\b(?:within|in)\s+this\s+(?:simulated\s+)?(?:worldline|scenario)\b|"
+    r"\bsimulated\s+(?:worldline|causal\s+link|agent\s+event|pressure\s+update)\b|"
+    r"\bscenario-internal\b|\bhypothetical\s+(?:worldline|scenario)\b)",
+    re.IGNORECASE,
+)
+CAUSAL_NEGATION_PATTERN = re.compile(
+    r"(?:\b(?:does\s+not|did\s+not|cannot|can't)\s+$|"
+    r"\b(?:does\s+not|did\s+not|do\s+not|not)\s+claim(?:ing|ed)?\s+that\b.{0,64}$)",
+    re.IGNORECASE,
+)
+CAUSAL_CLAUSE_SPLIT_PATTERN = re.compile(
+    r"[.!?;\n]|[}\]]\s*,\s*[{\[]|\bbut\b|\bhowever\b",
+    re.IGNORECASE,
 )
 
 GUARANTEED_DIRECTION_PATTERNS = (
     r"will rise",
     r"will fall",
-)
-
-BANNED_SAFETY_PATTERNS = (
-    *TRADING_INSTRUCTION_PATTERNS,
-    *CERTAINTY_PATTERNS,
-    *CAUSAL_CLAIM_PATTERNS,
-    *GUARANTEED_DIRECTION_PATTERNS,
 )
 
 CHINESE_TRADING_INSTRUCTION_TERMS = (
@@ -177,6 +182,16 @@ CHINESE_SAFETY_CONTEXT_PATTERN = re.compile(
     r"沒有|並非|不是|勿|禁止|避免|不保證"
 )
 CHINESE_CLAUSE_SPLIT_PATTERN = re.compile(r"[，,；;。.!?\n]|但|然而|可是")
+CHINESE_CAUSAL_CLAUSE_SPLIT_PATTERN = re.compile(r"[；;。.!?\n]|但|然而|可是")
+CHINESE_CAUSAL_CLAIM_PATTERN = re.compile(r"導致|造成")
+CHINESE_CAUSAL_SAFE_CONTEXT_PATTERN = re.compile(
+    r"在(?:這|本)(?:條)?(?:模擬)?(?:世界線|情境|推演)(?:中|內)|"
+    r"模擬(?:世界線|因果鏈|群體事件|壓力更新)|情境內部|"
+    r"假設(?:情境|世界線)"
+)
+CHINESE_CAUSAL_NEGATION_PATTERN = re.compile(
+    r"不代表|不表示|不構成|不能|無法|並非|不是|未能|不可"
+)
 
 
 @dataclass(frozen=True)
@@ -785,7 +800,6 @@ def safety_violation_codes(text: str) -> list[str]:
     checks = (
         ("trading_instruction", TRADING_INSTRUCTION_PATTERNS),
         ("certainty_claim", CERTAINTY_PATTERNS),
-        ("causal_claim", CAUSAL_CLAIM_PATTERNS),
         ("guaranteed_direction", GUARANTEED_DIRECTION_PATTERNS),
     )
     codes = [
@@ -795,7 +809,55 @@ def safety_violation_codes(text: str) -> list[str]:
     ]
     if _contains_unsafe_chinese_trading_language(text):
         codes.append("chinese_trading_instruction")
+    if _contains_unsafe_causal_claim(text):
+        codes.append("causal_claim")
     return codes
+
+
+def _contains_unsafe_causal_claim(text: str) -> bool:
+    for segment in _causal_text_segments(text):
+        for clause in CAUSAL_CLAUSE_SPLIT_PATTERN.split(segment):
+            for match in CAUSAL_CLAIM_PATTERN.finditer(clause):
+                prefix = clause[: match.start()]
+                if CAUSAL_SAFE_CONTEXT_PATTERN.search(prefix):
+                    continue
+                if CAUSAL_NEGATION_PATTERN.search(prefix[-96:]):
+                    continue
+                return True
+
+        for clause in CHINESE_CAUSAL_CLAUSE_SPLIT_PATTERN.split(segment):
+            claim = CHINESE_CAUSAL_CLAIM_PATTERN.search(clause)
+            if claim is None:
+                continue
+            prefix = clause[: claim.start()]
+            if CHINESE_CAUSAL_SAFE_CONTEXT_PATTERN.search(prefix):
+                continue
+            if CHINESE_CAUSAL_NEGATION_PATTERN.search(prefix[-24:]):
+                continue
+            return True
+    return False
+
+
+def _causal_text_segments(text: str) -> list[str]:
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return [text]
+
+    segments: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, str):
+            segments.append(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    collect(payload)
+    return segments
 
 
 def _contains_unsafe_chinese_trading_language(text: str) -> bool:
