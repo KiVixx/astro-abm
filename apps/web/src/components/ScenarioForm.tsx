@@ -132,7 +132,10 @@ export function ScenarioForm({
       120,
     );
     const shouldChunkWorldline =
-      product === "worldline" && payload.worldline_provider === "llm";
+      product === "worldline" &&
+      payload.worldline_provider === "llm" &&
+      payload.llm_provider === "openai_compatible" &&
+      payload.llm_real_enabled === true;
     const shouldChunkLlm =
       product !== "worldline" &&
       payload.llm_provider === "openai_compatible" && payload.llm_real_enabled === true;
@@ -185,6 +188,7 @@ export function ScenarioForm({
           totalChunks: chunks.length,
           message: `${chunkLabel} ${index + 1}/${chunks.length}: ${chunk.start} → ${chunk.end}`,
         });
+        let networkCallPerformed = false;
         if (shouldChunkWorldline) {
           if (!worldlineChunkAction) {
             throw new Error("Worldline chunk action is not configured.");
@@ -207,10 +211,25 @@ export function ScenarioForm({
             total_chunks: chunks.length,
             worldline_chunk_days: chunkSizeDays,
           });
+          networkCallPerformed = worldlineChunkPerformedNetworkCall(
+            response.report,
+            index + 1,
+          );
           if (!["completed", "fallback", "dry_run", "halted"].includes(response.worldline_status)) {
             throw new Error(
               `${t("scenarioCreate.progressChunkFailed")}: ${response.worldline_status}`,
             );
+          }
+          if (response.worldline_status === "dry_run") {
+            setProgress({
+              active: true,
+              phase: "done",
+              currentChunk: index + 1,
+              totalChunks: chunks.length,
+              message: t("scenarioCreate.progressWorldlineDryRunComplete"),
+            });
+            router.push(`/worldlines/${report.scenario_id}`);
+            return;
           }
           consecutiveWorldlineFailures =
             response.worldline_status === "fallback"
@@ -248,6 +267,9 @@ export function ScenarioForm({
             chunk_index: index + 1,
             total_chunks: chunks.length,
           });
+          networkCallPerformed = Boolean(
+            response.report.llm_report?.provenance.network_call_performed,
+          );
           if (response.llm_status !== "completed") {
             throw new Error(`${t("scenarioCreate.progressChunkFailed")}: ${response.llm_status}`);
           }
@@ -260,7 +282,7 @@ export function ScenarioForm({
           message: `${t("scenarioCreate.progressLlmChunkDone")} ${index + 1}/${chunks.length}`,
         });
         const hasNextChunk = index < chunks.length - 1;
-        if (hasNextChunk && callDelaySeconds > 0) {
+        if (hasNextChunk && callDelaySeconds > 0 && networkCallPerformed) {
           setProgress({
             active: true,
             phase: "delay",
@@ -750,6 +772,26 @@ function clampNumber(value: number, min: number, max: number): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function worldlineChunkPerformedNetworkCall(
+  report: ScenarioReport,
+  chunkIndex: number,
+): boolean {
+  const provenance = report.worldline_simulation?.provenance;
+  const history = Array.isArray(provenance?.chunk_history)
+    ? provenance.chunk_history
+    : [];
+  const currentChunk = history.find(
+    (item): item is Record<string, unknown> =>
+      typeof item === "object"
+      && item !== null
+      && !Array.isArray(item)
+      && Number(item.chunk_index) === chunkIndex,
+  );
+  return currentChunk
+    ? currentChunk.network_call_performed === true
+    : provenance?.network_call_performed === true;
 }
 
 function getDefaultScenarioTitle(language: string): string {

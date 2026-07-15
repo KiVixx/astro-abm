@@ -357,6 +357,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressLlmDelay": "Waiting before next LLM call",
     "scenarioCreate.progressChunkFailed": "LLM chunk failed",
     "scenarioCreate.progressWorldlineHalted": "Worldline generation stopped after two consecutive chunks exhausted their applicable retry policy. Check the LLM endpoint or preset.",
+    "scenarioCreate.progressWorldlineDryRunComplete": "Real LLM calls were not enabled. The deterministic dry-run worldline is ready without additional chunk calls.",
     "scenarioCreate.progressComplete": "Scenario generated. Opening report...",
 
     "report.summary": "Summary",
@@ -963,6 +964,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressLlmDelay": "等待後再呼叫下一段 LLM",
     "scenarioCreate.progressChunkFailed": "LLM 分段失敗",
     "scenarioCreate.progressWorldlineHalted": "連續兩個 chunk 已耗盡各自適用的重試策略，世界線生成已停止。請檢查 LLM endpoint 或 preset。",
+    "scenarioCreate.progressWorldlineDryRunComplete": "真實 LLM 呼叫未啟用；確定性 dry-run 世界線已完成，沒有再發出多餘的 chunk 呼叫。",
     "scenarioCreate.progressComplete": "情境已生成，正在打開報告...",
 
     "report.summary": "摘要",
