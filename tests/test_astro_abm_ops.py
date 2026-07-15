@@ -117,6 +117,7 @@ def test_astro_daily_snapshot_ready_requires_core_csvs(tmp_path):
     snapshot.mkdir(parents=True)
 
     assert ops.astro_daily_snapshot_ready(root=tmp_path) is False
+    assert "astro_moon_phase_events.csv" in ops.astro_daily_snapshot_missing(root=tmp_path)
 
     for name in (
         "astro_daily_positions.csv",
@@ -129,6 +130,61 @@ def test_astro_daily_snapshot_ready_requires_core_csvs(tmp_path):
         (snapshot / name).write_text("header\n")
 
     assert ops.astro_daily_snapshot_ready(root=tmp_path) is True
+    assert ops.astro_daily_snapshot_missing(root=tmp_path) == ()
+
+
+def test_astro_daily_status_separates_canonical_snapshot_from_questdb_replica():
+    ops = load_ops_module()
+
+    checks = {
+        check.name: check
+        for check in ops.astro_daily_status_checks(
+            snapshot_ready=True,
+            questdb_available=True,
+            questdb_ready=False,
+        )
+    }
+
+    assert checks["astro_daily_100y_snapshot"].ok is True
+    assert "canonical" in checks["astro_daily_100y_snapshot"].detail
+    assert checks["astro_daily_100y_questdb"].ok is False
+    assert "optional query replica" in checks["astro_daily_100y_questdb"].detail
+    assert "canonical local snapshot remains available" in checks["astro_daily_100y_questdb"].detail
+
+
+def test_astro_daily_status_reports_missing_canonical_snapshot():
+    ops = load_ops_module()
+
+    checks = {
+        check.name: check
+        for check in ops.astro_daily_status_checks(
+            snapshot_ready=False,
+            snapshot_missing=("astro_moon_phase_events.csv",),
+            questdb_available=False,
+            questdb_ready=False,
+        )
+    }
+
+    assert checks["astro_daily_100y_snapshot"].ok is False
+    assert "canonical local snapshot incomplete" in checks["astro_daily_100y_snapshot"].detail
+    assert "astro_moon_phase_events.csv" in checks["astro_daily_100y_snapshot"].detail
+    assert "available snapshot files remain usable" in checks["astro_daily_100y_snapshot"].detail
+    assert "--skip-ingest" in checks["astro_daily_100y_snapshot"].detail
+    assert checks["astro_daily_100y_questdb"].ok is False
+    assert "QuestDB unavailable" in checks["astro_daily_100y_questdb"].detail
+
+
+def test_astro_daily_status_reports_both_layers_ready():
+    ops = load_ops_module()
+
+    checks = ops.astro_daily_status_checks(
+        snapshot_ready=True,
+        questdb_available=True,
+        questdb_ready=True,
+    )
+
+    assert all(check.ok for check in checks)
+    assert checks[1].detail == "optional query replica 1970-2025 complete"
 
 
 def test_command_ensure_astro_daily_builds_snapshot_then_ingests(monkeypatch):

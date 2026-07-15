@@ -23,6 +23,14 @@ ASTRO_DAILY_START = "1926-01-01"
 ASTRO_DAILY_QUESTDB_START = "1970-01-01"
 ASTRO_DAILY_END = "2025-12-31"
 ASTRO_DAILY_SNAPSHOT = OUTPUT_ROOT / "parquet/astro_daily_1926_2025"
+ASTRO_DAILY_REQUIRED_FILES = (
+    "astro_daily_positions.csv",
+    "astro_retrograde_cycles.csv",
+    "astro_moon_phase_events.csv",
+    "astro_event_windows.csv",
+    "astro_daily_features.csv",
+    "astro_daily_facts.csv",
+)
 RESEARCH_DUCKDB = OUTPUT_ROOT / "duckdb/astro_research_full_history.duckdb"
 
 LOCAL_DATA_FILES = {
@@ -261,14 +269,15 @@ def command_status() -> int:
     checks.append(CheckResult("questdb_tcp", tcp_open("localhost", int(env_value("QUESTDB_PG_PORT") or "8812")), "localhost:8812"))
     db_tables = questdb_table_summary()
     checks.append(CheckResult("questdb_tables", db_tables != "unavailable", db_tables))
-    astro_daily_ready = astro_daily_snapshot_ready() and (astro_daily_questdb_ready() if db_tables != "unavailable" else False)
-    checks.append(
-        CheckResult(
-            "astro_daily_100y_questdb",
-            astro_daily_ready,
-            "snapshot 1926-2025; QuestDB slice 1970-2025 complete"
-            if astro_daily_ready
-            else "missing or incomplete; run `make astro-daily`",
+    snapshot_missing = astro_daily_snapshot_missing()
+    snapshot_ready = not snapshot_missing
+    questdb_available = db_tables != "unavailable"
+    checks.extend(
+        astro_daily_status_checks(
+            snapshot_ready=snapshot_ready,
+            snapshot_missing=snapshot_missing,
+            questdb_available=questdb_available,
+            questdb_ready=(astro_daily_questdb_ready() if questdb_available else False),
         )
     )
 
@@ -605,16 +614,65 @@ def research_input_checks(root: Path = ROOT) -> list[CheckResult]:
 
 
 def astro_daily_snapshot_ready(root: Path = ROOT) -> bool:
+    return not astro_daily_snapshot_missing(root=root)
+
+
+def astro_daily_snapshot_missing(root: Path = ROOT) -> tuple[str, ...]:
     snapshot = root / ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)
-    required = (
-        "astro_daily_positions.csv",
-        "astro_retrograde_cycles.csv",
-        "astro_moon_phase_events.csv",
-        "astro_event_windows.csv",
-        "astro_daily_features.csv",
-        "astro_daily_facts.csv",
+    return tuple(
+        name
+        for name in ASTRO_DAILY_REQUIRED_FILES
+        if not (snapshot / name).exists() or (snapshot / name).stat().st_size <= 0
     )
-    return all((snapshot / name).exists() and (snapshot / name).stat().st_size > 0 for name in required)
+
+
+def astro_daily_status_checks(
+    *,
+    snapshot_ready: bool,
+    snapshot_missing: tuple[str, ...] = (),
+    questdb_available: bool,
+    questdb_ready: bool,
+) -> list[CheckResult]:
+    if snapshot_ready:
+        snapshot_detail = "canonical local research snapshot 1926-2025 complete"
+    else:
+        missing_detail = f"; missing: {', '.join(snapshot_missing)}" if snapshot_missing else ""
+        snapshot_detail = (
+            f"canonical local snapshot incomplete{missing_detail}; available snapshot files remain usable, "
+            "but affected research components are incomplete; run "
+            "`uv run python scripts/astro_abm_ops.py astro-daily --skip-ingest`"
+        )
+
+    snapshot = CheckResult(
+        "astro_daily_100y_snapshot",
+        snapshot_ready,
+        snapshot_detail,
+    )
+    if not questdb_available:
+        questdb_detail = (
+            "QuestDB unavailable; canonical local snapshot remains available"
+            if snapshot_ready
+            else "QuestDB unavailable; canonical local snapshot is also incomplete"
+        )
+        questdb = CheckResult("astro_daily_100y_questdb", False, questdb_detail)
+    elif questdb_ready:
+        questdb = CheckResult(
+            "astro_daily_100y_questdb",
+            True,
+            "optional query replica 1970-2025 complete",
+        )
+    else:
+        questdb = CheckResult(
+            "astro_daily_100y_questdb",
+            False,
+            (
+                "optional query replica incomplete; canonical local snapshot remains available; "
+                "run `make astro-daily` only if QuestDB daily queries are needed"
+                if snapshot_ready
+                else "optional query replica incomplete and canonical snapshot incomplete; run `make astro-daily`"
+            ),
+        )
+    return [snapshot, questdb]
 
 
 def astro_daily_questdb_ready(connection_factory=None, *, start: str = ASTRO_DAILY_QUESTDB_START, end: str = ASTRO_DAILY_END) -> bool:

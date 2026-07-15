@@ -336,6 +336,8 @@ make checkpoint-check
 - research input missing：代表還沒建立 full research snapshots，不能完整跑 checkpoint。
 - FRED_API_KEY missing：代表 FRED macro data 會跳過或不完整。
 - QuestDB unavailable：代表資料庫還沒啟動，跑 `make bootstrap`。
+- `astro_daily_100y_snapshot` 是 canonical（權威本機）1926-2025 研究快照；它顯示 OK，就代表完整日線研究資料仍可供 DuckDB／Python／世界線脈絡使用。若顯示 WARN，狀態會列出實際缺少的檔案；其他已存在的快照仍可供不依賴該元件的研究流程使用。
+- `astro_daily_100y_questdb` 是可選的 1970-2025 查詢副本。只有這項 WARN 時，不代表 100 年資料遺失；只在需要用 QuestDB 查日線資料時才需跑 `make astro-daily` 補齊。
 
 這些 warning 不一定是錯誤。它們是在告訴維護者目前處於哪個資料完整度。
 

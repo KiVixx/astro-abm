@@ -164,6 +164,13 @@ Because QuestDB WAL/partitioned designated timestamp tables reject pre-1970
 timestamps, this command keeps the full 1926-2025 CSV snapshot locally and
 ingests the QuestDB-queryable 1970-2025 slice.
 
+`make status` reports these as separate layers. `astro_daily_100y_snapshot` is
+the canonical local 1926-2025 research input. `astro_daily_100y_questdb` is an
+optional 1970-2025 query replica; a warning for that replica does not mean the
+full-history snapshot is missing. If the canonical snapshot is incomplete, the
+status output names the missing component; the snapshot files already present
+remain usable for research paths that do not depend on that component.
+
 `make research-store` builds the ignored DuckDB full-history research store at
 `astro_research/output/duckdb/astro_research_full_history.duckdb`. This is the
 canonical local analysis layer for 1926-2025 daily research, including pre-1970
