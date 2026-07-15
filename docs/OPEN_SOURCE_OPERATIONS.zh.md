@@ -341,6 +341,8 @@ make checkpoint-check
 
 若 canonical 快照只缺 `astro_moon_phase_events.csv`，`make astro-daily` 會自動改用月相元件修復模式：只重算 exact 月相事件與月相事件視窗，保留既有 station／aspect 視窗，不會重算 100 年 positions 與 facts。若缺少其他核心檔案，才會執行完整 build。
 
+`make status` 也會檢查產品快照是否真的更新，而不只是檔案是否存在：market daily 按資產、macro daily 按 series、financial stress 按 universe 顯示最新日期與延遲。門檻會配合原始頻率：日頻 5 個日曆日、週頻 14 日、月頻 45 日，避免把 NFCI／USREC 這類正常週頻／月頻資料誤報為停更。若顯示 stale，依提示執行 `uv run python scripts/astro_abm_ops.py product-snapshots`。
+
 這些 warning 不一定是錯誤。它們是在告訴維護者目前處於哪個資料完整度。
 
 ## 安全提交規則

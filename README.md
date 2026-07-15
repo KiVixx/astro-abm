@@ -184,6 +184,12 @@ uv run python scripts/build_astro_daily.py \
   --no-parquet --dry-run --moon-phase-only
 ```
 
+The same status command also checks product snapshot freshness rather than only
+file existence. Market data is reported per asset, macro data per series, and
+financial stress per universe. Freshness thresholds respect source frequency:
+5 calendar days for daily series, 14 for weekly series, and 45 for monthly
+series. A stale check points to the `product-snapshots` refresh command.
+
 `make research-store` builds the ignored DuckDB full-history research store at
 `astro_research/output/duckdb/astro_research_full_history.duckdb`. This is the
 canonical local analysis layer for 1926-2025 daily research, including pre-1970

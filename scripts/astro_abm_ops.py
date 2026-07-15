@@ -32,6 +32,11 @@ ASTRO_DAILY_REQUIRED_FILES = (
     "astro_daily_facts.csv",
 )
 RESEARCH_DUCKDB = OUTPUT_ROOT / "duckdb/astro_research_full_history.duckdb"
+PRODUCT_SNAPSHOT_FILES = {
+    "market_daily": OUTPUT_ROOT / "parquet/market_daily/market_daily_features.parquet",
+    "financial_stress": OUTPUT_ROOT / "parquet/financial_stress/financial_stress_daily.parquet",
+    "macro_daily": OUTPUT_ROOT / "parquet/macro_daily/macro_daily_observations.parquet",
+}
 
 LOCAL_DATA_FILES = {
     "SPX": ROOT / "astro_research/data/local/equity/spx_daily.csv",
@@ -266,6 +271,7 @@ def command_status() -> int:
     checks.append(CheckResult("FRED_API_KEY", bool(env_value("FRED_API_KEY")), "present" if env_value("FRED_API_KEY") else "missing; FRED macro data will be skipped"))
     checks.extend(local_data_checks())
     checks.extend(research_input_checks())
+    checks.extend(product_snapshot_freshness_checks())
     checks.append(CheckResult("questdb_tcp", tcp_open("localhost", int(env_value("QUESTDB_PG_PORT") or "8812")), "localhost:8812"))
     db_tables = questdb_table_summary()
     checks.append(CheckResult("questdb_tables", db_tables != "unavailable", db_tables))
@@ -614,6 +620,114 @@ def research_input_checks(root: Path = ROOT) -> list[CheckResult]:
         target = root / path.relative_to(ROOT)
         checks.append(CheckResult(f"research_input_{label}", target.exists(), str(target.relative_to(root)) if target.exists() else "missing; run smoke/public rebuild first"))
     return checks
+
+
+def product_snapshot_freshness_checks(
+    root: Path = ROOT,
+    *,
+    today: date | None = None,
+) -> list[CheckResult]:
+    today = today or datetime.now().astimezone().date()
+    definitions = (
+        ("market_daily", "asset", None),
+        ("financial_stress", "stress_universe", None),
+        ("macro_daily", "series_id", "original_frequency"),
+    )
+    checks: list[CheckResult] = []
+    for label, group_column, frequency_column in definitions:
+        configured_path = PRODUCT_SNAPSHOT_FILES[label]
+        path = root / configured_path.relative_to(ROOT)
+        if not path.exists() or path.stat().st_size <= 0:
+            checks.append(
+                CheckResult(
+                    f"product_snapshot_{label}",
+                    False,
+                    "missing snapshot; run `uv run python scripts/astro_abm_ops.py product-snapshots`",
+                )
+            )
+            continue
+        try:
+            import pandas as pd
+
+            columns = ["ts", group_column]
+            if frequency_column:
+                columns.append(frequency_column)
+            frame = pd.read_parquet(path, columns=columns)
+            checks.extend(
+                snapshot_freshness_checks_from_frame(
+                    frame,
+                    name_prefix=label,
+                    today=today,
+                    group_column=group_column,
+                    frequency_column=frequency_column,
+                )
+            )
+        except Exception as exc:  # Status must report a corrupt/unreadable snapshot instead of crashing.
+            checks.append(
+                CheckResult(
+                    f"product_snapshot_{label}",
+                    False,
+                    f"snapshot unreadable: {type(exc).__name__}; run product-snapshots validation",
+                )
+            )
+    return checks
+
+
+def snapshot_freshness_checks_from_frame(
+    frame,
+    *,
+    name_prefix: str,
+    today: date,
+    group_column: str,
+    frequency_column: str | None = None,
+) -> list[CheckResult]:
+    import pandas as pd
+
+    required = {"ts", group_column}
+    if not required.issubset(frame.columns) or frame.empty:
+        return [CheckResult(f"product_snapshot_{name_prefix}", False, "snapshot is empty or missing freshness columns")]
+
+    normalized = frame.copy()
+    normalized["ts"] = pd.to_datetime(normalized["ts"], utc=True, errors="coerce")
+    normalized = normalized.dropna(subset=["ts", group_column])
+    if normalized.empty:
+        return [CheckResult(f"product_snapshot_{name_prefix}", False, "snapshot has no valid dated observations")]
+
+    checks: list[CheckResult] = []
+    for group, rows in normalized.groupby(group_column, sort=True):
+        frequency = _snapshot_frequency(rows, frequency_column)
+        stale_after_days = _freshness_threshold_days(frequency)
+        latest = rows["ts"].max().date()
+        lag_days = (today - latest).days
+        ok = 0 <= lag_days <= stale_after_days
+        detail = (
+            f"latest={latest.isoformat()} lag_days={lag_days} frequency={frequency} "
+            f"threshold_days={stale_after_days}"
+        )
+        if lag_days < 0:
+            detail += "; observed snapshot date is in the future; verify timestamp normalization"
+        elif not ok:
+            detail += "; stale; run `uv run python scripts/astro_abm_ops.py product-snapshots`"
+        checks.append(CheckResult(f"product_snapshot_{name_prefix}_{group}", ok, detail))
+    return checks
+
+
+def _snapshot_frequency(rows, frequency_column: str | None) -> str:
+    if not frequency_column or frequency_column not in rows.columns:
+        return "daily"
+    values = rows[frequency_column].dropna().astype(str).str.lower()
+    if values.empty:
+        return "daily"
+    value = values.mode().iloc[0]
+    if "month" in value:
+        return "monthly"
+    if "week" in value:
+        return "weekly"
+    return "daily"
+
+
+def _freshness_threshold_days(frequency: str) -> int:
+    return {"daily": 5, "weekly": 14, "monthly": 45}.get(frequency, 5)
 
 
 def astro_daily_snapshot_ready(root: Path = ROOT) -> bool:

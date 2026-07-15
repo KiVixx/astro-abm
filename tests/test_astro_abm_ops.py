@@ -3,6 +3,9 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from datetime import date
+
+import pandas as pd
 
 
 def load_ops_module():
@@ -185,6 +188,62 @@ def test_astro_daily_status_reports_both_layers_ready():
 
     assert all(check.ok for check in checks)
     assert checks[1].detail == "optional query replica 1970-2025 complete"
+
+
+def test_snapshot_freshness_is_frequency_aware():
+    ops = load_ops_module()
+    frame = pd.DataFrame(
+        [
+            {"ts": "2026-07-14", "series_id": "DAILY", "original_frequency": "daily"},
+            {"ts": "2026-07-03", "series_id": "WEEKLY", "original_frequency": "weekly"},
+            {"ts": "2026-06-01", "series_id": "MONTHLY", "original_frequency": "monthly"},
+        ]
+    )
+
+    checks = ops.snapshot_freshness_checks_from_frame(
+        frame,
+        name_prefix="macro_daily",
+        today=date(2026, 7, 16),
+        group_column="series_id",
+        frequency_column="original_frequency",
+    )
+
+    assert all(check.ok for check in checks)
+    by_name = {check.name: check for check in checks}
+    assert "frequency=weekly" in by_name["product_snapshot_macro_daily_WEEKLY"].detail
+    assert "frequency=monthly" in by_name["product_snapshot_macro_daily_MONTHLY"].detail
+
+
+def test_snapshot_freshness_reports_stale_group_with_action():
+    ops = load_ops_module()
+    frame = pd.DataFrame([{"ts": "2026-05-15", "asset": "BTC"}])
+
+    checks = ops.snapshot_freshness_checks_from_frame(
+        frame,
+        name_prefix="market_daily",
+        today=date(2026, 7, 16),
+        group_column="asset",
+    )
+
+    assert len(checks) == 1
+    assert checks[0].ok is False
+    assert "latest=2026-05-15" in checks[0].detail
+    assert "lag_days=62" in checks[0].detail
+    assert "product-snapshots" in checks[0].detail
+
+
+def test_product_snapshot_freshness_reports_missing_file(tmp_path):
+    ops = load_ops_module()
+
+    checks = ops.product_snapshot_freshness_checks(root=tmp_path, today=date(2026, 7, 16))
+
+    assert {check.name for check in checks} == {
+        "product_snapshot_market_daily",
+        "product_snapshot_financial_stress",
+        "product_snapshot_macro_daily",
+    }
+    assert all(not check.ok for check in checks)
+    assert all("missing snapshot" in check.detail for check in checks)
 
 
 def test_command_ensure_astro_daily_builds_snapshot_then_ingests(monkeypatch):
