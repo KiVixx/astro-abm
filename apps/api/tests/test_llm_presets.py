@@ -216,6 +216,12 @@ def test_worldline_regeneration_halts_network_after_two_failed_chunks(
 
     assert all(response.status_code == 200 for response in responses)
     assert [response.json()["rebuilt_chunk_count"] for response in responses] == [1, 2, 3, 4]
+    assert [response.json()["continuity_status"] for response in responses] == [
+        "rebuilding",
+        "rebuilding",
+        "rebuilding",
+        "consistent",
+    ]
     body = responses[-1].json()
     assert body["regeneration_status"] == "failed_fallback"
     assert body["llm_completed_chunk_count"] == 0

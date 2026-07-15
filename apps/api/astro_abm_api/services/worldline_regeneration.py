@@ -234,6 +234,8 @@ def regenerate_worldline_from_chunk(
             note=note,
             preset_note=preset_note,
             regeneration_id=regeneration_id,
+            regeneration_complete=chunk.chunk_index == len(chunks),
+            pending_chunk_count=len(chunks) - chunk.chunk_index,
         )
         rebuilt_count += 1
         delay_seconds = generation_config.llm_call_delay_seconds or 0
@@ -498,14 +500,19 @@ def _replace_worldline_days(
     note: str | None,
     preset_note: str | None,
     regeneration_id: str | None,
+    regeneration_complete: bool,
+    pending_chunk_count: int,
 ) -> ScenarioReport:
     existing = report.worldline_simulation
     if existing is None:
         raise ValueError("worldline_simulation is required for regeneration")
     by_date = {day.date: day for day in existing.days}
     by_date.update({day.date: day for day in chunk_days})
-    merged_days = ensure_worldline_state_continuity(
-        [by_date[key] for key in sorted(by_date)]
+    ordered_days = [by_date[key] for key in sorted(by_date)]
+    merged_days = (
+        ensure_worldline_state_continuity(ordered_days)
+        if regeneration_complete
+        else ordered_days
     )
     provenance = _updated_provenance(existing, generation_config, chunk_history)
     caveats = _merge_strings(
@@ -522,7 +529,7 @@ def _replace_worldline_days(
         caveats=caveats,
         provenance=provenance,
         generation_config=generation_config,
-        continuity_status="consistent",
+        continuity_status="consistent" if regeneration_complete else "rebuilding",
         last_regeneration={
             "regeneration_id": regeneration_id,
             "regenerated_at": regenerated_at,
@@ -530,6 +537,7 @@ def _replace_worldline_days(
             "rebuilt_chunk_count": rebuilt_chunk_count,
             "note": note,
             "preset_note": preset_note,
+            "pending_chunk_count": pending_chunk_count,
         },
     )
     return report.model_copy(update={"worldline_simulation": updated_worldline})

@@ -1336,6 +1336,77 @@ def test_worldline_regenerate_from_zero_rebuilds_all_chunks(
     assert_worldline_state_continuity(worldline["days"])
 
 
+def test_progressive_regeneration_marks_downstream_stale_until_final_chunk(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from astro_abm_api.services import worldline_regeneration
+
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_id = created["scenario_id"]
+    original_downstream = created["worldline_simulation"]["days"][3:]
+    original_regenerator = worldline_regeneration._regenerate_deterministic_chunk
+
+    def regenerate_with_changed_anchor(*args, **kwargs):
+        days = original_regenerator(*args, **kwargs)
+        final_day = days[-1]
+        changed_state = final_day.world_state_after.model_copy(
+            update={
+                "narrative_pressure": min(
+                    1.0, final_day.world_state_after.narrative_pressure + 0.123
+                )
+            }
+        )
+        return [
+            *days[:-1],
+            final_day.model_copy(update={"world_state_after": changed_state}),
+        ]
+
+    monkeypatch.setattr(
+        worldline_regeneration,
+        "_regenerate_deterministic_chunk",
+        regenerate_with_changed_anchor,
+    )
+
+    first = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={
+            "start_chunk_index": 0,
+            "regeneration_id": "interrupted_progressive_run",
+            "progressive": True,
+        },
+    )
+
+    assert first.status_code == 200
+    first_worldline = first.json()["report"]["worldline_simulation"]
+    assert first.json()["continuity_status"] == "rebuilding"
+    assert first_worldline["continuity_status"] == "rebuilding"
+    assert first_worldline["days"][3:] == original_downstream
+    assert first_worldline["last_regeneration"]["pending_chunk_count"] == 1
+    assert "Continuity status: rebuilding" in first.json()["report"]["markdown_report"]
+
+    final = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={
+            "start_chunk_index": 1,
+            "regeneration_id": "interrupted_progressive_run",
+            "progressive": True,
+        },
+    )
+
+    assert final.status_code == 200
+    final_worldline = final.json()["report"]["worldline_simulation"]
+    assert final.json()["continuity_status"] == "consistent"
+    assert final_worldline["continuity_status"] == "consistent"
+    assert final_worldline["last_regeneration"]["pending_chunk_count"] == 0
+    assert_worldline_state_continuity(final_worldline["days"])
+    history = final_worldline["provenance"]["chunk_history"]
+    assert history[1]["upstream_state_hash"] == history[0]["output_state_hash"]
+
+
 def test_worldline_regeneration_preserves_safe_llm_attempt_diagnostics(
     monkeypatch, tmp_path: Path
 ) -> None:

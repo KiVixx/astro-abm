@@ -172,6 +172,8 @@ function WorldlineProvenanceTags({
         {t("worldline.continuityStatus")}:{" "}
         {simulation.continuity_status === "consistent"
           ? t("worldline.consistent")
+          : simulation.continuity_status === "rebuilding"
+            ? t("worldline.rebuilding")
           : String(simulation.continuity_status || "legacy_unknown")}
       </span>
       <span className="tag">
