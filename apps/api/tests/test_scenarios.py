@@ -1046,6 +1046,44 @@ def test_worldline_chunk_disabled_returns_dry_run_without_network(
     assert worldline["provenance"]["network_call_performed"] is False
 
 
+def test_worldline_generation_config_snapshots_resolved_non_secret_env_settings(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("ASTRO_ABM_LLM_BASE_URL", "http://env-llm.local/v1")
+    monkeypatch.setenv("ASTRO_ABM_LLM_MODEL", "env-model")
+    monkeypatch.setenv("ASTRO_ABM_LLM_API_KEY", "env-secret")
+    monkeypatch.setenv("ASTRO_ABM_LLM_TIMEOUT_SECONDS", "91")
+    monkeypatch.setenv("ASTRO_ABM_LLM_MAX_OUTPUT_TOKENS", "4096")
+
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": False,
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-03",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 3,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    config = chunk_response.json()["report"]["worldline_simulation"]["generation_config"]
+    saved_text = (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
+    assert config["llm_base_url"] == "http://env-llm.local/v1"
+    assert config["llm_model"] == "env-model"
+    assert config["llm_timeout_seconds"] == 91
+    assert config["llm_max_output_tokens"] == 4096
+    assert config["credential_status"] == "redacted"
+    assert "env-secret" not in saved_text
+
+
 def test_worldline_chunk_mocked_network_generates_structured_events(
     monkeypatch, tmp_path: Path
 ) -> None:
