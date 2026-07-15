@@ -29,6 +29,7 @@ from astro_abm_api.services.worldline_llm_context import build_worldline_llm_con
 from astro_abm_api.services.worldline_llm_prompts import (
     WORLDLINE_PROMPT_TEMPLATE_VERSION,
     build_worldline_messages,
+    build_worldline_retry_messages,
 )
 from astro_abm_api.services.worldline_simulation import (
     WORLDLINE_DISCLAIMER,
@@ -215,6 +216,7 @@ def generate_worldline_chunk(
     context_hash = str(context["input_context_hash"])
 
     messages = build_worldline_messages(context)
+    attempt_messages = messages
     last_failure = {
         "output_validation_status": "not_run",
         "safety_check_status": "not_run",
@@ -224,7 +226,7 @@ def generate_worldline_chunk(
     for attempt_count in range(1, MAX_WORLDLINE_CHUNK_ATTEMPTS + 1):
         attempt = _attempt_worldline_chunk(
             config,
-            messages,
+            attempt_messages,
             report,
             fallback,
             request,
@@ -271,6 +273,14 @@ def generate_worldline_chunk(
             "reason": str(attempt["reason"]),
             "response_diagnostics": attempt.get("response_diagnostics"),
         }
+        if attempt_count < MAX_WORLDLINE_CHUNK_ATTEMPTS:
+            attempt_messages = build_worldline_retry_messages(
+                messages,
+                language=request.language,
+                output_validation_status=last_failure["output_validation_status"],
+                safety_check_status=last_failure["safety_check_status"],
+                next_attempt=attempt_count + 1,
+            )
 
     return _fallback_chunk(
         report,

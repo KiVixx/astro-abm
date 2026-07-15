@@ -14,7 +14,10 @@ from astro_abm_api.models.report import ScenarioReport
 from astro_abm_api.services.llm_client import diagnose_llm_json, safety_check_text
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
-from astro_abm_api.services.worldline_llm_prompts import build_worldline_messages
+from astro_abm_api.services.worldline_llm_prompts import (
+    build_worldline_messages,
+    build_worldline_retry_messages,
+)
 
 
 def scenario_payload() -> dict[str, object]:
@@ -151,6 +154,29 @@ def test_worldline_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant(
     assert "You are simulating a market scenario worldline" not in system
     assert user.startswith("請根據這份精簡 JSON context")
     assert "使用者補充指引" in user
+
+
+def test_worldline_retry_prompt_uses_report_language_without_raw_output() -> None:
+    base = build_worldline_messages({"language": "zh-Hant", "daily_timeline": []})
+
+    retried = build_worldline_retry_messages(
+        base,
+        language="zh-Hant",
+        output_validation_status="invalid_json",
+        safety_check_status="not_run",
+        next_attempt=2,
+    )
+
+    assert len(retried) == 3
+    assert "上一次回應無法解析為完整 JSON" in retried[-1]["content"]
+    assert "原始回應" not in retried[-1]["content"]
+    assert build_worldline_retry_messages(
+        base,
+        language="zh-Hant",
+        output_validation_status="request_failed",
+        safety_check_status="not_run",
+        next_attempt=2,
+    ) == base
 
 
 def test_llm_prompts_keep_english_instructions_for_english_reports() -> None:
@@ -1281,6 +1307,7 @@ def test_worldline_chunk_retries_before_fallback(
         "caveats": [],
     }
     calls = 0
+    request_payloads: list[dict[str, object]] = []
 
     class Response:
         def raise_for_status(self):
@@ -1293,10 +1320,11 @@ def test_worldline_chunk_retries_before_fallback(
                 return {"choices": [{"message": {"content": "not json"}}]}
             return {"choices": [{"message": {"content": json.dumps(valid_payload)}}]}
 
-    monkeypatch.setattr(
-        "astro_abm_api.services.llm_client.requests.post",
-        lambda *args, **kwargs: Response(),
-    )
+    def fake_post(*args, **kwargs):
+        request_payloads.append(kwargs["json"])
+        return Response()
+
+    monkeypatch.setattr("astro_abm_api.services.llm_client.requests.post", fake_post)
     client = TestClient(app)
     create_response = client.post("/scenarios", json=scenario_payload())
     assert create_response.status_code == 200
@@ -1327,6 +1355,11 @@ def test_worldline_chunk_retries_before_fallback(
     assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
     assert worldline["days"][0]["generation_source"] == "llm_chunk"
     assert "attempt 3" in " ".join(worldline["days"][0]["quality_notes"])
+    assert len(request_payloads[0]["messages"]) == 2
+    assert len(request_payloads[1]["messages"]) == 3
+    retry_instruction = request_payloads[1]["messages"][-1]["content"]
+    assert "Previous response failed JSON parsing" in retry_instruction
+    assert "not json" not in retry_instruction
 
 
 def test_worldline_chunk_invalid_json_falls_back_safely(

@@ -45,6 +45,61 @@ def build_worldline_messages(context: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def build_worldline_retry_messages(
+    base_messages: list[dict[str, str]],
+    *,
+    language: str,
+    output_validation_status: str,
+    safety_check_status: str,
+    next_attempt: int,
+) -> list[dict[str, str]]:
+    if output_validation_status == "request_failed":
+        return list(base_messages)
+
+    if language == "zh-Hant":
+        if output_validation_status == "invalid_json":
+            correction = (
+                "上一次回應無法解析為完整 JSON。請在這次重試中只輸出一個完整、"
+                "閉合且精簡的 JSON object，不要使用 Markdown code fence 或額外說明；"
+                "保留所有必要日期，但縮短各文字欄位。"
+            )
+        elif output_validation_status == "invalid_payload":
+            correction = (
+                "上一次回應未符合指定 schema、日期或 agent_id。請嚴格沿用系統訊息中的"
+                " JSON 結構，只使用 context 提供的日期與 agent_id。"
+            )
+        elif safety_check_status == "failed":
+            correction = (
+                "上一次回應未通過安全檢查。請改用審慎、描述性的模擬情境語言，"
+                "不要加入任何肯定式交易指令、目標價、保證或真實因果宣稱。"
+            )
+        else:
+            correction = "請嚴格依照原 schema，重新輸出完整且精簡的 JSON object。"
+        prefix = f"第 {next_attempt} 次嘗試修正："
+    else:
+        if output_validation_status == "invalid_json":
+            correction = (
+                "Previous response failed JSON parsing. Return exactly one complete, closed, "
+                "concise JSON object with no Markdown fence or commentary. Keep every required "
+                "date, but shorten user-facing text fields."
+            )
+        elif output_validation_status == "invalid_payload":
+            correction = (
+                "Previous response did not match the required schema, dates, or agent IDs. "
+                "Follow the system JSON schema exactly and use only supplied dates and agent IDs."
+            )
+        elif safety_check_status == "failed":
+            correction = (
+                "Previous response failed safety review. Use cautious, descriptive simulated "
+                "scenario language without affirmative trading instructions, price targets, "
+                "guarantees, or real-causality claims."
+            )
+        else:
+            correction = "Retry with one complete and concise JSON object matching the original schema."
+        prefix = f"Attempt {next_attempt} correction: "
+    return [*base_messages, {"role": "user", "content": prefix + correction}]
+
+
 def _build_en_worldline_system_prompt(language: str) -> str:
     return f"""You are simulating a market scenario worldline.
 Interpret only the provided scenario context.
