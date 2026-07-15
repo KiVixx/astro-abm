@@ -279,6 +279,7 @@ class WorldlineGenerationConfig(BaseModel):
     llm_call_delay_seconds: float | None = None
     report_language: str | None = None
     custom_user_prompt: str | None = None
+    preset_id: str | None = None
     preset_name: str | None = None
     credential_status: str = "not_configured"
 
@@ -358,11 +359,36 @@ class ScenarioWorldlineChunkResponse(BaseModel):
     report: ScenarioReport
 
 
+class LlmRegenerationOverrides(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    real_enabled: bool | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = Field(default=None, exclude=True, repr=False)
+    timeout_seconds: float | None = Field(default=None, ge=1, le=600)
+    max_output_tokens: int | None = Field(default=None, ge=512, le=32000)
+    call_delay_seconds: float | None = Field(default=None, ge=0, le=120)
+    custom_user_prompt: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("base_url", "model", "api_key", "custom_user_prompt")
+    @classmethod
+    def clean_optional_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class ScenarioWorldlineRegenerateFromRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     start_chunk_index: int = Field(ge=0)
     note: str | None = Field(default=None, max_length=1000)
+    regeneration_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{8,80}$")
+    progressive: bool = False
+    preset_id: str | None = None
+    llm_overrides: LlmRegenerationOverrides | None = None
 
 
 class ScenarioWorldlineRegenerateFromResponse(BaseModel):
@@ -372,4 +398,8 @@ class ScenarioWorldlineRegenerateFromResponse(BaseModel):
     start_chunk_index: int
     rebuilt_chunk_count: int
     continuity_status: str
+    regeneration_status: str
+    llm_completed_chunk_count: int
+    fallback_chunk_count: int
+    skipped_chunk_count: int
     report: ScenarioReport

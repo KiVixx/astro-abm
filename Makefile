@@ -77,7 +77,7 @@ checkpoint-check:
 	uv run python scripts/astro_abm_ops.py checkpoint --check-only
 
 api:
-	uv run uvicorn astro_abm_api.main:app --app-dir apps/api --host $(API_HOST) --port $(API_PORT) --reload
+	uv run uvicorn astro_abm_api.main:app --app-dir apps/api --host $(API_HOST) --port $(API_PORT) --reload --reload-dir apps/api
 
 web:
 	cd apps/web && npm run dev -- --hostname $(WEB_HOST) --port $(WEB_PORT)

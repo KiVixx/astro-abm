@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from time import sleep
 from typing import Literal
 
 from astro_abm_api.models.report import (
+    LlmRegenerationOverrides,
     ScenarioReport,
     WorldlineDay,
     WorldlineGenerationConfig,
@@ -13,6 +15,7 @@ from astro_abm_api.models.report import (
 )
 from astro_abm_api.models.scenario import ScenarioWorldlineChunkRequest
 from astro_abm_api.services.worldline_llm_generator import generate_worldline_chunk
+from astro_abm_api.services.llm_preset_store import LlmPresetStore
 from astro_abm_api.services.worldline_simulation import (
     generate_worldline_days_for_range,
     generate_worldline_simulation,
@@ -31,6 +34,10 @@ class WorldlineChunk:
 class RegenerationResult:
     report: ScenarioReport
     rebuilt_chunk_count: int
+    regeneration_status: str
+    llm_completed_chunk_count: int
+    fallback_chunk_count: int
+    skipped_chunk_count: int
 
 
 def regenerate_worldline_from_chunk(
@@ -38,13 +45,21 @@ def regenerate_worldline_from_chunk(
     *,
     start_chunk_index: int,
     note: str | None = None,
+    regeneration_id: str | None = None,
+    progressive: bool = False,
+    preset_id: str | None = None,
+    llm_overrides: LlmRegenerationOverrides | None = None,
 ) -> RegenerationResult:
     if not report.daily_timeline:
         raise ValueError("daily_timeline is required for worldline regeneration")
     if report.worldline_simulation is None:
         raise ValueError("worldline_simulation is required for worldline regeneration")
 
-    generation_config, preset_note = _resolve_generation_config(report)
+    generation_config, preset_note, api_key = _resolve_generation_config(
+        report,
+        preset_id=preset_id,
+        overrides=llm_overrides,
+    )
     chunks = _build_chunks(
         [snapshot.date for snapshot in report.daily_timeline],
         generation_config.worldline_chunk_days,
@@ -57,13 +72,74 @@ def regenerate_worldline_from_chunk(
         report.worldline_simulation.provenance.get("chunk_history"),
         start_chunk_index,
     )
+    previous_regeneration = report.worldline_simulation.last_regeneration or {}
+    same_progressive_run = bool(
+        regeneration_id
+        and previous_regeneration.get("regeneration_id") == regeneration_id
+    )
+    rebuilt_before = (
+        int(previous_regeneration.get("rebuilt_chunk_count") or 0)
+        if same_progressive_run
+        else 0
+    )
     rebuilt_count = 0
-    regenerated_at = datetime.now(UTC).isoformat()
+    llm_completed_count = (
+        int(previous_regeneration.get("llm_completed_chunk_count") or 0)
+        if same_progressive_run
+        else 0
+    )
+    fallback_count = (
+        int(previous_regeneration.get("fallback_chunk_count") or 0)
+        if same_progressive_run
+        else 0
+    )
+    skipped_count = (
+        int(previous_regeneration.get("skipped_chunk_count") or 0)
+        if same_progressive_run
+        else 0
+    )
+    consecutive_failed_count = (
+        int(previous_regeneration.get("consecutive_failed_chunk_count") or 0)
+        if same_progressive_run
+        else 0
+    )
+    generation_halted = bool(
+        previous_regeneration.get("generation_halted", False)
+        if same_progressive_run
+        else False
+    )
+    first_failure = (
+        str(previous_regeneration.get("error_summary") or "") or None
+        if same_progressive_run
+        else None
+    )
+    regenerated_at = (
+        str(previous_regeneration.get("regenerated_at"))
+        if same_progressive_run
+        else datetime.now(UTC).isoformat()
+    )
 
-    for chunk in chunks[start_chunk_index:]:
+    rebuild_chunks = chunks[start_chunk_index : start_chunk_index + 1] if progressive else chunks[start_chunk_index:]
+    for rebuild_offset, chunk in enumerate(rebuild_chunks):
         previous_state = _previous_state_for_chunk(working_report, chunk)
         upstream_state_hash = hash_worldline_state(previous_state)
-        if _should_use_llm(generation_config):
+        if generation_halted:
+            status = "skipped_after_halt"
+            output_validation = "skipped_after_consecutive_failures"
+            safety_check = "not_run"
+            network_call = False
+            issues = [
+                "LLM call skipped after two consecutive chunk failures; deterministic fallback chunk was used.",
+            ]
+            chunk_days = _regenerate_deterministic_chunk(
+                working_report,
+                chunk,
+                previous_state,
+                chunk_status="fallback",
+                quality_notes=issues,
+            )
+            skipped_count += 1
+        elif _should_use_llm(generation_config):
             chunk_days, status, output_validation, safety_check, network_call, issues = (
                 _regenerate_llm_chunk(
                     working_report,
@@ -71,8 +147,19 @@ def regenerate_worldline_from_chunk(
                     chunks,
                     previous_state,
                     generation_config,
+                    api_key,
                 )
             )
+            if status == "completed":
+                llm_completed_count += 1
+                consecutive_failed_count = 0
+            else:
+                fallback_count += 1
+                consecutive_failed_count += 1
+                if first_failure is None:
+                    first_failure = next((item for item in issues[1:] if item), issues[0])
+                if consecutive_failed_count >= 2:
+                    generation_halted = True
         else:
             status = (
                 "fallback"
@@ -94,6 +181,10 @@ def regenerate_worldline_from_chunk(
                 chunk_status=status,
                 quality_notes=issues,
             )
+            if generation_config.worldline_provider == "llm":
+                fallback_count += 1
+                if first_failure is None:
+                    first_failure = next((item for item in issues if item), None)
 
         output_state_hash = hash_worldline_state(chunk_days[-1].world_state_after)
         chunk_history.append(
@@ -118,40 +209,114 @@ def regenerate_worldline_from_chunk(
             chunk_history=chunk_history,
             regenerated_at=regenerated_at,
             start_chunk_index=start_chunk_index,
-            rebuilt_chunk_count=rebuilt_count + 1,
+            rebuilt_chunk_count=rebuilt_before + rebuilt_count + 1,
             note=note,
             preset_note=preset_note,
+            regeneration_id=regeneration_id,
         )
         rebuilt_count += 1
+        delay_seconds = generation_config.llm_call_delay_seconds or 0
+        if network_call and delay_seconds > 0 and rebuild_offset < len(rebuild_chunks) - 1:
+            sleep(delay_seconds)
 
-    return RegenerationResult(report=working_report, rebuilt_chunk_count=rebuilt_count)
+    regeneration_status = _regeneration_status(
+        llm_completed_count=llm_completed_count,
+        fallback_count=fallback_count,
+        skipped_count=skipped_count,
+        worldline_provider=generation_config.worldline_provider,
+    )
+    working_report = _finalize_regeneration(
+        working_report,
+        regeneration_status=regeneration_status,
+        llm_completed_count=llm_completed_count,
+        fallback_count=fallback_count,
+        skipped_count=skipped_count,
+        generation_halted=generation_halted,
+        consecutive_failed_count=consecutive_failed_count,
+        first_failure=first_failure,
+    )
+    return RegenerationResult(
+        report=working_report,
+        rebuilt_chunk_count=rebuilt_before + rebuilt_count,
+        regeneration_status=regeneration_status,
+        llm_completed_chunk_count=llm_completed_count,
+        fallback_chunk_count=fallback_count,
+        skipped_chunk_count=skipped_count,
+    )
 
 
 def _resolve_generation_config(
     report: ScenarioReport,
-) -> tuple[WorldlineGenerationConfig, str | None]:
+    *,
+    preset_id: str | None = None,
+    overrides: LlmRegenerationOverrides | None = None,
+) -> tuple[WorldlineGenerationConfig, str | None, str | None]:
     existing = report.worldline_simulation
     if existing and existing.generation_config is not None:
-        return existing.generation_config, None
-
-    provenance = existing.provenance if existing else {}
-    provider = str(provenance.get("provider") or "mock")
-    model = provenance.get("model")
-    chunk_days = _coerce_chunk_days(provenance.get("chunk_size_days"))
-    generation_mode = str(provenance.get("generation_mode") or "")
-    worldline_provider = "llm" if "llm" in generation_mode else "deterministic_mock"
-    note = "Original generation preset was unavailable; fallback settings were used."
-    return (
-        WorldlineGenerationConfig(
+        config = existing.generation_config
+        preset_note = None
+    else:
+        provenance = existing.provenance if existing else {}
+        provider = str(provenance.get("provider") or "mock")
+        model = provenance.get("model")
+        chunk_days = _coerce_chunk_days(provenance.get("chunk_size_days"))
+        generation_mode = str(provenance.get("generation_mode") or "")
+        worldline_provider = "llm" if "llm" in generation_mode else "deterministic_mock"
+        preset_note = "Original generation preset was unavailable; fallback settings were used."
+        config = WorldlineGenerationConfig(
             worldline_provider=worldline_provider,
             worldline_chunk_days=chunk_days,
             llm_provider=provider if provider in {"mock", "openai_compatible"} else "mock",
             llm_model=str(model) if isinstance(model, str) and model else None,
             report_language=report.language,
             credential_status=str(provenance.get("credential_status") or "unavailable"),
-        ),
-        note,
-    )
+        )
+
+    api_key: str | None = None
+    if preset_id:
+        record = LlmPresetStore().get_record(preset_id)
+        api_key = record.get("api_key")
+        config = config.model_copy(
+            update={
+                "worldline_provider": "llm",
+                "llm_provider": record.get("provider", "openai_compatible"),
+                "llm_real_enabled": bool(record.get("real_enabled", True)),
+                "llm_base_url": record.get("base_url"),
+                "llm_model": record.get("model"),
+                "llm_timeout_seconds": record.get("timeout_seconds"),
+                "llm_max_output_tokens": record.get("max_output_tokens"),
+                "llm_call_delay_seconds": record.get("call_delay_seconds"),
+                "custom_user_prompt": record.get("custom_user_prompt"),
+                "report_language": report.language,
+                "preset_id": preset_id,
+                "preset_name": record.get("name"),
+                "credential_status": "stored_local" if api_key else "env_required",
+            }
+        )
+        preset_note = f"Local LLM preset reused: {record.get('name') or preset_id}."
+
+    if overrides is not None:
+        updates: dict[str, object] = {}
+        mapping = {
+            "real_enabled": "llm_real_enabled",
+            "base_url": "llm_base_url",
+            "model": "llm_model",
+            "timeout_seconds": "llm_timeout_seconds",
+            "max_output_tokens": "llm_max_output_tokens",
+            "call_delay_seconds": "llm_call_delay_seconds",
+            "custom_user_prompt": "custom_user_prompt",
+        }
+        for source, target in mapping.items():
+            value = getattr(overrides, source)
+            if value is not None:
+                updates[target] = value
+        if overrides.api_key:
+            api_key = overrides.api_key
+            updates["credential_status"] = "request_transient"
+        if updates:
+            config = config.model_copy(update=updates)
+
+    return config, preset_note, api_key
 
 
 def _build_chunks(dates: list[date], chunk_days: int) -> list[WorldlineChunk]:
@@ -201,13 +366,14 @@ def _regenerate_llm_chunk(
     chunks: list[WorldlineChunk],
     previous_state: WorldlineState,
     generation_config: WorldlineGenerationConfig,
+    api_key: str | None,
 ) -> tuple[list[WorldlineDay], str, str, str, bool, list[str]]:
     request = ScenarioWorldlineChunkRequest(
         llm_provider="openai_compatible",
         llm_real_enabled=generation_config.llm_real_enabled,
         llm_base_url=generation_config.llm_base_url,
         llm_model=generation_config.llm_model,
-        llm_api_key=None,
+        llm_api_key=api_key,
         llm_user_prompt=generation_config.custom_user_prompt,
         llm_timeout_seconds=generation_config.llm_timeout_seconds,
         llm_max_output_tokens=generation_config.llm_max_output_tokens,
@@ -287,6 +453,7 @@ def _replace_worldline_days(
     rebuilt_chunk_count: int,
     note: str | None,
     preset_note: str | None,
+    regeneration_id: str | None,
 ) -> ScenarioReport:
     existing = report.worldline_simulation
     if existing is None:
@@ -311,6 +478,7 @@ def _replace_worldline_days(
         generation_config=generation_config,
         continuity_status="consistent",
         last_regeneration={
+            "regeneration_id": regeneration_id,
             "regenerated_at": regenerated_at,
             "start_chunk_index": start_chunk_index,
             "rebuilt_chunk_count": rebuilt_chunk_count,
@@ -326,7 +494,11 @@ def _updated_provenance(
     generation_config: WorldlineGenerationConfig,
     chunk_history: list[dict[str, object]],
 ) -> dict[str, object]:
-    failed_count = sum(1 for item in chunk_history if item.get("status") == "fallback")
+    failed_count = sum(
+        1
+        for item in chunk_history
+        if item.get("status") in {"fallback", "skipped_after_halt"}
+    )
     return {
         **existing.provenance,
         "generation_mode": (
@@ -384,8 +556,10 @@ def _chunk_history_entry(
         "provider": generation_config.llm_provider,
         "model": generation_config.llm_model,
         "status": status,
-        "quality_status": "fallback" if status == "fallback" else "completed",
-        "quality_score": 0.4 if status == "fallback" else 0.8,
+        "quality_status": (
+            "fallback" if status in {"fallback", "skipped_after_halt"} else "completed"
+        ),
+        "quality_score": 0.4 if status in {"fallback", "skipped_after_halt"} else 0.8,
         "output_validation_status": output_validation,
         "safety_check_status": safety_check,
         "network_call_performed": network_call,
@@ -396,6 +570,77 @@ def _chunk_history_entry(
         "upstream_state_hash": upstream_state_hash,
         "output_state_hash": output_state_hash,
     }
+
+
+def _regeneration_status(
+    *,
+    llm_completed_count: int,
+    fallback_count: int,
+    skipped_count: int,
+    worldline_provider: str,
+) -> str:
+    if worldline_provider != "llm":
+        return "completed"
+    if fallback_count == 0 and skipped_count == 0:
+        return "completed"
+    if llm_completed_count > 0:
+        return "partial_fallback"
+    return "failed_fallback"
+
+
+def _finalize_regeneration(
+    report: ScenarioReport,
+    *,
+    regeneration_status: str,
+    llm_completed_count: int,
+    fallback_count: int,
+    skipped_count: int,
+    generation_halted: bool,
+    consecutive_failed_count: int,
+    first_failure: str | None,
+) -> ScenarioReport:
+    worldline = report.worldline_simulation
+    if worldline is None:
+        return report
+    last_regeneration = {
+        **(worldline.last_regeneration or {}),
+        "status": regeneration_status,
+        "llm_completed_chunk_count": llm_completed_count,
+        "fallback_chunk_count": fallback_count,
+        "skipped_chunk_count": skipped_count,
+        "generation_halted": generation_halted,
+        "consecutive_failed_chunk_count": consecutive_failed_count,
+        "error_summary": first_failure,
+    }
+    provenance = {
+        **worldline.provenance,
+        "last_regeneration_status": regeneration_status,
+        "last_regeneration_llm_completed_chunk_count": llm_completed_count,
+        "last_regeneration_fallback_chunk_count": fallback_count,
+        "last_regeneration_skipped_chunk_count": skipped_count,
+        "generation_halted": generation_halted,
+        "halt_reason": (
+            "Two consecutive LLM chunks failed during regeneration; remaining network calls were skipped."
+            if generation_halted
+            else None
+        ),
+    }
+    status = {
+        "completed": "completed",
+        "partial_fallback": "completed_with_fallback",
+        "failed_fallback": "fallback",
+    }[regeneration_status]
+    return report.model_copy(
+        update={
+            "worldline_simulation": worldline.model_copy(
+                update={
+                    "status": status,
+                    "last_regeneration": last_regeneration,
+                    "provenance": provenance,
+                }
+            )
+        }
+    )
 
 
 def _deterministic_issues(

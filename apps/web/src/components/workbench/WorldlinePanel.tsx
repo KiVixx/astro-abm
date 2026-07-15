@@ -9,6 +9,7 @@ import type {
 } from "@/lib/types";
 import { formatAgentName } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
+import { worldlineDisplayStatus } from "@/lib/worldlineStatus";
 
 interface WorldlinePanelProps {
   primary?: boolean;
@@ -165,7 +166,7 @@ function WorldlineProvenanceTags({
         {String(provenance.chunk_size_days || "n/a")}
       </span>
       <span className="tag">
-        {t("worldline.chunkStatus")}: {simulation.status}
+        {t("worldline.chunkStatus")}: {worldlineDisplayStatus(simulation)}
       </span>
       <span className="tag">
         {t("worldline.continuityStatus")}:{" "}
@@ -202,6 +203,7 @@ function WorldlineReviewHeader({
   const provenance = simulation.provenance || {};
   const failedChunks = numberFromUnknown(provenance.failed_chunk_count);
   const chunkHistory = arrayOfRecords(provenance.chunk_history);
+  const regeneration = regenerationOutcome(simulation.last_regeneration, chunkHistory);
   const qualityNotes = stringArray(provenance.llm_output_quality_notes);
   const sourceCounts = countDaySources(simulation.days);
   return (
@@ -229,10 +231,25 @@ function WorldlineReviewHeader({
         <p className="muted">{t("worldline.chunkInfoUnavailable")}</p>
       ) : null}
       {simulation.last_regeneration ? (
-        <p className="muted">
-          {t("worldline.regenerationCompleted")}:{" "}
-          {String(simulation.last_regeneration.regenerated_at || "unknown")}
-        </p>
+        <div className={regeneration.status === "completed" ? "notice" : "notice warning"}>
+          <strong>
+            {regeneration.status === "completed"
+              ? t("worldline.regenerationSucceeded")
+              : regeneration.status === "partial_fallback"
+                ? t("worldline.regenerationPartialFallback")
+                : t("worldline.regenerationFailedFallback")}
+          </strong>
+          <p>
+            {t("worldline.regenerationEndedAt")}: {" "}
+            {String(simulation.last_regeneration.regenerated_at || "unknown")}
+          </p>
+          <p>
+            {t("worldline.llmCompletedChunks")}: {regeneration.completed} · {" "}
+            {t("worldline.fallbackChunks")}: {regeneration.fallback} · {" "}
+            {t("worldline.skippedChunks")}: {regeneration.skipped}
+          </p>
+          {regeneration.error ? <p>{t("worldline.failureReason")}: {regeneration.error}</p> : null}
+        </div>
       ) : null}
       {regenerationMessage ? <p className="muted">{regenerationMessage}</p> : null}
       {regenerationError ? (
@@ -418,4 +435,41 @@ function countDaySources(days: WorldlineDay[]): Record<string, number> {
     counts[source] = (counts[source] || 0) + 1;
     return counts;
   }, {});
+}
+
+function regenerationOutcome(
+  lastRegeneration: Record<string, unknown> | null | undefined,
+  chunkHistory: Array<Record<string, unknown>>,
+) {
+  if (!lastRegeneration) {
+    return { status: "completed", completed: 0, fallback: 0, skipped: 0, error: "" };
+  }
+  const regeneratedAt = String(lastRegeneration.regenerated_at || "");
+  const relevant = chunkHistory.filter(
+    (chunk) => regeneratedAt && String(chunk.regenerated_at || "") === regeneratedAt,
+  );
+  const completed = numberFromUnknown(lastRegeneration.llm_completed_chunk_count)
+    || relevant.filter((chunk) => chunk.status === "completed").length;
+  const fallback = numberFromUnknown(lastRegeneration.fallback_chunk_count)
+    || relevant.filter((chunk) => chunk.status === "fallback").length;
+  const skipped = numberFromUnknown(lastRegeneration.skipped_chunk_count)
+    || relevant.filter((chunk) => chunk.status === "skipped_after_halt").length;
+  const storedStatus = String(lastRegeneration.status || "");
+  const status = storedStatus || (
+    fallback + skipped === 0
+      ? "completed"
+      : completed > 0
+        ? "partial_fallback"
+        : "failed_fallback"
+  );
+  const firstIssue = relevant
+    .flatMap((chunk) => stringArray(chunk.issues))
+    .find((issue) => !issue.startsWith("LLM regeneration failed safely"));
+  return {
+    status,
+    completed,
+    fallback,
+    skipped,
+    error: String(lastRegeneration.error_summary || firstIssue || ""),
+  };
 }

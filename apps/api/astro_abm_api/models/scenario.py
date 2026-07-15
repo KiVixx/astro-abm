@@ -25,6 +25,7 @@ class ScenarioCreateRequest(BaseModel):
     assets: list[str] = Field(min_length=1)
     agent_ids: list[str] = Field(min_length=1)
     llm_provider: LLMProvider = "mock"
+    llm_preset_id: str | None = None
     llm_real_enabled: bool | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
@@ -90,6 +91,7 @@ class ScenarioLlmChunkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     llm_provider: LLMProvider = "openai_compatible"
+    llm_preset_id: str | None = None
     llm_real_enabled: bool | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
@@ -125,6 +127,7 @@ class ScenarioWorldlineChunkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     llm_provider: LLMProvider = "openai_compatible"
+    llm_preset_id: str | None = None
     llm_real_enabled: bool | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None

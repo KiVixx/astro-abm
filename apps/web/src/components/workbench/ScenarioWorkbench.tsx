@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ContextCoverageSummaryCard } from "../ContextCoverageSummaryCard";
 import { LlmScenarioReportCard } from "../LlmScenarioReportCard";
@@ -11,7 +12,7 @@ import type {
   DailyScenarioSnapshot,
   ScenarioReport,
 } from "@/lib/types";
-import { regenerateScenarioWorldlineFromChunk } from "@/lib/api";
+import { worldlineDisplayStatus } from "@/lib/worldlineStatus";
 import { buildAssetStressSeries } from "@/lib/assetStressSentiment";
 import { buildWorkbenchGraph } from "@/lib/workbenchGraph";
 import { formatEnumLabel } from "@/i18n/labels";
@@ -42,13 +43,9 @@ export function ScenarioWorkbench({
   product = "scenario",
 }: ScenarioWorkbenchProps) {
   const { t } = useI18n();
+  const router = useRouter();
   const isWorldline = product === "worldline";
   const [currentReport, setCurrentReport] = useState(report);
-  const [regeneration, setRegeneration] = useState<{
-    active: boolean;
-    message: string;
-    error: string | null;
-  }>({ active: false, message: "", error: null });
   const timeline = currentReport.daily_timeline || [];
   const initialSnapshot = getInitialSnapshot(timeline, initialDate);
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
@@ -103,42 +100,13 @@ export function ScenarioWorkbench({
     return Math.floor(selectedIndex / chunkSize);
   }, [currentReport.worldline_simulation, selectedIndex, selectedSnapshot, selectedWorldlineDay]);
 
-  const regenerateWorldlineFromSelectedChunk = async () => {
-    if (!timeline.length || regeneration.active || selectedChunkIndex === null) {
+  const openRegenerationSettings = () => {
+    if (!timeline.length || selectedChunkIndex === null) {
       return;
     }
-    const confirmed = window.confirm(
-      `${t("worldline.regenerateFromHereConfirm")}\n\n${t("worldline.regenerateDownstreamWarning")}\n${t("worldline.originalPresetReused")}`,
+    router.push(
+      `/worldlines/${currentReport.scenario_id}/regenerate?start_chunk_index=${selectedChunkIndex}&date=${encodeURIComponent(selectedDate)}`,
     );
-    if (!confirmed) {
-      return;
-    }
-    setRegeneration({
-      active: true,
-      message: t("worldline.regenerationInProgress"),
-      error: null,
-    });
-    try {
-      const response = await regenerateScenarioWorldlineFromChunk(currentReport.scenario_id, {
-        start_chunk_index: selectedChunkIndex,
-      });
-      const latestReport = response.report;
-      setCurrentReport(latestReport);
-      setRegeneration({
-        active: false,
-        message: `${t("worldline.regenerationCompleted")} (${response.rebuilt_chunk_count})`,
-        error: null,
-      });
-      if (!latestReport.daily_timeline?.some((snapshot) => snapshot.date === selectedDate)) {
-        setSelectedDate(latestReport.daily_timeline?.[0]?.date || "");
-      }
-    } catch (error) {
-      setRegeneration({
-        active: false,
-        message: "",
-        error: error instanceof Error ? error.message : t("common.unknownError"),
-      });
-    }
   };
 
   if (!selectedSnapshot || !graph) {
@@ -178,7 +146,7 @@ export function ScenarioWorkbench({
             {isWorldline && currentReport.worldline_simulation ? (
               <>
                 <span className="tag">
-                  {t("worldline.status")}: {currentReport.worldline_simulation.status}
+                  {t("worldline.status")}: {worldlineDisplayStatus(currentReport.worldline_simulation)}
                 </span>
                 <span className="tag">
                   {t("worldline.dayCount")}: {selectedIndex + 1}/
@@ -270,11 +238,11 @@ export function ScenarioWorkbench({
           snapshot={selectedSnapshot}
           worldlineDay={selectedWorldlineDay}
           worldlineSimulation={currentReport.worldline_simulation}
-          onRegenerateWorldline={isWorldline ? regenerateWorldlineFromSelectedChunk : undefined}
+          onRegenerateWorldline={isWorldline ? openRegenerationSettings : undefined}
           canRegenerateWorldline={isWorldline && selectedChunkIndex !== null}
-          regenerationError={regeneration.error}
-          regenerationMessage={regeneration.message}
-          regenerationActive={regeneration.active}
+          regenerationError={null}
+          regenerationMessage=""
+          regenerationActive={false}
           worldlinePrimary={isWorldline}
         />
       </main>

@@ -23,6 +23,10 @@ from astro_abm_api.services.llm_client import (
     generate_llm_scenario_report_chunk,
     merge_llm_report_chunk,
 )
+from astro_abm_api.services.llm_preset_store import (
+    LlmPresetNotFoundError,
+    LlmPresetStore,
+)
 from astro_abm_api.services.simulation_engine import generate_scenario_report, render_markdown
 from astro_abm_api.services.worldline_llm_generator import generate_worldline_chunk
 from astro_abm_api.services.worldline_regeneration import regenerate_worldline_from_chunk
@@ -59,6 +63,7 @@ def delete_scenario(scenario_id: str) -> dict[str, object]:
 
 @router.post("/scenarios", response_model=ScenarioReport)
 def create_scenario(request: ScenarioCreateRequest) -> ScenarioReport:
+    request, _ = _resolve_request_preset(request)
     agents, unknown = resolve_agents(request.agent_ids)
     if unknown:
         raise HTTPException(
@@ -76,6 +81,7 @@ def generate_scenario_llm_chunk(
     scenario_id: str,
     request: ScenarioLlmChunkRequest,
 ) -> ScenarioLlmChunkResponse:
+    request, _ = _resolve_request_preset(request)
     store = ScenarioStore()
     try:
         report = store.load(scenario_id)
@@ -133,6 +139,7 @@ def generate_scenario_worldline_chunk(
     scenario_id: str,
     request: ScenarioWorldlineChunkRequest,
 ) -> ScenarioWorldlineChunkResponse:
+    request, preset_record = _resolve_request_preset(request)
     store = ScenarioStore()
     try:
         report = store.load(scenario_id)
@@ -148,6 +155,20 @@ def generate_scenario_worldline_chunk(
         )
 
     worldline_simulation = generate_worldline_chunk(request, report)
+    if preset_record and worldline_simulation.generation_config:
+        worldline_simulation = worldline_simulation.model_copy(
+            update={
+                "generation_config": worldline_simulation.generation_config.model_copy(
+                    update={
+                        "preset_id": request.llm_preset_id,
+                        "preset_name": preset_record.get("name"),
+                        "credential_status": (
+                            "stored_local" if preset_record.get("api_key") else "env_required"
+                        ),
+                    }
+                )
+            }
+        )
     provenance = dict(report.provenance)
     provenance["worldline"] = {
         "provider": request.llm_provider,
@@ -214,7 +235,13 @@ def regenerate_scenario_worldline_from_chunk(
             report,
             start_chunk_index=request.start_chunk_index,
             note=request.note,
+            regeneration_id=request.regeneration_id,
+            progressive=request.progressive,
+            preset_id=request.preset_id,
+            llm_overrides=request.llm_overrides,
         )
+    except LlmPresetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="LLM preset not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -229,5 +256,43 @@ def regenerate_scenario_worldline_from_chunk(
         continuity_status=saved_report.worldline_simulation.continuity_status
         if saved_report.worldline_simulation
         else "legacy_unknown",
+        regeneration_status=result.regeneration_status,
+        llm_completed_chunk_count=result.llm_completed_chunk_count,
+        fallback_chunk_count=result.fallback_chunk_count,
+        skipped_chunk_count=result.skipped_chunk_count,
         report=saved_report,
     )
+
+
+def _resolve_request_preset(request):
+    preset_id = getattr(request, "llm_preset_id", None)
+    if not preset_id:
+        return request, None
+    try:
+        record = LlmPresetStore().get_record(preset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LlmPresetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="LLM preset not found") from exc
+    updates = {
+        "llm_provider": record.get("provider", "openai_compatible"),
+        "llm_real_enabled": (
+            request.llm_real_enabled
+            if request.llm_real_enabled is not None
+            else bool(record.get("real_enabled", True))
+        ),
+        "llm_base_url": request.llm_base_url or record.get("base_url"),
+        "llm_model": request.llm_model or record.get("model"),
+        "llm_api_key": request.llm_api_key or record.get("api_key"),
+        "llm_user_prompt": request.llm_user_prompt or record.get("custom_user_prompt"),
+        "llm_timeout_seconds": request.llm_timeout_seconds or record.get("timeout_seconds"),
+        "llm_max_output_tokens": (
+            request.llm_max_output_tokens or record.get("max_output_tokens")
+        ),
+        "llm_call_delay_seconds": (
+            request.llm_call_delay_seconds
+            if request.llm_call_delay_seconds is not None
+            else record.get("call_delay_seconds")
+        ),
+    }
+    return request.model_copy(update=updates), record

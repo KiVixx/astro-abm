@@ -27,3 +27,21 @@ def test_local_web_delete_preflight_is_allowed() -> None:
     assert response.status_code == 200
     assert "DELETE" in response.headers["access-control-allow-methods"]
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
+
+
+def test_local_web_preset_update_preflight_is_allowed() -> None:
+    client = TestClient(app)
+
+    for origin in ("http://127.0.0.1:3000", "http://localhost:3000"):
+        response = client.options(
+            "/llm/presets/local_preset",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "PUT",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+        assert response.status_code == 200
+        assert "PUT" in response.headers["access-control-allow-methods"]
+        assert response.headers["access-control-allow-origin"] == origin

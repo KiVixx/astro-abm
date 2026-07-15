@@ -126,6 +126,14 @@ Worldline product experience:
 - Explore saved worldlines at `/worldlines`.
 - Open the main Worldline Workbench at `/worldlines/{scenario_id}`, for example
   `/worldlines/demo_2026q3_btc_eth` after `make scenario-demo`.
+- Selecting "Regenerate from here to end" opens
+  `/worldlines/{scenario_id}/regenerate`, where only LLM call settings can be
+  changed. Scenario dates, assets, agents, language, and chunk boundaries stay
+  locked.
+- LLM presets are stored locally in `.local/astro-abm/llm_presets.json` by
+  default. The directory is git-ignored, the file is written with mode `0600`,
+  and API keys are never returned by the API or copied into scenario reports.
+  Set `ASTRO_ABM_LOCAL_CONFIG_DIR` to use a different local directory.
 - Open the full text report only when needed at
   `/scenarios/{scenario_id}/report`.
 - Older scenario routes remain compatible, including `/scenarios/{scenario_id}`
