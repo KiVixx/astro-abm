@@ -176,6 +176,8 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.noParseError": "valid JSON",
     "worldline.errorLocation": "Error location (line:column)",
     "worldline.markdownFenceDetected": "Markdown fence detected",
+    "worldline.leadingTextIgnored": "Leading text ignored",
+    "worldline.trailingTextIgnored": "Trailing text ignored",
     "worldline.probableTruncation": "Response was probably truncated",
     "worldline.probableTruncationHelp":
       "Try a smaller chunk or a higher output-token limit before regenerating.",
@@ -744,6 +746,8 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.noParseError": "有效 JSON",
     "worldline.errorLocation": "錯誤位置（行:欄）",
     "worldline.markdownFenceDetected": "偵測到 Markdown code fence",
+    "worldline.leadingTextIgnored": "已忽略 JSON 前方文字",
+    "worldline.trailingTextIgnored": "已忽略 JSON 後方文字",
     "worldline.probableTruncation": "回應可能遭到截斷",
     "worldline.probableTruncationHelp":
       "重新生成前，可嘗試縮小 chunk 或提高輸出 token 上限。",

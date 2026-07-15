@@ -617,17 +617,17 @@ def _call_openai_compatible(
 
 
 def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
-    text = _extract_llm_json_text(raw_text)
+    text, _, _ = _extract_llm_json_text(raw_text)
     try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
+        payload, _ = json.JSONDecoder().raw_decode(text)
+    except (json.JSONDecodeError, TypeError):
         return None
     return payload if isinstance(payload, dict) else None
 
 
 def diagnose_llm_json(raw_text: str) -> dict[str, object]:
     stripped = raw_text.strip()
-    text = _extract_llm_json_text(raw_text)
+    text, leading_text_ignored, outer_trailing_text_ignored = _extract_llm_json_text(raw_text)
     diagnostics: dict[str, object] = {
         "response_char_count": len(raw_text),
         "response_empty": not bool(stripped),
@@ -638,6 +638,8 @@ def diagnose_llm_json(raw_text: str) -> dict[str, object]:
         "parse_error_line": None,
         "parse_error_column": None,
         "parse_error_message": None,
+        "leading_text_ignored": leading_text_ignored,
+        "trailing_text_ignored": outer_trailing_text_ignored,
     }
     if not stripped:
         diagnostics["parse_error_type"] = "empty_response"
@@ -646,7 +648,7 @@ def diagnose_llm_json(raw_text: str) -> dict[str, object]:
         diagnostics["parse_error_type"] = "no_json_object"
         return diagnostics
     try:
-        payload = json.loads(text)
+        payload, end_index = json.JSONDecoder().raw_decode(text)
     except json.JSONDecodeError as exc:
         probable_truncation = text.lstrip().startswith("{") and _has_unclosed_json_delimiters(text)
         diagnostics.update(
@@ -660,22 +662,27 @@ def diagnose_llm_json(raw_text: str) -> dict[str, object]:
             }
         )
         return diagnostics
+    diagnostics["trailing_text_ignored"] = bool(
+        diagnostics["trailing_text_ignored"] or text[end_index:].strip()
+    )
     if not isinstance(payload, dict):
         diagnostics["parse_error_type"] = "non_object_json"
     return diagnostics
 
 
-def _extract_llm_json_text(raw_text: str) -> str:
+def _extract_llm_json_text(raw_text: str) -> tuple[str, bool, bool]:
     text = raw_text.strip()
-    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
     if fenced:
-        text = fenced.group(1).strip()
-    elif not text.startswith("{"):
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end > start:
-            text = text[start : end + 1].strip()
-    return text
+        return (
+            fenced.group(1).strip(),
+            bool(text[: fenced.start()].strip()),
+            bool(text[fenced.end() :].strip()),
+        )
+    start = text.find("{")
+    if start > 0:
+        return text[start:].strip(), True, False
+    return text, False, False
 
 
 def _has_unclosed_json_delimiters(text: str) -> bool:

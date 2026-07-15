@@ -129,6 +129,21 @@ def test_llm_json_diagnostics_identify_truncation_without_retaining_content() ->
     assert raw_text not in json.dumps(diagnostics)
 
 
+def test_llm_json_parser_accepts_complete_object_with_surrounding_text() -> None:
+    raw_text = 'Result follows:\n```json\n{"days": [], "summary": "ok"}\n```\nDone.'
+
+    from astro_abm_api.services.llm_client import parse_llm_json
+
+    parsed = parse_llm_json(raw_text)
+    diagnostics = diagnose_llm_json(raw_text)
+
+    assert parsed == {"days": [], "summary": "ok"}
+    assert diagnostics["parse_error_type"] is None
+    assert diagnostics["leading_text_ignored"] is True
+    assert diagnostics["trailing_text_ignored"] is True
+    assert raw_text not in json.dumps(diagnostics)
+
+
 def test_llm_request_diagnostics_classify_timeout_without_retaining_details() -> None:
     secret_detail = "https://llm.example/v1?api_key=secret-value"
 

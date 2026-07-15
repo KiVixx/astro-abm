@@ -446,6 +446,12 @@ function ChunkResponseDiagnostics({ value }: { value: unknown }) {
         {diagnostics.markdown_fence_detected === true ? (
           <span className="tag">{t("worldline.markdownFenceDetected")}</span>
         ) : null}
+        {diagnostics.leading_text_ignored === true ? (
+          <span className="tag">{t("worldline.leadingTextIgnored")}</span>
+        ) : null}
+        {diagnostics.trailing_text_ignored === true ? (
+          <span className="tag">{t("worldline.trailingTextIgnored")}</span>
+        ) : null}
       </div>
       {diagnostics.probable_truncation === true ? (
         <p className="notice warning">
