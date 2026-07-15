@@ -17,6 +17,7 @@ from astro_abm_api.models.scenario import ScenarioWorldlineChunkRequest
 from astro_abm_api.services.worldline_llm_generator import generate_worldline_chunk
 from astro_abm_api.services.llm_preset_store import LlmPresetStore
 from astro_abm_api.services.worldline_simulation import (
+    ensure_worldline_state_continuity,
     generate_worldline_days_for_range,
     generate_worldline_simulation,
     hash_worldline_state,
@@ -460,7 +461,9 @@ def _replace_worldline_days(
         raise ValueError("worldline_simulation is required for regeneration")
     by_date = {day.date: day for day in existing.days}
     by_date.update({day.date: day for day in chunk_days})
-    merged_days = [by_date[key] for key in sorted(by_date)]
+    merged_days = ensure_worldline_state_continuity(
+        [by_date[key] for key in sorted(by_date)]
+    )
     provenance = _updated_provenance(existing, generation_config, chunk_history)
     caveats = _merge_strings(
         existing.caveats,

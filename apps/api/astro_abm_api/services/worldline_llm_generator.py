@@ -32,6 +32,7 @@ from astro_abm_api.services.worldline_llm_prompts import (
 )
 from astro_abm_api.services.worldline_simulation import (
     WORLDLINE_DISCLAIMER,
+    ensure_worldline_state_continuity,
     generate_worldline_simulation,
 )
 
@@ -593,7 +594,7 @@ def _merge_days(
     if existing:
         by_date.update({day.date: day for day in existing.days})
     by_date.update({day.date: day for day in chunk_days})
-    return [by_date[key] for key in sorted(by_date)]
+    return ensure_worldline_state_continuity([by_date[key] for key in sorted(by_date)])
 
 
 def _previous_state_for_chunk(

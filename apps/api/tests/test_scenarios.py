@@ -36,6 +36,11 @@ def inclusive_day_count(start_date: str, end_date: str) -> int:
     return (end - start).days + 1
 
 
+def assert_worldline_state_continuity(days: list[dict[str, object]]) -> None:
+    for previous_day, current_day in zip(days, days[1:]):
+        assert current_day["world_state_before"] == previous_day["world_state_after"]
+
+
 def test_safety_checker_allows_benign_horizon_language() -> None:
     benign_text = (
         "Long-Term Holder reviews a long-term horizon with a longer-term view. "
@@ -1106,6 +1111,7 @@ def test_worldline_chunk_mocked_network_generates_structured_events(
     assert first_day["world_state_after"]["narrative_pressure"] == 1
     assert first_day["world_state_after"]["leverage_pressure"] == 0
     assert first_day["causal_links"][0]["source"] == "retail_attention"
+    assert_worldline_state_continuity(worldline["days"])
     assert calls[0][0] == "http://llm.local/v1/chat/completions"
     assert calls[0][1]["Authorization"] == f"Bearer {request_secret}"
     assert calls[0][2]["max_tokens"] == 2500
@@ -1144,6 +1150,7 @@ def test_worldline_regenerate_from_middle_chunk_rebuilds_downstream_only(
     assert worldline["last_regeneration"]["start_chunk_index"] == 1
     assert worldline["provenance"]["chunk_history"][-1]["upstream_state_hash"]
     assert worldline["provenance"]["chunk_history"][-1]["output_state_hash"]
+    assert_worldline_state_continuity(worldline["days"])
     assert "Continuity status: consistent" in body["report"]["markdown_report"]
 
 
@@ -1172,6 +1179,7 @@ def test_worldline_regenerate_from_zero_rebuilds_all_chunks(
     assert history[0]["chunk_index"] == 1
     assert history[1]["chunk_index"] == 2
     assert history[1]["upstream_state_hash"] == history[0]["output_state_hash"]
+    assert_worldline_state_continuity(worldline["days"])
 
 
 def test_worldline_regenerate_invalid_chunk_returns_400(
@@ -1377,6 +1385,7 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert worldline["days"][0]["chunk_status"] == "invalid_json"
     assert worldline["days"][0]["quality_notes"]
     assert worldline["days"][0]["agent_events"]
+    assert_worldline_state_continuity(worldline["days"])
 
 
 def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
