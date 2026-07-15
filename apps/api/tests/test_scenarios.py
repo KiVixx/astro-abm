@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from astro_abm_api.main import app
 from astro_abm_api.models.report import ScenarioReport
-from astro_abm_api.services.llm_client import safety_check_text
+from astro_abm_api.services.llm_client import diagnose_llm_json, safety_check_text
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
 from astro_abm_api.services.worldline_llm_prompts import build_worldline_messages
@@ -93,6 +93,18 @@ def test_safety_checker_rejects_explicit_trading_instruction_phrases(
     unsafe_text: str,
 ) -> None:
     assert not safety_check_text(unsafe_text)
+
+
+def test_llm_json_diagnostics_identify_truncation_without_retaining_content() -> None:
+    raw_text = '{"days": [{"date": "2026-07-01"}'
+
+    diagnostics = diagnose_llm_json(raw_text)
+
+    assert diagnostics["response_char_count"] == len(raw_text)
+    assert diagnostics["parse_error_type"] == "truncated_json"
+    assert diagnostics["probable_truncation"] is True
+    assert "raw_text" not in diagnostics
+    assert raw_text not in json.dumps(diagnostics)
 
 
 def test_scenario_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant() -> None:
@@ -1353,6 +1365,12 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert worldline["provenance"]["failed_chunk_count"] == 1
     assert worldline["provenance"]["attempt_count"] == 3
     assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
+    diagnostics = worldline["provenance"]["chunk_history"][0]["response_diagnostics"]
+    assert diagnostics["response_char_count"] == len("not json")
+    assert diagnostics["parse_error_type"] == "no_json_object"
+    assert diagnostics["probable_truncation"] is False
+    assert "raw_text" not in diagnostics
+    assert "not json" not in json.dumps(diagnostics)
     assert worldline["provenance"]["llm_output_quality_notes"]
     assert worldline["provenance"]["chunk_history"][0]["status"] == "fallback"
     assert worldline["days"][0]["generation_source"] == "fallback"

@@ -562,6 +562,55 @@ def _call_openai_compatible(
 
 
 def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
+    text = _extract_llm_json_text(raw_text)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def diagnose_llm_json(raw_text: str) -> dict[str, object]:
+    stripped = raw_text.strip()
+    text = _extract_llm_json_text(raw_text)
+    diagnostics: dict[str, object] = {
+        "response_char_count": len(raw_text),
+        "response_empty": not bool(stripped),
+        "markdown_fence_detected": stripped.startswith("```"),
+        "probable_truncation": False,
+        "parse_error_type": None,
+        "parse_error_position": None,
+        "parse_error_line": None,
+        "parse_error_column": None,
+        "parse_error_message": None,
+    }
+    if not stripped:
+        diagnostics["parse_error_type"] = "empty_response"
+        return diagnostics
+    if "{" not in text:
+        diagnostics["parse_error_type"] = "no_json_object"
+        return diagnostics
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        probable_truncation = text.lstrip().startswith("{") and _has_unclosed_json_delimiters(text)
+        diagnostics.update(
+            {
+                "probable_truncation": probable_truncation,
+                "parse_error_type": "truncated_json" if probable_truncation else "malformed_json",
+                "parse_error_position": exc.pos,
+                "parse_error_line": exc.lineno,
+                "parse_error_column": exc.colno,
+                "parse_error_message": exc.msg,
+            }
+        )
+        return diagnostics
+    if not isinstance(payload, dict):
+        diagnostics["parse_error_type"] = "non_object_json"
+    return diagnostics
+
+
+def _extract_llm_json_text(raw_text: str) -> str:
     text = raw_text.strip()
     fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
     if fenced:
@@ -571,11 +620,32 @@ def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
         end = text.rfind("}")
         if start >= 0 and end > start:
             text = text[start : end + 1].strip()
-    try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
+    return text
+
+
+def _has_unclosed_json_delimiters(text: str) -> bool:
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    pairs = {"}": "{", "]": "["}
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "{[":
+            stack.append(character)
+        elif character in "}]":
+            if not stack or stack[-1] != pairs[character]:
+                return False
+            stack.pop()
+    return bool(stack) or in_string
 
 
 def build_report_from_payload(

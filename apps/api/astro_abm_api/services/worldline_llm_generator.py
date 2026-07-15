@@ -21,6 +21,7 @@ from astro_abm_api.services.llm_client import (
     _call_openai_compatible,
     build_llm_config,
     credential_status,
+    diagnose_llm_json,
     parse_llm_json,
     safety_check_text,
 )
@@ -217,6 +218,7 @@ def generate_worldline_chunk(
         "output_validation_status": "not_run",
         "safety_check_status": "not_run",
         "reason": "LLM worldline chunk did not complete.",
+        "response_diagnostics": None,
     }
     for attempt_count in range(1, MAX_WORLDLINE_CHUNK_ATTEMPTS + 1):
         attempt = _attempt_worldline_chunk(
@@ -257,6 +259,7 @@ def generate_worldline_chunk(
                     failed=False,
                     attempt_count=attempt_count,
                     last_error=None,
+                    response_diagnostics=attempt.get("response_diagnostics"),
                 ),
                 generation_config=generation_config,
                 continuity_status="consistent",
@@ -265,6 +268,7 @@ def generate_worldline_chunk(
             "output_validation_status": str(attempt["output_validation_status"]),
             "safety_check_status": str(attempt["safety_check_status"]),
             "reason": str(attempt["reason"]),
+            "response_diagnostics": attempt.get("response_diagnostics"),
         }
 
     return _fallback_chunk(
@@ -281,6 +285,7 @@ def generate_worldline_chunk(
         reason=last_failure["reason"],
         attempt_count=MAX_WORLDLINE_CHUNK_ATTEMPTS,
         generation_config=generation_config,
+        response_diagnostics=last_failure["response_diagnostics"],
     )
 
 
@@ -305,12 +310,14 @@ def _attempt_worldline_chunk(
         }
 
     parsed = parse_llm_json(raw_text)
+    response_diagnostics = diagnose_llm_json(raw_text)
     if parsed is None:
         return {
             "ok": False,
             "output_validation_status": "invalid_json",
             "safety_check_status": "not_run",
             "reason": "The LLM returned output that could not be parsed as strict JSON.",
+            "response_diagnostics": response_diagnostics,
         }
     if not safety_check_text(json.dumps(parsed, ensure_ascii=False)):
         return {
@@ -321,6 +328,7 @@ def _attempt_worldline_chunk(
                 "The LLM worldline chunk failed safety review and was replaced by "
                 "deterministic fallback."
             ),
+            "response_diagnostics": response_diagnostics,
         }
 
     try:
@@ -338,9 +346,15 @@ def _attempt_worldline_chunk(
             "output_validation_status": "invalid_payload",
             "safety_check_status": "not_run",
             "reason": str(exc),
+            "response_diagnostics": response_diagnostics,
         }
 
-    return {"ok": True, "parsed": parsed, "chunk_days": chunk_days}
+    return {
+        "ok": True,
+        "parsed": parsed,
+        "chunk_days": chunk_days,
+        "response_diagnostics": response_diagnostics,
+    }
 
 
 def _days_from_payload(
@@ -521,6 +535,7 @@ def _fallback_chunk(
     reason: str,
     attempt_count: int,
     generation_config: WorldlineGenerationConfig,
+    response_diagnostics: dict[str, object] | None = None,
 ) -> WorldlineSimulation:
     chunk_days = [
         _mark_day(
@@ -562,6 +577,7 @@ def _fallback_chunk(
             failed=True,
             attempt_count=attempt_count,
             last_error=reason,
+            response_diagnostics=response_diagnostics,
         ),
         generation_config=generation_config,
         continuity_status="consistent",
@@ -705,6 +721,7 @@ def _provenance(
     failed: bool,
     attempt_count: int,
     last_error: str | None,
+    response_diagnostics: dict[str, object] | None = None,
 ) -> dict[str, Any]:
     previous = report.worldline_simulation.provenance if report.worldline_simulation else {}
     previous_consecutive_failures = _previous_consecutive_failed_chunk_count(report)
@@ -727,6 +744,7 @@ def _provenance(
         "attempt_count": attempt_count,
         "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
         "last_error": last_error,
+        "response_diagnostics": response_diagnostics,
         "consecutive_failed_chunk_count": consecutive_failures,
         "generation_halted": generation_halted,
     }
@@ -747,6 +765,7 @@ def _provenance(
         "attempt_count": attempt_count,
         "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
         "last_error": last_error,
+        "response_diagnostics": response_diagnostics,
         "chunk_count": _previous_chunk_count(report) + 1,
         "failed_chunk_count": _previous_failed_chunk_count(report) + (1 if failed else 0),
         "consecutive_failed_chunk_count": consecutive_failures,
