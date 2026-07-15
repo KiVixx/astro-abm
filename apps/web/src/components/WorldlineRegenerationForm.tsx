@@ -239,7 +239,9 @@ export function WorldlineRegenerationForm({
         currentChunk: affectedChunks,
         message: finalStatus === "partial_fallback"
           ? t("worldline.regenerationPartialFallback")
-          : t("worldline.regenerateProgressDone"),
+          : finalStatus === "configuration_fallback"
+            ? t("worldline.regenerateProgressConfigurationFallback")
+            : t("worldline.regenerateProgressDone"),
         phase: "done",
         totalChunks: affectedChunks,
       });

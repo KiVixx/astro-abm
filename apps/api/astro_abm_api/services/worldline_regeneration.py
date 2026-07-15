@@ -105,6 +105,16 @@ def regenerate_worldline_from_chunk(
         if same_progressive_run
         else 0
     )
+    configuration_fallback_count = (
+        int(previous_regeneration.get("configuration_fallback_chunk_count") or 0)
+        if same_progressive_run
+        else 0
+    )
+    llm_failed_count = (
+        int(previous_regeneration.get("llm_failed_chunk_count") or 0)
+        if same_progressive_run
+        else 0
+    )
     consecutive_failed_count = (
         int(previous_regeneration.get("consecutive_failed_chunk_count") or 0)
         if same_progressive_run
@@ -176,25 +186,35 @@ def regenerate_worldline_from_chunk(
                 consecutive_failed_count = 0
             else:
                 fallback_count += 1
+                llm_failed_count += 1
                 consecutive_failed_count += 1
                 if first_failure is None:
                     first_failure = next((item for item in issues[1:] if item), issues[0])
                 if consecutive_failed_count >= 2:
                     generation_halted = True
         else:
+            configuration_fallback = _llm_configuration_fallback(generation_config)
             status = (
                 "fallback"
                 if generation_config.worldline_provider == "llm"
                 else "mock_completed"
             )
             output_validation = (
-                "llm_disabled_or_config_unavailable"
-                if generation_config.worldline_provider == "llm"
+                configuration_fallback[0]
+                if configuration_fallback is not None
                 else "not_run"
             )
             safety_check = "not_run"
             network_call = False
-            issues = _deterministic_issues(generation_config, preset_note)
+            issues = _deterministic_issues(
+                generation_config,
+                preset_note,
+                fallback_reason=(
+                    configuration_fallback[0]
+                    if configuration_fallback is not None
+                    else None
+                ),
+            )
             chunk_days = _regenerate_deterministic_chunk(
                 working_report,
                 chunk,
@@ -207,8 +227,24 @@ def regenerate_worldline_from_chunk(
                 "attempt_history": [],
                 "safety_violation_codes": [],
             }
+            if configuration_fallback is not None:
+                fallback_reason, recommended_action, _ = configuration_fallback
+                generation_details.update(
+                    {
+                        "fallback_reason": fallback_reason,
+                        "request_diagnostics": {
+                            "error_category": "configuration",
+                            "failure_kind": fallback_reason,
+                            "recommended_action": recommended_action,
+                            "exception_type": None,
+                            "retryable": False,
+                            "http_status": None,
+                        },
+                    }
+                )
             if generation_config.worldline_provider == "llm":
                 fallback_count += 1
+                configuration_fallback_count += 1
                 if first_failure is None:
                     first_failure = next((item for item in issues if item), None)
 
@@ -260,6 +296,7 @@ def regenerate_worldline_from_chunk(
         llm_completed_count=llm_completed_count,
         fallback_count=fallback_count,
         skipped_count=skipped_count,
+        configuration_fallback_count=configuration_fallback_count,
         worldline_provider=generation_config.worldline_provider,
     )
     working_report = _finalize_regeneration(
@@ -268,6 +305,8 @@ def regenerate_worldline_from_chunk(
         llm_completed_count=llm_completed_count,
         fallback_count=fallback_count,
         skipped_count=skipped_count,
+        configuration_fallback_count=configuration_fallback_count,
+        llm_failed_count=llm_failed_count,
         generation_halted=generation_halted,
         consecutive_failed_count=consecutive_failed_count,
         first_failure=first_failure,
@@ -429,6 +468,38 @@ def _should_use_llm(config: WorldlineGenerationConfig) -> bool:
         and bool(config.llm_base_url)
         and bool(config.llm_model)
     )
+
+
+def _llm_configuration_fallback(
+    config: WorldlineGenerationConfig,
+) -> tuple[str, str, str] | None:
+    if config.worldline_provider != "llm":
+        return None
+    if config.llm_provider != "openai_compatible":
+        return (
+            "unsupported_llm_provider",
+            "select_openai_compatible",
+            "OpenAI-compatible LLM mode was not configured; deterministic fallback was used without a network call.",
+        )
+    if config.llm_real_enabled is not True:
+        return (
+            "real_llm_disabled",
+            "enable_real_llm",
+            "Real LLM calls were disabled; deterministic fallback was used without a network call.",
+        )
+    if not config.llm_base_url:
+        return (
+            "llm_base_url_missing",
+            "configure_endpoint",
+            "The LLM base URL was missing; deterministic fallback was used without a network call.",
+        )
+    if not config.llm_model:
+        return (
+            "llm_model_missing",
+            "configure_model",
+            "The LLM model was missing; deterministic fallback was used without a network call.",
+        )
+    return None
 
 
 def _regenerate_llm_chunk(
@@ -593,6 +664,17 @@ def _updated_provenance(
         for item in chunk_history
         if item.get("status") in {"fallback", "skipped_after_halt"}
     )
+    fallback_reason_counts = _fallback_reason_counts(chunk_history)
+    configuration_fallback_count = sum(
+        fallback_reason_counts.get(reason, 0)
+        for reason in _CONFIGURATION_FALLBACK_REASONS
+    )
+    llm_failed_count = sum(
+        1
+        for item in chunk_history
+        if item.get("status") == "fallback"
+        and item.get("fallback_reason") not in _CONFIGURATION_FALLBACK_REASONS
+    )
     return {
         **existing.provenance,
         "generation_mode": (
@@ -609,6 +691,9 @@ def _updated_provenance(
         "credential_status": generation_config.credential_status,
         "chunk_count": len(chunk_history),
         "failed_chunk_count": failed_count,
+        "configuration_fallback_chunk_count": configuration_fallback_count,
+        "llm_failed_chunk_count": llm_failed_count,
+        "fallback_reason_counts": fallback_reason_counts,
         "chunk_history": chunk_history,
     }
 
@@ -688,12 +773,15 @@ def _regeneration_status(
     llm_completed_count: int,
     fallback_count: int,
     skipped_count: int,
+    configuration_fallback_count: int,
     worldline_provider: str,
 ) -> str:
     if worldline_provider != "llm":
         return "completed"
     if fallback_count == 0 and skipped_count == 0:
         return "completed"
+    if fallback_count > 0 and fallback_count == configuration_fallback_count and skipped_count == 0:
+        return "configuration_fallback"
     if llm_completed_count > 0:
         return "partial_fallback"
     return "failed_fallback"
@@ -706,6 +794,8 @@ def _finalize_regeneration(
     llm_completed_count: int,
     fallback_count: int,
     skipped_count: int,
+    configuration_fallback_count: int,
+    llm_failed_count: int,
     generation_halted: bool,
     consecutive_failed_count: int,
     first_failure: str | None,
@@ -724,6 +814,8 @@ def _finalize_regeneration(
         "llm_completed_chunk_count": llm_completed_count,
         "fallback_chunk_count": fallback_count,
         "skipped_chunk_count": skipped_count,
+        "configuration_fallback_chunk_count": configuration_fallback_count,
+        "llm_failed_chunk_count": llm_failed_count,
         "generation_halted": generation_halted,
         "consecutive_failed_chunk_count": consecutive_failed_count,
         "error_summary": first_failure,
@@ -734,6 +826,8 @@ def _finalize_regeneration(
         "last_regeneration_llm_completed_chunk_count": llm_completed_count,
         "last_regeneration_fallback_chunk_count": fallback_count,
         "last_regeneration_skipped_chunk_count": skipped_count,
+        "last_regeneration_configuration_fallback_chunk_count": configuration_fallback_count,
+        "last_regeneration_llm_failed_chunk_count": llm_failed_count,
         "generation_halted": generation_halted,
         "halt_reason": (
             "Two consecutive LLM chunks failed during regeneration; remaining network calls were skipped."
@@ -745,6 +839,7 @@ def _finalize_regeneration(
         "completed": "completed",
         "partial_fallback": "completed_with_fallback",
         "failed_fallback": "fallback",
+        "configuration_fallback": "completed_with_fallback",
     }[regeneration_status]
     return report.model_copy(
         update={
@@ -762,18 +857,51 @@ def _finalize_regeneration(
 def _deterministic_issues(
     config: WorldlineGenerationConfig,
     preset_note: str | None,
+    *,
+    fallback_reason: str | None = None,
 ) -> list[str]:
-    issues = [
-        "Regenerated with deterministic path-dependent fallback.",
-        "No API key or secret was saved or reused from the scenario file.",
-    ]
-    if config.worldline_provider == "llm":
-        issues.append(
-            "Original worldline mode was LLM, but real LLM settings or credentials were unavailable at regeneration time."
-        )
+    configuration_fallback = _llm_configuration_fallback(config)
+    reason_message = (
+        configuration_fallback[2]
+        if configuration_fallback is not None and configuration_fallback[0] == fallback_reason
+        else "Regenerated with deterministic path-dependent fallback."
+    )
+    issues = [reason_message, "No API key or secret was saved or reused from the scenario file."]
     if preset_note:
         issues.append(preset_note)
     return issues
+
+
+_CONFIGURATION_FALLBACK_REASONS = {
+    "unsupported_llm_provider",
+    "real_llm_disabled",
+    "llm_base_url_missing",
+    "llm_model_missing",
+    "legacy_configuration_unavailable",
+}
+
+
+def _fallback_reason_counts(
+    chunk_history: list[dict[str, object]],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in chunk_history:
+        reason = item.get("fallback_reason")
+        if (
+            not reason
+            and item.get("status") == "fallback"
+            and not item.get("network_call_performed")
+            and item.get("output_validation_status")
+            in {
+                "configuration_missing",
+                "llm_disabled_or_config_unavailable",
+                "not_run",
+            }
+        ):
+            reason = "legacy_configuration_unavailable"
+        if isinstance(reason, str) and reason:
+            counts[reason] = counts.get(reason, 0) + 1
+    return counts
 
 
 def _coerce_chunk_days(value: object) -> Literal[1, 2, 3, 5]:

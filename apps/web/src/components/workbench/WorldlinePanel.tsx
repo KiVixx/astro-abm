@@ -10,7 +10,10 @@ import type {
 import { worldlineGenerationMode } from "@/lib/worldline";
 import { formatAgentName } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
-import { worldlineDisplayStatus } from "@/lib/worldlineStatus";
+import {
+  worldlineDisplayStatus,
+  worldlineFallbackBreakdown,
+} from "@/lib/worldlineStatus";
 
 interface WorldlinePanelProps {
   primary?: boolean;
@@ -214,7 +217,8 @@ function WorldlineReviewHeader({
 }) {
   const { t } = useI18n();
   const provenance = simulation.provenance || {};
-  const failedChunks = numberFromUnknown(provenance.failed_chunk_count);
+  const fallbackBreakdown = worldlineFallbackBreakdown(simulation);
+  const failedChunks = fallbackBreakdown.llmFailed;
   const chunkHistory = arrayOfRecords(provenance.chunk_history);
   const regeneration = regenerationOutcome(simulation.last_regeneration, chunkHistory);
   const qualityNotes = stringArray(provenance.llm_output_quality_notes);
@@ -249,10 +253,19 @@ function WorldlineReviewHeader({
         <p className="notice warning">{t("worldline.interruptedRegenerationDetected")}</p>
       ) : null}
       {simulation.last_regeneration ? (
-        <div className={regeneration.status === "completed" ? "notice" : "notice warning"}>
+        <div
+          className={
+            regeneration.status === "completed"
+              || regeneration.status === "configuration_fallback"
+              ? "notice"
+              : "notice warning"
+          }
+        >
           <strong>
             {regeneration.status === "completed"
               ? t("worldline.regenerationSucceeded")
+              : regeneration.status === "configuration_fallback"
+                ? t("worldline.regenerationConfigurationFallback")
               : regeneration.status === "partial_fallback"
                 ? t("worldline.regenerationPartialFallback")
                 : t("worldline.regenerationFailedFallback")}
@@ -266,7 +279,13 @@ function WorldlineReviewHeader({
             {t("worldline.fallbackChunks")}: {regeneration.fallback} · {" "}
             {t("worldline.skippedChunks")}: {regeneration.skipped}
           </p>
-          {regeneration.error ? <p>{t("worldline.failureReason")}: {regeneration.error}</p> : null}
+          {regeneration.error ? (
+            <p>
+              {regeneration.status === "configuration_fallback"
+                ? t("worldline.configurationFallbackReason")
+                : t("worldline.failureReason")}: {regeneration.error}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {regenerationMessage ? <p className="muted">{regenerationMessage}</p> : null}
@@ -277,6 +296,21 @@ function WorldlineReviewHeader({
         <p className="notice warning">
           {t("worldline.failedChunkWarning")}: {failedChunks}
         </p>
+      ) : null}
+      {fallbackBreakdown.configurationFallback > 0 ? (
+        <div className="notice">
+          <strong>
+            {t("worldline.configurationFallbackChunks")}: {fallbackBreakdown.configurationFallback}
+          </strong>
+          <p>{t("worldline.configurationFallbackHelp")}</p>
+          <div className="tag-row">
+            {Object.entries(fallbackBreakdown.reasonCounts).map(([reason, count]) => (
+              <span className="tag" key={reason}>
+                {t(`worldline.failureKind.${reason}`, reason)}: {count}
+              </span>
+            ))}
+          </div>
+        </div>
       ) : null}
       {Boolean(provenance.generation_halted) ? (
         <p className="notice warning">

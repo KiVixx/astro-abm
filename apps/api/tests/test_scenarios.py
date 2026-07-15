@@ -1617,6 +1617,190 @@ def test_worldline_regenerate_missing_generation_config_falls_back_safely(
     assert worldline["last_regeneration"]["preset_note"]
 
 
+@pytest.mark.parametrize(
+    ("config_updates", "fallback_reason", "recommended_action"),
+    [
+        (
+            {
+                "llm_real_enabled": False,
+                "llm_base_url": "http://llm.local/v1",
+                "llm_model": "test-model",
+            },
+            "real_llm_disabled",
+            "enable_real_llm",
+        ),
+        (
+            {
+                "llm_real_enabled": True,
+                "llm_base_url": "http://llm.local/v1",
+                "llm_model": None,
+            },
+            "llm_model_missing",
+            "configure_model",
+        ),
+    ],
+)
+def test_worldline_regeneration_distinguishes_configuration_fallback(
+    monkeypatch,
+    tmp_path: Path,
+    config_updates: dict[str, object],
+    fallback_reason: str,
+    recommended_action: str,
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+
+    def unexpected_network_call(*args, **kwargs):
+        raise AssertionError("configuration fallback must not call the LLM endpoint")
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        unexpected_network_call,
+    )
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_id = created["scenario_id"]
+    scenario_path = tmp_path / f"{scenario_id}.json"
+    saved_report = json.loads(scenario_path.read_text(encoding="utf-8"))
+    generation_config = saved_report["worldline_simulation"]["generation_config"]
+    generation_config.update(
+        {
+            "worldline_provider": "llm",
+            "llm_provider": "openai_compatible",
+            **config_updates,
+        }
+    )
+    scenario_path.write_text(json.dumps(saved_report), encoding="utf-8")
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"]
+    assert len(history) == 2
+    assert all(item["status"] == "fallback" for item in history)
+    assert all(item["fallback_reason"] == fallback_reason for item in history)
+    assert all(item["network_call_performed"] is False for item in history)
+    assert all(item["request_diagnostics"]["error_category"] == "configuration" for item in history)
+    assert all(item["request_diagnostics"]["failure_kind"] == fallback_reason for item in history)
+    assert all(
+        item["request_diagnostics"]["recommended_action"] == recommended_action
+        for item in history
+    )
+    assert worldline["provenance"]["configuration_fallback_chunk_count"] == 2
+    assert worldline["provenance"]["llm_failed_chunk_count"] == 0
+    assert worldline["provenance"]["fallback_reason_counts"] == {
+        fallback_reason: 2
+    }
+    assert worldline["last_regeneration"]["configuration_fallback_chunk_count"] == 2
+    assert worldline["last_regeneration"]["llm_failed_chunk_count"] == 0
+    assert response.json()["regeneration_status"] == "configuration_fallback"
+    assert worldline["last_regeneration"]["status"] == "configuration_fallback"
+    assert all(
+        "settings or credentials were unavailable" not in " ".join(item["issues"])
+        for item in history
+    )
+
+
+def test_worldline_regeneration_counts_actual_llm_failure_separately(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from astro_abm_api.services.worldline_simulation import (
+        generate_worldline_days_for_range,
+    )
+
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-01", "worldline_chunk_days": 1})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_id = created["scenario_id"]
+    scenario_path = tmp_path / f"{scenario_id}.json"
+    saved_report = json.loads(scenario_path.read_text(encoding="utf-8"))
+    saved_report["worldline_simulation"]["generation_config"].update(
+        {
+            "worldline_provider": "llm",
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+        }
+    )
+    scenario_path.write_text(json.dumps(saved_report), encoding="utf-8")
+
+    def failed_llm_chunk(report, chunk, chunks, previous_state, config, api_key):
+        days = generate_worldline_days_for_range(
+            report,
+            start_date=chunk.start_date,
+            end_date=chunk.end_date,
+            previous_state=previous_state,
+            generation_source="fallback",
+            chunk_index=chunk.chunk_index,
+            chunk_status="fallback",
+            quality_notes=["LLM request failed safely."],
+        )
+        return (
+            days,
+            "fallback",
+            "request_failed",
+            "not_run",
+            True,
+            ["LLM request failed safely."],
+            {
+                "attempt_count": 3,
+                "request_diagnostics": {
+                    "error_category": "timeout",
+                    "failure_kind": "request_timeout",
+                    "recommended_action": "retry_later",
+                    "retryable": True,
+                    "http_status": None,
+                },
+            },
+        )
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.worldline_regeneration._regenerate_llm_chunk",
+        failed_llm_chunk,
+    )
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    assert response.json()["regeneration_status"] == "failed_fallback"
+    assert worldline["provenance"]["configuration_fallback_chunk_count"] == 0
+    assert worldline["provenance"]["llm_failed_chunk_count"] == 1
+    assert worldline["last_regeneration"]["configuration_fallback_chunk_count"] == 0
+    assert worldline["last_regeneration"]["llm_failed_chunk_count"] == 1
+    assert worldline["provenance"]["chunk_history"][0]["network_call_performed"] is True
+
+
+def test_legacy_non_network_fallback_is_classified_conservatively() -> None:
+    from astro_abm_api.services.worldline_regeneration import (
+        _fallback_reason_counts,
+    )
+
+    counts = _fallback_reason_counts(
+        [
+            {
+                "status": "fallback",
+                "network_call_performed": False,
+                "output_validation_status": "llm_disabled_or_config_unavailable",
+            }
+        ]
+    )
+
+    assert counts == {"legacy_configuration_unavailable": 1}
+
+
 def test_worldline_chunk_retries_before_fallback(
     monkeypatch, tmp_path: Path
 ) -> None:
