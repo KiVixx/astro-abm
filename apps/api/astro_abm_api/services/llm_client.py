@@ -38,7 +38,7 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_OUTPUT_TOKENS = 5000
 RAW_TEXT_PREVIEW_LIMIT = 800
 
-BANNED_SAFETY_PATTERNS = (
+TRADING_INSTRUCTION_PATTERNS = (
     r"\bmust\s+buy\b",
     r"\bmust\s+sell\b",
     r"\byou\s+should\s+buy\b",
@@ -63,12 +63,28 @@ BANNED_SAFETY_PATTERNS = (
     r"\blong signal\b",
     r"price target",
     r"trading recommendation",
+)
+
+CERTAINTY_PATTERNS = (
     r"guaranteed",
     r"predicts with certainty",
+)
+
+CAUSAL_CLAIM_PATTERNS = (
     r"\bcaused\b",
     r"\bcauses\b",
+)
+
+GUARANTEED_DIRECTION_PATTERNS = (
     r"will rise",
     r"will fall",
+)
+
+BANNED_SAFETY_PATTERNS = (
+    *TRADING_INSTRUCTION_PATTERNS,
+    *CERTAINTY_PATTERNS,
+    *CAUSAL_CLAIM_PATTERNS,
+    *GUARANTEED_DIRECTION_PATTERNS,
 )
 
 CHINESE_TRADING_INSTRUCTION_TERMS = (
@@ -679,10 +695,25 @@ def build_report_from_payload(
 
 
 def safety_check_text(text: str) -> bool:
+    return not safety_violation_codes(text)
+
+
+def safety_violation_codes(text: str) -> list[str]:
     lowered = text.lower()
-    if any(re.search(pattern, lowered) for pattern in BANNED_SAFETY_PATTERNS):
-        return False
-    return not _contains_unsafe_chinese_trading_language(text)
+    checks = (
+        ("trading_instruction", TRADING_INSTRUCTION_PATTERNS),
+        ("certainty_claim", CERTAINTY_PATTERNS),
+        ("causal_claim", CAUSAL_CLAIM_PATTERNS),
+        ("guaranteed_direction", GUARANTEED_DIRECTION_PATTERNS),
+    )
+    codes = [
+        code
+        for code, patterns in checks
+        if any(re.search(pattern, lowered) for pattern in patterns)
+    ]
+    if _contains_unsafe_chinese_trading_language(text):
+        codes.append("chinese_trading_instruction")
+    return codes
 
 
 def _contains_unsafe_chinese_trading_language(text: str) -> bool:

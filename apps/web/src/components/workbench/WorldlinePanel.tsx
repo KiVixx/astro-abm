@@ -373,6 +373,12 @@ function ChunkAttemptHistory({ value }: { value: unknown }) {
               </span>
               <span className="tag">{String(attempt.safety_check_status || "unknown")}</span>
             </div>
+            {Array.isArray(attempt.safety_violation_codes) && attempt.safety_violation_codes.length ? (
+              <p className="notice warning">
+                <strong>{t("worldline.safetyRuleCategories")}:</strong>{" "}
+                {attempt.safety_violation_codes.map(String).join(", ")}
+              </p>
+            ) : null}
             {attempt.reason ? <p className="muted">{String(attempt.reason)}</p> : null}
             <ChunkResponseDiagnostics value={attempt.response_diagnostics} />
           </div>

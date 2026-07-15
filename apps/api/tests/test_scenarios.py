@@ -11,7 +11,11 @@ from fastapi.testclient import TestClient
 
 from astro_abm_api.main import app
 from astro_abm_api.models.report import ScenarioReport
-from astro_abm_api.services.llm_client import diagnose_llm_json, safety_check_text
+from astro_abm_api.services.llm_client import (
+    diagnose_llm_json,
+    safety_check_text,
+    safety_violation_codes,
+)
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
 from astro_abm_api.services.worldline_llm_prompts import (
@@ -101,6 +105,15 @@ def test_safety_checker_rejects_explicit_trading_instruction_phrases(
     unsafe_text: str,
 ) -> None:
     assert not safety_check_text(unsafe_text)
+
+
+def test_safety_checker_reports_categories_without_retaining_input() -> None:
+    unsafe_text = "You must buy BTC because it will rise."
+
+    codes = safety_violation_codes(unsafe_text)
+
+    assert codes == ["trading_instruction", "guaranteed_direction"]
+    assert unsafe_text not in json.dumps(codes)
 
 
 def test_llm_json_diagnostics_identify_truncation_without_retaining_content() -> None:
@@ -1602,6 +1615,10 @@ def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
     worldline = chunk_response.json()["report"]["worldline_simulation"]
     assert chunk_response.json()["worldline_status"] == "fallback"
     assert worldline["provenance"]["safety_check_status"] == "failed"
+    assert worldline["provenance"]["safety_violation_codes"] == ["trading_instruction"]
+    assert worldline["provenance"]["chunk_history"][0]["attempt_history"][0][
+        "safety_violation_codes"
+    ] == ["trading_instruction"]
     assert "must buy BTC" not in response_text
 
 

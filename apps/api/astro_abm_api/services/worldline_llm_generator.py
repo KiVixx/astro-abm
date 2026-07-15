@@ -24,7 +24,7 @@ from astro_abm_api.services.llm_client import (
     credential_status,
     diagnose_llm_json,
     parse_llm_json,
-    safety_check_text,
+    safety_violation_codes,
 )
 from astro_abm_api.services.worldline_llm_context import build_worldline_llm_context
 from astro_abm_api.services.worldline_llm_prompts import (
@@ -223,6 +223,7 @@ def generate_worldline_chunk(
         "safety_check_status": "not_run",
         "reason": "LLM worldline chunk did not complete.",
         "response_diagnostics": None,
+        "safety_violation_codes": [],
     }
     attempt_history: list[dict[str, object]] = []
     for attempt_count in range(1, MAX_WORLDLINE_CHUNK_ATTEMPTS + 1):
@@ -243,6 +244,7 @@ def generate_worldline_chunk(
                     safety_check_status="passed",
                     reason="Chunk output passed JSON validation and safety review.",
                     response_diagnostics=attempt.get("response_diagnostics"),
+                    safety_violation_codes=[],
                 )
             )
             parsed = attempt["parsed"]
@@ -275,6 +277,7 @@ def generate_worldline_chunk(
                     last_error=None,
                     response_diagnostics=attempt.get("response_diagnostics"),
                     attempt_history=attempt_history,
+                    safety_violation_codes=[],
                 ),
                 generation_config=generation_config,
                 continuity_status="consistent",
@@ -284,6 +287,7 @@ def generate_worldline_chunk(
             "safety_check_status": str(attempt["safety_check_status"]),
             "reason": str(attempt["reason"]),
             "response_diagnostics": attempt.get("response_diagnostics"),
+            "safety_violation_codes": attempt.get("safety_violation_codes", []),
         }
         attempt_history.append(
             _attempt_history_entry(
@@ -292,6 +296,7 @@ def generate_worldline_chunk(
                 safety_check_status=last_failure["safety_check_status"],
                 reason=last_failure["reason"],
                 response_diagnostics=last_failure["response_diagnostics"],
+                safety_violation_codes=last_failure["safety_violation_codes"],
             )
         )
         if attempt_count < MAX_WORLDLINE_CHUNK_ATTEMPTS:
@@ -322,6 +327,7 @@ def generate_worldline_chunk(
         generation_config=generation_config,
         response_diagnostics=last_failure["response_diagnostics"],
         attempt_history=attempt_history,
+        safety_violation_codes=last_failure["safety_violation_codes"],
     )
     if failed_simulation.provenance.get("generation_halted"):
         return _mark_remaining_chunks_after_halt(failed_simulation, report, request)
@@ -358,7 +364,9 @@ def _attempt_worldline_chunk(
             "reason": "The LLM returned output that could not be parsed as strict JSON.",
             "response_diagnostics": response_diagnostics,
         }
-    if not safety_check_text(json.dumps(parsed, ensure_ascii=False)):
+    parsed_text = json.dumps(parsed, ensure_ascii=False)
+    violation_codes = safety_violation_codes(parsed_text)
+    if violation_codes:
         return {
             "ok": False,
             "output_validation_status": "valid_json",
@@ -368,6 +376,7 @@ def _attempt_worldline_chunk(
                 "deterministic fallback."
             ),
             "response_diagnostics": response_diagnostics,
+            "safety_violation_codes": violation_codes,
         }
 
     try:
@@ -576,6 +585,7 @@ def _fallback_chunk(
     generation_config: WorldlineGenerationConfig,
     response_diagnostics: dict[str, object] | None = None,
     attempt_history: list[dict[str, object]] | None = None,
+    safety_violation_codes: list[str] | None = None,
 ) -> WorldlineSimulation:
     chunk_days = [
         _mark_day(
@@ -619,6 +629,7 @@ def _fallback_chunk(
             last_error=reason,
             response_diagnostics=response_diagnostics,
             attempt_history=attempt_history,
+            safety_violation_codes=safety_violation_codes,
         ),
         generation_config=generation_config,
         continuity_status="consistent",
@@ -764,6 +775,7 @@ def _provenance(
     last_error: str | None,
     response_diagnostics: dict[str, object] | None = None,
     attempt_history: list[dict[str, object]] | None = None,
+    safety_violation_codes: list[str] | None = None,
 ) -> dict[str, Any]:
     previous = report.worldline_simulation.provenance if report.worldline_simulation else {}
     previous_consecutive_failures = _previous_consecutive_failed_chunk_count(report)
@@ -788,6 +800,7 @@ def _provenance(
         "last_error": last_error,
         "response_diagnostics": response_diagnostics,
         "attempt_history": attempt_history or [],
+        "safety_violation_codes": safety_violation_codes or [],
         "consecutive_failed_chunk_count": consecutive_failures,
         "generation_halted": generation_halted,
     }
@@ -810,6 +823,7 @@ def _provenance(
         "last_error": last_error,
         "response_diagnostics": response_diagnostics,
         "attempt_history": attempt_history or [],
+        "safety_violation_codes": safety_violation_codes or [],
         "chunk_count": _previous_chunk_count(report) + 1,
         "failed_chunk_count": _previous_failed_chunk_count(report) + (1 if failed else 0),
         "consecutive_failed_chunk_count": consecutive_failures,
@@ -839,6 +853,7 @@ def _attempt_history_entry(
     safety_check_status: str,
     reason: object,
     response_diagnostics: object,
+    safety_violation_codes: object,
 ) -> dict[str, object]:
     return {
         "attempt": attempt,
@@ -846,6 +861,7 @@ def _attempt_history_entry(
         "safety_check_status": safety_check_status,
         "reason": str(reason),
         "response_diagnostics": response_diagnostics,
+        "safety_violation_codes": safety_violation_codes,
     }
 
 
