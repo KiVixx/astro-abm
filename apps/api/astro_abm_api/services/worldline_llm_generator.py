@@ -282,7 +282,7 @@ def generate_worldline_chunk(
                 next_attempt=attempt_count + 1,
             )
 
-    return _fallback_chunk(
+    failed_simulation = _fallback_chunk(
         report,
         fallback,
         request,
@@ -298,6 +298,9 @@ def generate_worldline_chunk(
         generation_config=generation_config,
         response_diagnostics=last_failure["response_diagnostics"],
     )
+    if failed_simulation.provenance.get("generation_halted"):
+        return _mark_remaining_chunks_after_halt(failed_simulation, report, request)
+    return failed_simulation
 
 
 def _attempt_worldline_chunk(
@@ -842,13 +845,114 @@ def _generation_circuit_is_open(
     history = simulation.provenance.get("chunk_history")
     if not isinstance(history, list) or not history:
         return True
-    last_entry = history[-1]
-    if not isinstance(last_entry, dict):
-        return True
-    try:
-        return request.chunk_index > int(last_entry.get("chunk_index", 0))
-    except (TypeError, ValueError):
-        return True
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            matches_request = int(entry.get("chunk_index", 0)) == request.chunk_index
+        except (TypeError, ValueError):
+            continue
+        if matches_request and entry.get("status") == "skipped_after_halt":
+            return True
+    attempted_indices = []
+    for entry in history:
+        if not isinstance(entry, dict) or entry.get("status") == "skipped_after_halt":
+            continue
+        try:
+            attempted_indices.append(int(entry.get("chunk_index", 0)))
+        except (TypeError, ValueError):
+            continue
+    return not attempted_indices or request.chunk_index > max(attempted_indices)
+
+
+def _mark_remaining_chunks_after_halt(
+    simulation: WorldlineSimulation,
+    report: ScenarioReport,
+    request: ScenarioWorldlineChunkRequest,
+) -> WorldlineSimulation:
+    reason = str(
+        simulation.provenance.get("halt_reason")
+        or "LLM worldline generation halted after consecutive chunk failures."
+    )
+    future_dates = sorted(
+        snapshot.date
+        for snapshot in report.daily_timeline
+        if snapshot.date > request.chunk_end_date
+    )
+    if not future_dates:
+        return simulation
+
+    history = _merge_chunk_history(simulation.provenance.get("chunk_history"), None)
+    existing_indices = {
+        int(entry.get("chunk_index", 0))
+        for entry in history
+        if isinstance(entry, dict) and str(entry.get("chunk_index", "")).isdigit()
+    }
+    by_date = {day.date: day for day in simulation.days}
+    skipped_note = (
+        "LLM call was skipped after the generation circuit breaker opened; "
+        "deterministic fallback was retained."
+    )
+    chunk_size = max(1, request.worldline_chunk_days)
+    for offset in range(0, len(future_dates), chunk_size):
+        dates = future_dates[offset : offset + chunk_size]
+        chunk_index = request.chunk_index + offset // chunk_size + 1
+        if chunk_index > request.total_chunks or chunk_index in existing_indices:
+            continue
+        for current_date in dates:
+            day = by_date.get(current_date)
+            if day is not None:
+                by_date[current_date] = _mark_day(
+                    day,
+                    generation_source="fallback",
+                    chunk_index=chunk_index,
+                    chunk_status="skipped_after_halt",
+                    quality_notes=[skipped_note, reason],
+                )
+        history.append(
+            {
+                "chunk_index": chunk_index,
+                "total_chunks": request.total_chunks,
+                "chunk_start_date": dates[0].isoformat(),
+                "chunk_end_date": dates[-1].isoformat(),
+                "status": "skipped_after_halt",
+                "output_validation_status": "skipped_after_consecutive_failures",
+                "safety_check_status": "not_run",
+                "network_call_performed": False,
+                "attempt_count": 0,
+                "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
+                "last_error": reason,
+                "response_diagnostics": None,
+                "consecutive_failed_chunk_count": MAX_CONSECUTIVE_FAILED_CHUNKS,
+                "generation_halted": True,
+            }
+        )
+        existing_indices.add(chunk_index)
+
+    history.sort(key=lambda entry: int(entry.get("chunk_index", 0)))
+    skipped_count = sum(
+        1 for entry in history if entry.get("status") == "skipped_after_halt"
+    )
+    return simulation.model_copy(
+        update={
+            "days": ensure_worldline_state_continuity(
+                [by_date[key] for key in sorted(by_date)]
+            ),
+            "caveats": _merge_strings(simulation.caveats, [skipped_note]),
+            "provenance": {
+                **simulation.provenance,
+                "chunk_count": len(history),
+                "skipped_chunk_count": skipped_count,
+                "chunk_history": history,
+                "llm_output_quality_notes": _merge_strings(
+                    _string_list(
+                        simulation.provenance.get("llm_output_quality_notes")
+                    ),
+                    [skipped_note],
+                ),
+            },
+        }
+    )
 
 
 def _halted_generation(

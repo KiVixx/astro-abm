@@ -178,6 +178,11 @@ function WorldlineProvenanceTags({
         {t("worldline.failedChunks")}:{" "}
         {String(provenance.failed_chunk_count || 0)}
       </span>
+      {numberFromUnknown(provenance.skipped_chunk_count) > 0 ? (
+        <span className="tag">
+          {t("worldline.skippedChunks")}: {String(provenance.skipped_chunk_count)}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -1442,7 +1442,7 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
     )
     client = TestClient(app)
     payload = scenario_payload()
-    payload["end_date"] = "2026-07-03"
+    payload["end_date"] = "2026-07-05"
     create_response = client.post("/scenarios", json=payload)
     assert create_response.status_code == 200
     scenario_id = create_response.json()["scenario_id"]
@@ -1463,7 +1463,7 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
                     "chunk_start_date": chunk_date,
                     "chunk_end_date": chunk_date,
                     "chunk_index": chunk_index,
-                    "total_chunks": 3,
+                    "total_chunks": 5,
                     "worldline_chunk_days": 1,
                 },
             )
@@ -1477,11 +1477,32 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
     assert responses[1].json()["worldline_status"] == "fallback"
     assert responses[1].json()["consecutive_failed_chunk_count"] == 2
     assert responses[1].json()["generation_halted"] is True
+    halted_worldline = responses[1].json()["report"]["worldline_simulation"]
+    halted_history = halted_worldline["provenance"]["chunk_history"]
+    assert [item["status"] for item in halted_history] == [
+        "fallback",
+        "fallback",
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+    ]
+    assert halted_worldline["provenance"]["failed_chunk_count"] == 2
+    assert halted_worldline["provenance"]["skipped_chunk_count"] == 3
+    assert all(
+        item["network_call_performed"] is False and item["attempt_count"] == 0
+        for item in halted_history[2:]
+    )
+    assert [day["chunk_status"] for day in halted_worldline["days"][2:]] == [
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+    ]
+    assert_worldline_state_continuity(halted_worldline["days"])
     assert responses[2].json()["worldline_status"] == "halted"
     assert responses[2].json()["generation_halted"] is True
     worldline = responses[2].json()["report"]["worldline_simulation"]
-    assert worldline["provenance"]["chunk_count"] == 2
-    assert len(worldline["provenance"]["chunk_history"]) == 2
+    assert worldline["provenance"]["chunk_count"] == 5
+    assert len(worldline["provenance"]["chunk_history"]) == 5
     assert "two consecutive chunks" in worldline["provenance"]["halt_reason"]
 
 
