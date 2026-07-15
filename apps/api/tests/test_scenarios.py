@@ -485,6 +485,33 @@ def test_delete_missing_scenario_returns_404(monkeypatch, tmp_path: Path) -> Non
     assert response.json()["detail"] == "scenario not found"
 
 
+@pytest.mark.parametrize(
+    ("content", "category"),
+    [
+        ('{"secret": "must-not-appear"', "invalid_json"),
+        ('{"title": "private-title-not-for-errors"}', "invalid_report_schema"),
+    ],
+)
+def test_get_unreadable_scenario_returns_safe_422(
+    monkeypatch,
+    tmp_path: Path,
+    content: str,
+    category: str,
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    (tmp_path / "legacy_report.json").write_text(content, encoding="utf-8")
+    client = TestClient(app)
+
+    response = client.get("/scenarios/legacy_report")
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": f"scenario report is unreadable ({category})"
+    }
+    assert "must-not-appear" not in response.text
+    assert "private-title-not-for-errors" not in response.text
+
+
 def test_future_date_uses_computed_ephemeris_without_market_observations(
     monkeypatch, tmp_path: Path
 ) -> None:

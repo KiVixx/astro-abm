@@ -68,3 +68,14 @@ def test_list_summaries_does_not_log_invalid_report_values(
     assert "legacy_report.json" in caplog.text
     assert "invalid_report_schema" in caplog.text
     assert "private-title-not-for-logs" not in caplog.text
+
+
+def test_load_raises_safe_error_without_report_values(tmp_path: Path) -> None:
+    invalid = tmp_path / "legacy_report.json"
+    invalid.write_text('{"title": "private-title-not-for-errors"}', encoding="utf-8")
+
+    with pytest.raises(scenario_store.ScenarioUnreadableError) as captured:
+        scenario_store.ScenarioStore(tmp_path).load("legacy_report")
+
+    assert captured.value.category == "invalid_report_schema"
+    assert "private-title-not-for-errors" not in str(captured.value)

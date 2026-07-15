@@ -39,6 +39,8 @@ can leave Markdown one revision behind until the next successful save.
 Atomic updates preserve the permissions of existing report files.
 The list endpoint skips an unreadable legacy report and logs only its filename
 and a safe error category; report contents and validation values are not logged.
+Opening an unreadable report returns HTTP `422` with the same safe category
+instead of exposing raw JSON or schema-validation values.
 
 Override the output directory for tests or local experiments:
 

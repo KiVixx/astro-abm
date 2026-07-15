@@ -21,6 +21,12 @@ class ScenarioNotFoundError(FileNotFoundError):
     pass
 
 
+class ScenarioUnreadableError(RuntimeError):
+    def __init__(self, category: str) -> None:
+        self.category = category
+        super().__init__(f"scenario report is unreadable ({category})")
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
@@ -134,7 +140,17 @@ class ScenarioStore:
         json_path = self._path_for(scenario_id, ".json")
         if not json_path.exists():
             raise ScenarioNotFoundError(scenario_id)
-        return ScenarioReport.model_validate_json(json_path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            return ScenarioReport.model_validate(data)
+        except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
+            category = _report_read_error_category(error)
+            logger.warning(
+                "Unable to load scenario report %s (%s)",
+                json_path.name,
+                category,
+            )
+            raise ScenarioUnreadableError(category) from error
 
     def delete(self, scenario_id: str) -> None:
         json_path = self._path_for(scenario_id, ".json")

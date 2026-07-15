@@ -18,7 +18,11 @@ from astro_abm_api.models.scenario import (
 from astro_abm_api.services.agents import resolve_agents
 from astro_abm_api.services.asset_registry import normalize_asset_ids
 from astro_abm_api.services.daily_context import build_daily_context
-from astro_abm_api.services.scenario_store import ScenarioNotFoundError, ScenarioStore
+from astro_abm_api.services.scenario_store import (
+    ScenarioNotFoundError,
+    ScenarioStore,
+    ScenarioUnreadableError,
+)
 from astro_abm_api.services.llm_client import (
     generate_llm_scenario_report_chunk,
     merge_llm_report_chunk,
@@ -42,12 +46,7 @@ def list_scenarios() -> list[ScenarioSummary]:
 
 @router.get("/scenarios/{scenario_id}", response_model=ScenarioReport)
 def get_scenario(scenario_id: str) -> ScenarioReport:
-    try:
-        return ScenarioStore().load(scenario_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ScenarioNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="scenario not found") from exc
+    return _load_scenario(ScenarioStore(), scenario_id)
 
 
 @router.delete("/scenarios/{scenario_id}")
@@ -83,12 +82,7 @@ def generate_scenario_llm_chunk(
 ) -> ScenarioLlmChunkResponse:
     request, _ = _resolve_request_preset(request)
     store = ScenarioStore()
-    try:
-        report = store.load(scenario_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ScenarioNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="scenario not found") from exc
+    report = _load_scenario(store, scenario_id)
 
     if request.chunk_start_date < report.start_date or request.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -141,12 +135,7 @@ def generate_scenario_worldline_chunk(
 ) -> ScenarioWorldlineChunkResponse:
     request, preset_record = _resolve_request_preset(request)
     store = ScenarioStore()
-    try:
-        report = store.load(scenario_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ScenarioNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="scenario not found") from exc
+    report = _load_scenario(store, scenario_id)
 
     if request.chunk_start_date < report.start_date or request.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -223,12 +212,7 @@ def regenerate_scenario_worldline_from_chunk(
     request: ScenarioWorldlineRegenerateFromRequest,
 ) -> ScenarioWorldlineRegenerateFromResponse:
     store = ScenarioStore()
-    try:
-        report = store.load(scenario_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ScenarioNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="scenario not found") from exc
+    report = _load_scenario(store, scenario_id)
 
     try:
         result = regenerate_worldline_from_chunk(
@@ -262,6 +246,17 @@ def regenerate_scenario_worldline_from_chunk(
         skipped_chunk_count=result.skipped_chunk_count,
         report=saved_report,
     )
+
+
+def _load_scenario(store: ScenarioStore, scenario_id: str) -> ScenarioReport:
+    try:
+        return store.load(scenario_id)
+    except ScenarioUnreadableError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ScenarioNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="scenario not found") from exc
 
 
 def _resolve_request_preset(request):
