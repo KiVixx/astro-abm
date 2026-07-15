@@ -1,8 +1,9 @@
 # Astro ABM
 
-Astro ABM is an hourly data-engineering foundation for a future agent-based market simulator.
+Astro ABM is a local-first AI market Worldline scenario platform backed by an
+hourly data pipeline and a 100-year daily research layer.
 
-The core hypothesis is intentionally unconventional:
+Its research hypothesis is intentionally unconventional:
 
 - objective astronomy and space-weather signals can be transformed into exogenous sentiment-perturbation variables
 - those variables may help explain changes in market risk appetite
@@ -10,17 +11,22 @@ The core hypothesis is intentionally unconventional:
   - a retail swarm in high-volatility crypto markets
   - more deliberate corporate/CEO-style decision agents in traditional finance
 
-This repository does not yet contain the full simulation engine.
+The repository now includes a usable deterministic and optional
+OpenAI-compatible LLM Worldline engine. It produces day-by-day agent events,
+simulated causal links, pressure updates, fallback diagnostics, and path-aware
+regeneration. This is a scenario-rehearsal engine, not a validated market
+prediction model, real-world causal proof, or trading system.
 
-What it does contain is the MVP data-layer scaffold required before any meaningful ABM work can start:
+The project has three connected layers:
 
-- QuestDB storage schema and local runtime config
-- hourly market-data provider modules
-- hourly space-weather parsing helpers
-- local ephemeris feature computation helpers
-- ETL alignment and scheduling helpers
+- `src/astro_abm/`: hourly market, derivatives, space-weather, ephemeris, ETL,
+  QuestDB, and scheduled maintenance
+- `astro_research/`: 1926-2025 daily astronomy, market/macro, financial stress,
+  event-study, and local DuckDB/Parquet research outputs
+- `apps/api/` + `apps/web/`: local scenario storage, bilingual Worldline creation,
+  chunked LLM generation, review, Workbench playback, and regeneration
 
-The entire MVP is standardized around a single rule:
+The hourly feature layer remains standardized around a single rule:
 
 All features must align to UTC 1-hour buckets.
 
@@ -35,6 +41,10 @@ Implemented and unit-tested:
 - Phase 4 — price-action and derivatives feature ingestion
 - Phase 5 — ETL alignment helpers, hourly/daily maintenance, Docker runtime
 - Active-only data completeness reporting
+- Daily research snapshots, normalized events, coverage/readiness checks, and
+  exploratory event-study workflows
+- Local-first bilingual Worldline API/Web product with deterministic and
+  opt-in OpenAI-compatible LLM chunk generation
 
 Chinese maintainer briefing:
 
