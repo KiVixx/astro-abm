@@ -4,6 +4,7 @@ import json
 import stat
 from pathlib import Path
 
+import pytest
 import requests
 from fastapi.testclient import TestClient
 
@@ -82,6 +83,62 @@ def test_local_llm_preset_crud_redacts_key(monkeypatch, tmp_path: Path) -> None:
     deleted = client.delete(f"/llm/presets/{preset_id}")
     assert deleted.status_code == 200
     assert client.get("/llm/presets").json() == []
+
+
+@pytest.mark.parametrize("chunk_size_days", [1, 2, 3, 5])
+def test_llm_preset_accepts_supported_chunk_sizes(
+    monkeypatch, tmp_path: Path, chunk_size_days: int
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    response = TestClient(app).post(
+        "/llm/presets",
+        json=preset_payload(chunk_size_days=chunk_size_days),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["chunk_size_days"] == chunk_size_days
+
+
+def test_llm_preset_rejects_unsupported_chunk_size(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    response = TestClient(app).post(
+        "/llm/presets",
+        json=preset_payload(chunk_size_days=4),
+    )
+
+    assert response.status_code == 422
+
+
+def test_regeneration_keeps_original_chunk_boundaries_when_preset_differs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    client = TestClient(app)
+    preset = client.post(
+        "/llm/presets",
+        json=preset_payload(real_enabled=False, chunk_size_days=5),
+    ).json()
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-05", "worldline_chunk_days": 1})
+    report = client.post("/scenarios", json=payload).json()
+
+    response = client.post(
+        f"/scenarios/{report['scenario_id']}/worldline/regenerate-from",
+        json={"start_chunk_index": 0, "preset_id": preset["preset_id"]},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    assert worldline["generation_config"]["worldline_chunk_days"] == 1
+    assert len(worldline["provenance"]["chunk_history"]) == 5
+    assert [item["chunk_index"] for item in worldline["provenance"]["chunk_history"]] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+    ]
 
 
 def test_worldline_regeneration_uses_local_preset_without_saving_key(

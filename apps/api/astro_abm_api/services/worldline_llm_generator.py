@@ -49,7 +49,10 @@ def generate_worldline_for_request(
     report: ScenarioReport,
 ) -> WorldlineSimulation | None:
     if request.worldline_provider == "deterministic_mock":
-        return generate_worldline_simulation(report)
+        return generate_worldline_simulation(
+            report,
+            chunk_days=request.worldline_chunk_days,
+        )
 
     config = build_llm_config(
         provider=request.llm_provider,

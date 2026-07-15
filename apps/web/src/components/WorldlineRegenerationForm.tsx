@@ -116,7 +116,7 @@ export function WorldlineRegenerationForm({
   async function savePreset(updateExisting: boolean) {
     setError("");
     try {
-      const payload = presetPayload(settings, report.language || "en");
+      const payload = presetPayload(settings, report.language || "en", chunkSize);
       const saved = updateExisting && selectedPresetId
         ? await updateLlmPreset(selectedPresetId, payload)
         : await createLlmPreset(payload);
@@ -339,7 +339,11 @@ export function WorldlineRegenerationForm({
   );
 }
 
-function presetPayload(settings: Settings, language: string): LlmPresetSaveRequest {
+function presetPayload(
+  settings: Settings,
+  language: string,
+  chunkSize: 1 | 2 | 3 | 5,
+): LlmPresetSaveRequest {
   return {
     name: settings.name.trim() || "Worldline LLM",
     provider: "openai_compatible",
@@ -349,7 +353,7 @@ function presetPayload(settings: Settings, language: string): LlmPresetSaveReque
     api_key: settings.apiKey || null,
     keep_existing_api_key: true,
     worldline_provider: "llm",
-    chunk_size_days: 3,
+    chunk_size_days: chunkSize,
     call_delay_seconds: Number(settings.callDelaySeconds),
     timeout_seconds: Number(settings.timeoutSeconds),
     max_output_tokens: Number(settings.maxOutputTokens),

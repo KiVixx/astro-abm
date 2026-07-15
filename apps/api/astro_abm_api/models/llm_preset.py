@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -18,7 +19,7 @@ class LlmPresetSaveRequest(BaseModel):
     api_key: str | None = Field(default=None, exclude=True, repr=False)
     keep_existing_api_key: bool = True
     worldline_provider: str = "llm"
-    chunk_size_days: int = Field(default=3, ge=1, le=5)
+    chunk_size_days: Literal[1, 2, 3, 5] = 3
     call_delay_seconds: float = Field(default=2, ge=0, le=120)
     timeout_seconds: float = Field(default=120, ge=1, le=600)
     max_output_tokens: int = Field(default=5000, ge=512, le=32000)

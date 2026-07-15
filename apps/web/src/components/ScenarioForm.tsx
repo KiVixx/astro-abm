@@ -792,7 +792,9 @@ function readLlmPresetFromForm(
     real_enabled: formData.get("llm_real_enabled") === "on",
     base_url: optionalString(getString(formData, "llm_base_url")),
     model: getString(formData, "llm_model"),
-    chunk_size_days: Number(getString(formData, "llm_chunk_size_days") || "3"),
+    chunk_size_days: normalizePresetChunkSize(
+      Number(getString(formData, "llm_chunk_size_days") || "3"),
+    ),
     call_delay_seconds: Number(getString(formData, "llm_call_delay_seconds") || DEFAULT_LLM_CALL_DELAY_SECONDS),
     timeout_seconds: Number(getString(formData, "llm_timeout_seconds") || "120"),
     max_output_tokens: Number(getString(formData, "llm_max_output_tokens") || "5000"),
@@ -809,7 +811,11 @@ function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmPresetSummary) {
   setFormChecked(form, "llm_real_enabled", preset.real_enabled);
   setFormValue(form, "llm_base_url", preset.base_url || "");
   setFormValue(form, "llm_model", preset.model || "");
-  setFormValue(form, "llm_chunk_size_days", String(preset.chunk_size_days));
+  setFormValue(
+    form,
+    "llm_chunk_size_days",
+    String(normalizePresetChunkSize(preset.chunk_size_days)),
+  );
   setFormValue(
     form,
     "llm_call_delay_seconds",
@@ -820,6 +826,10 @@ function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmPresetSummary) {
   setFormValue(form, "llm_user_prompt", preset.custom_user_prompt || "");
   setFormValue(form, "worldline_provider", preset.worldline_provider || "deterministic_mock");
   setFormValue(form, "llm_api_key", "");
+}
+
+function normalizePresetChunkSize(value: number): 1 | 2 | 3 | 5 {
+  return value === 1 || value === 2 || value === 3 || value === 5 ? value : 3;
 }
 
 function setFormValue(form: HTMLFormElement, name: string, value: string) {

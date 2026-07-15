@@ -82,7 +82,11 @@ def ensure_worldline_state_continuity(days: list[WorldlineDay]) -> list[Worldlin
     return continuous
 
 
-def generate_worldline_simulation(report: ScenarioReport) -> WorldlineSimulation | None:
+def generate_worldline_simulation(
+    report: ScenarioReport,
+    *,
+    chunk_days: int = 3,
+) -> WorldlineSimulation | None:
     if not report.daily_timeline:
         return None
 
@@ -135,7 +139,7 @@ def generate_worldline_simulation(report: ScenarioReport) -> WorldlineSimulation
         },
         generation_config=WorldlineGenerationConfig(
             worldline_provider="deterministic_mock",
-            worldline_chunk_days=3,
+            worldline_chunk_days=chunk_days,
             llm_provider="mock",
             report_language=report.language,
             credential_status="not_configured",
