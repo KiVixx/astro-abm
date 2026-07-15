@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 
 from astro_abm_api.models.report import ScenarioReport
@@ -32,6 +33,24 @@ def validate_scenario_id(scenario_id: str) -> str:
     if not SCENARIO_ID_PATTERN.fullmatch(scenario_id):
         raise ValueError("scenario_id may only contain lowercase letters, numbers, hyphens, and underscores")
     return scenario_id
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Commit a complete UTF-8 file without exposing a partially written target."""
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
@@ -91,8 +110,8 @@ class ScenarioStore:
         self.ensure_output_dir()
         json_path = self._path_for(report.scenario_id, ".json")
         markdown_path = self._path_for(report.scenario_id, ".md")
-        json_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
-        markdown_path.write_text(report.markdown_report, encoding="utf-8")
+        _atomic_write_text(json_path, report.model_dump_json(indent=2))
+        _atomic_write_text(markdown_path, report.markdown_report)
         return report
 
     def load(self, scenario_id: str) -> ScenarioReport:

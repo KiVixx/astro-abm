@@ -31,6 +31,12 @@ compact worldline status, generation mode, failed-chunk count, and coverage
 counts. It never returns the full Markdown or daily timeline. Use
 `GET /scenarios/{scenario_id}` only when opening one report or Workbench.
 
+Scenario JSON and Markdown updates use same-directory temporary files followed
+by atomic replacement. If the API process stops during a chunk update, readers
+continue to see the previous complete file rather than a truncated report.
+JSON is the canonical API record; an interruption between the two replacements
+can leave Markdown one revision behind until the next successful save.
+
 Override the output directory for tests or local experiments:
 
 ```bash
