@@ -243,6 +243,13 @@ function WorldlineReviewHeader({
           {t("worldline.failedChunkWarning")}: {failedChunks}
         </p>
       ) : null}
+      {Boolean(provenance.generation_halted) ? (
+        <p className="notice warning">
+          <strong>{t("worldline.generationHalted")}</strong>
+          <br />
+          {t("worldline.generationHaltedReason")}
+        </p>
+      ) : null}
       <WorldlineProvenanceTags simulation={simulation} />
       <div className="tag-row">
         {Object.entries(sourceCounts).map(([source, count]) => (

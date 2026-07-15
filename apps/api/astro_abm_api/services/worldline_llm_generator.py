@@ -35,6 +35,7 @@ from astro_abm_api.services.worldline_simulation import (
 )
 
 MAX_WORLDLINE_CHUNK_ATTEMPTS = 3
+MAX_CONSECUTIVE_FAILED_CHUNKS = 2
 
 
 def generate_worldline_for_request(
@@ -160,6 +161,9 @@ def generate_worldline_chunk(
             generation_config=generation_config,
             continuity_status="consistent",
         )
+
+    if _generation_circuit_is_open(report, request):
+        return _halted_generation(report, generation_config)
 
     if not config.real_calls_enabled:
         return _with_provenance(
@@ -703,6 +707,14 @@ def _provenance(
     last_error: str | None,
 ) -> dict[str, Any]:
     previous = report.worldline_simulation.provenance if report.worldline_simulation else {}
+    previous_consecutive_failures = _previous_consecutive_failed_chunk_count(report)
+    consecutive_failures = previous_consecutive_failures + 1 if failed else 0
+    generation_halted = consecutive_failures >= MAX_CONSECUTIVE_FAILED_CHUNKS
+    halt_reason = (
+        "LLM worldline generation stopped after two consecutive chunks failed after three attempts each."
+        if generation_halted
+        else None
+    )
     chunk_entry = {
         "chunk_index": request.chunk_index,
         "total_chunks": request.total_chunks,
@@ -715,6 +727,8 @@ def _provenance(
         "attempt_count": attempt_count,
         "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
         "last_error": last_error,
+        "consecutive_failed_chunk_count": consecutive_failures,
+        "generation_halted": generation_halted,
     }
     return {
         **previous,
@@ -735,6 +749,9 @@ def _provenance(
         "last_error": last_error,
         "chunk_count": _previous_chunk_count(report) + 1,
         "failed_chunk_count": _previous_failed_chunk_count(report) + (1 if failed else 0),
+        "consecutive_failed_chunk_count": consecutive_failures,
+        "generation_halted": generation_halted,
+        "halt_reason": halt_reason,
         "llm_output_quality_notes": _merge_strings(
             _string_list(previous.get("llm_output_quality_notes")),
             _quality_notes_for_status(
@@ -764,6 +781,73 @@ def _previous_failed_chunk_count(report: ScenarioReport) -> int:
         return int((report.worldline_simulation.provenance if report.worldline_simulation else {}).get("failed_chunk_count", 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _previous_consecutive_failed_chunk_count(report: ScenarioReport) -> int:
+    provenance = report.worldline_simulation.provenance if report.worldline_simulation else {}
+    stored = provenance.get("consecutive_failed_chunk_count")
+    if stored is not None:
+        try:
+            return max(0, int(stored))
+        except (TypeError, ValueError):
+            pass
+
+    count = 0
+    history = provenance.get("chunk_history")
+    if isinstance(history, list):
+        for item in reversed(history):
+            if not isinstance(item, dict) or item.get("status") != "fallback":
+                break
+            count += 1
+    return count
+
+
+def _generation_circuit_is_open(
+    report: ScenarioReport,
+    request: ScenarioWorldlineChunkRequest,
+) -> bool:
+    simulation = report.worldline_simulation
+    if simulation is None or not simulation.provenance.get("generation_halted"):
+        return False
+    history = simulation.provenance.get("chunk_history")
+    if not isinstance(history, list) or not history:
+        return True
+    last_entry = history[-1]
+    if not isinstance(last_entry, dict):
+        return True
+    try:
+        return request.chunk_index > int(last_entry.get("chunk_index", 0))
+    except (TypeError, ValueError):
+        return True
+
+
+def _halted_generation(
+    report: ScenarioReport,
+    generation_config: WorldlineGenerationConfig,
+) -> WorldlineSimulation:
+    simulation = report.worldline_simulation
+    if simulation is None:
+        raise ValueError("worldline simulation is unavailable")
+    reason = str(
+        simulation.provenance.get("halt_reason")
+        or "LLM worldline generation is halted after consecutive chunk failures."
+    )
+    return simulation.model_copy(
+        update={
+            "status": "halted",
+            "summary": reason,
+            "caveats": _merge_strings(simulation.caveats, [reason]),
+            "provenance": {
+                **simulation.provenance,
+                "generation_halted": True,
+                "halt_reason": reason,
+                "network_call_performed": simulation.provenance.get(
+                    "network_call_performed", False
+                ),
+            },
+            "generation_config": simulation.generation_config or generation_config,
+        }
+    )
 
 
 def _clamp_float(value: Any, fallback: float) -> float:

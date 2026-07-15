@@ -352,6 +352,9 @@ export interface ScenarioWorldlineChunkResponse {
   chunk_end_date: string;
   worldline_status: string;
   completed: boolean;
+  consecutive_failed_chunk_count: number;
+  generation_halted: boolean;
+  halt_reason?: string | null;
   report: ScenarioReport;
 }
 

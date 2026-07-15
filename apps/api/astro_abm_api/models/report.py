@@ -352,6 +352,9 @@ class ScenarioWorldlineChunkResponse(BaseModel):
     chunk_end_date: date
     worldline_status: str
     completed: bool
+    consecutive_failed_chunk_count: int = 0
+    generation_halted: bool = False
+    halt_reason: str | None = None
     report: ScenarioReport
 
 

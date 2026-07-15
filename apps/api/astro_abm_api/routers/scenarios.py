@@ -182,6 +182,13 @@ def generate_scenario_worldline_chunk(
             worldline_simulation.status == "completed"
             and request.chunk_index == request.total_chunks
         ),
+        consecutive_failed_chunk_count=int(
+            worldline_simulation.provenance.get("consecutive_failed_chunk_count", 0)
+        ),
+        generation_halted=bool(
+            worldline_simulation.provenance.get("generation_halted", False)
+        ),
+        halt_reason=worldline_simulation.provenance.get("halt_reason"),
         report=saved_report,
     )
 

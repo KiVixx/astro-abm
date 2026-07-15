@@ -798,6 +798,8 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
 - 是否使用 LLM 網路呼叫：{worldline.provenance.get("network_call_performed")}
 - Chunk count：{worldline.provenance.get("chunk_count")}
 - Failed chunk count：{worldline.provenance.get("failed_chunk_count")}
+- Generation halted：{worldline.provenance.get("generation_halted", False)}
+- Halt reason：{worldline.provenance.get("halt_reason") or "無"}
 - 輸出驗證：{worldline.provenance.get("output_validation_status")}
 - 安全檢查：{worldline.provenance.get("safety_check_status")}
 - 連續性狀態：{worldline.continuity_status}
@@ -858,6 +860,8 @@ def render_worldline_markdown(report: ScenarioReport, *, language: ReportLanguag
 - LLM network call performed: {worldline.provenance.get("network_call_performed")}
 - Chunk count: {worldline.provenance.get("chunk_count")}
 - Failed chunk count: {worldline.provenance.get("failed_chunk_count")}
+- Generation halted: {worldline.provenance.get("generation_halted", False)}
+- Halt reason: {worldline.provenance.get("halt_reason") or "none"}
 - Output validation: {worldline.provenance.get("output_validation_status")}
 - Safety check: {worldline.provenance.get("safety_check_status")}
 - Continuity status: {worldline.continuity_status}

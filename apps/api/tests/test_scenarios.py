@@ -1340,6 +1340,70 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert worldline["days"][0]["agent_events"]
 
 
+def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    calls = 0
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            nonlocal calls
+            calls += 1
+            return {"choices": [{"message": {"content": "not json"}}]}
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        lambda *args, **kwargs: Response(),
+    )
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload["end_date"] = "2026-07-03"
+    create_response = client.post("/scenarios", json=payload)
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    responses = []
+    for chunk_index, chunk_date in enumerate(
+        ("2026-07-01", "2026-07-02", "2026-07-03"), start=1
+    ):
+        responses.append(
+            client.post(
+                f"/scenarios/{scenario_id}/worldline-chunks",
+                json={
+                    "llm_provider": "openai_compatible",
+                    "llm_real_enabled": True,
+                    "llm_base_url": "http://llm.local/v1",
+                    "llm_model": "test-model",
+                    "language": "en",
+                    "chunk_start_date": chunk_date,
+                    "chunk_end_date": chunk_date,
+                    "chunk_index": chunk_index,
+                    "total_chunks": 3,
+                    "worldline_chunk_days": 1,
+                },
+            )
+        )
+
+    assert all(response.status_code == 200 for response in responses)
+    assert calls == 6
+    assert responses[0].json()["worldline_status"] == "fallback"
+    assert responses[0].json()["consecutive_failed_chunk_count"] == 1
+    assert responses[0].json()["generation_halted"] is False
+    assert responses[1].json()["worldline_status"] == "fallback"
+    assert responses[1].json()["consecutive_failed_chunk_count"] == 2
+    assert responses[1].json()["generation_halted"] is True
+    assert responses[2].json()["worldline_status"] == "halted"
+    assert responses[2].json()["generation_halted"] is True
+    worldline = responses[2].json()["report"]["worldline_simulation"]
+    assert worldline["provenance"]["chunk_count"] == 2
+    assert len(worldline["provenance"]["chunk_history"]) == 2
+    assert "two consecutive chunks" in worldline["provenance"]["halt_reason"]
+
+
 def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
     monkeypatch, tmp_path: Path
 ) -> None:

@@ -23,7 +23,7 @@ import type {
 
 interface GenerationProgress {
   active: boolean;
-  phase: "idle" | "base" | "llm" | "delay" | "done" | "error";
+  phase: "idle" | "base" | "llm" | "delay" | "done" | "halted" | "error";
   currentChunk: number;
   totalChunks: number;
   message: string;
@@ -189,6 +189,7 @@ export function ScenarioForm({
       }
 
       const chunks = buildDateChunks(payload.start_date, payload.end_date, chunkSizeDays);
+      let consecutiveWorldlineFailures = 0;
       for (const [index, chunk] of chunks.entries()) {
         const chunkLabel = shouldChunkWorldline
           ? t("scenarioCreate.progressWorldlineChunk")
@@ -221,10 +222,28 @@ export function ScenarioForm({
             total_chunks: chunks.length,
             worldline_chunk_days: chunkSizeDays,
           });
-          if (!["completed", "fallback", "dry_run"].includes(response.worldline_status)) {
+          if (!["completed", "fallback", "dry_run", "halted"].includes(response.worldline_status)) {
             throw new Error(
               `${t("scenarioCreate.progressChunkFailed")}: ${response.worldline_status}`,
             );
+          }
+          consecutiveWorldlineFailures =
+            response.worldline_status === "fallback"
+              ? response.consecutive_failed_chunk_count || consecutiveWorldlineFailures + 1
+              : response.worldline_status === "completed"
+                ? 0
+                : consecutiveWorldlineFailures;
+          if (response.generation_halted || consecutiveWorldlineFailures >= 2) {
+            setProgress({
+              active: true,
+              phase: "halted",
+              currentChunk: index + 1,
+              totalChunks: chunks.length,
+              message: t("scenarioCreate.progressWorldlineHalted"),
+            });
+            await sleep(1200);
+            router.push(`/worldlines/${report.scenario_id}`);
+            return;
           }
         } else {
           const response = await chunkAction(report.scenario_id, {

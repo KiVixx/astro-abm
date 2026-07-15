@@ -124,6 +124,8 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.chunkSize": "Chunk size",
     "worldline.chunkStatus": "Chunk status",
     "worldline.failedChunks": "Failed chunks",
+    "worldline.generationHalted": "LLM generation halted",
+    "worldline.generationHaltedReason": "Two consecutive chunks failed after three attempts each. Check the LLM endpoint or preset before regenerating.",
     "worldline.reviewTitle": "LLM Worldline Review",
     "worldline.reviewHelp":
       "Review which days came from LLM chunks and which days used deterministic fallback.",
@@ -258,6 +260,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressLlmChunkDone": "Completed LLM chunk",
     "scenarioCreate.progressLlmDelay": "Waiting before next LLM call",
     "scenarioCreate.progressChunkFailed": "LLM chunk failed",
+    "scenarioCreate.progressWorldlineHalted": "Worldline generation stopped after two consecutive chunks failed three attempts each. Check the LLM endpoint or preset.",
     "scenarioCreate.progressComplete": "Scenario generated. Opening report...",
 
     "report.summary": "Summary",
@@ -635,6 +638,8 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.chunkSize": "Chunk 大小",
     "worldline.chunkStatus": "Chunk 狀態",
     "worldline.failedChunks": "失敗 Chunk 數",
+    "worldline.generationHalted": "LLM 生成已中止",
+    "worldline.generationHaltedReason": "連續兩個 chunk 各重試三次仍失敗。請先檢查 LLM endpoint 或 preset，再重新生成。",
     "worldline.reviewTitle": "LLM 世界線審查",
     "worldline.reviewHelp": "檢視哪些日期由 LLM chunk 生成，哪些日期使用確定性 fallback。",
     "worldline.regenerateChunks": "重新生成世界線 chunks",
@@ -765,6 +770,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressLlmChunkDone": "已完成 LLM 分段",
     "scenarioCreate.progressLlmDelay": "等待後再呼叫下一段 LLM",
     "scenarioCreate.progressChunkFailed": "LLM 分段失敗",
+    "scenarioCreate.progressWorldlineHalted": "連續兩個 chunk 各重試三次仍失敗，世界線生成已停止。請檢查 LLM endpoint 或 preset。",
     "scenarioCreate.progressComplete": "情境已生成，正在打開報告...",
 
     "report.summary": "摘要",
