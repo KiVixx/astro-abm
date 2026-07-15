@@ -140,8 +140,22 @@ def regenerate_worldline_from_chunk(
                 quality_notes=issues,
             )
             skipped_count += 1
+            generation_details: dict[str, object] = {
+                "attempt_count": 0,
+                "max_attempts": 3,
+                "attempt_history": [],
+                "safety_violation_codes": [],
+            }
         elif _should_use_llm(generation_config):
-            chunk_days, status, output_validation, safety_check, network_call, issues = (
+            (
+                chunk_days,
+                status,
+                output_validation,
+                safety_check,
+                network_call,
+                issues,
+                generation_details,
+            ) = (
                 _regenerate_llm_chunk(
                     working_report,
                     chunk,
@@ -182,6 +196,11 @@ def regenerate_worldline_from_chunk(
                 chunk_status=status,
                 quality_notes=issues,
             )
+            generation_details = {
+                "attempt_count": 0,
+                "attempt_history": [],
+                "safety_violation_codes": [],
+            }
             if generation_config.worldline_provider == "llm":
                 fallback_count += 1
                 if first_failure is None:
@@ -201,6 +220,7 @@ def regenerate_worldline_from_chunk(
                 upstream_state_hash=upstream_state_hash,
                 output_state_hash=output_state_hash,
                 issues=issues,
+                generation_details=generation_details,
             )
         )
         working_report = _replace_worldline_days(
@@ -368,7 +388,15 @@ def _regenerate_llm_chunk(
     previous_state: WorldlineState,
     generation_config: WorldlineGenerationConfig,
     api_key: str | None,
-) -> tuple[list[WorldlineDay], str, str, str, bool, list[str]]:
+) -> tuple[
+    list[WorldlineDay],
+    str,
+    str,
+    str,
+    bool,
+    list[str],
+    dict[str, object],
+]:
     request = ScenarioWorldlineChunkRequest(
         llm_provider="openai_compatible",
         llm_real_enabled=generation_config.llm_real_enabled,
@@ -388,6 +416,7 @@ def _regenerate_llm_chunk(
     )
     generated = generate_worldline_chunk(request, report)
     provenance = generated.provenance
+    generation_details = _safe_generation_details(provenance)
     chunk_days = [
         day
         for day in generated.days
@@ -412,6 +441,7 @@ def _regenerate_llm_chunk(
             str(provenance.get("safety_check_status") or "not_run"),
             bool(provenance.get("network_call_performed")),
             issues,
+            generation_details,
         )
     return (
         chunk_days,
@@ -420,6 +450,7 @@ def _regenerate_llm_chunk(
         str(provenance.get("safety_check_status") or "passed"),
         bool(provenance.get("network_call_performed")),
         _string_list(provenance.get("llm_output_quality_notes")),
+        generation_details,
     )
 
 
@@ -545,6 +576,7 @@ def _chunk_history_entry(
     upstream_state_hash: str,
     output_state_hash: str,
     issues: list[str],
+    generation_details: dict[str, object],
 ) -> dict[str, object]:
     return {
         "chunk_index": chunk.chunk_index,
@@ -572,7 +604,22 @@ def _chunk_history_entry(
         "depends_on_previous_chunk": chunk.chunk_index > 1,
         "upstream_state_hash": upstream_state_hash,
         "output_state_hash": output_state_hash,
+        **generation_details,
     }
+
+
+def _safe_generation_details(provenance: dict[str, object]) -> dict[str, object]:
+    keys = (
+        "attempt_count",
+        "max_attempts",
+        "last_error",
+        "response_diagnostics",
+        "attempt_history",
+        "safety_violation_codes",
+        "consecutive_failed_chunk_count",
+        "generation_halted",
+    )
+    return {key: provenance[key] for key in keys if key in provenance}
 
 
 def _regeneration_status(

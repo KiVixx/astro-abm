@@ -1221,6 +1221,89 @@ def test_worldline_regenerate_from_zero_rebuilds_all_chunks(
     assert_worldline_state_continuity(worldline["days"])
 
 
+def test_worldline_regeneration_preserves_safe_llm_attempt_diagnostics(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-01", "worldline_chunk_days": 1})
+    create_response = client.post("/scenarios", json=payload)
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    scenario_path = tmp_path / f"{scenario_id}.json"
+    saved_report = json.loads(scenario_path.read_text(encoding="utf-8"))
+    generation_config = saved_report["worldline_simulation"]["generation_config"]
+    generation_config.update(
+        {
+            "worldline_provider": "llm",
+            "worldline_chunk_days": 1,
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+        }
+    )
+    scenario_path.write_text(json.dumps(saved_report), encoding="utf-8")
+
+    def fake_regenerate_llm_chunk(report, chunk, chunks, previous_state, config, api_key):
+        from astro_abm_api.services.worldline_simulation import (
+            generate_worldline_days_for_range,
+        )
+
+        days = generate_worldline_days_for_range(
+            report,
+            start_date=chunk.start_date,
+            end_date=chunk.end_date,
+            previous_state=previous_state,
+            generation_source="llm_chunk",
+            chunk_index=chunk.chunk_index,
+            chunk_status="completed",
+            quality_notes=[],
+        )
+        details = {
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "attempt_history": [
+                {
+                    "attempt": 1,
+                    "output_validation_status": "invalid_json",
+                    "safety_check_status": "not_run",
+                    "response_diagnostics": {"parse_error_type": "truncated_json"},
+                    "safety_violation_codes": [],
+                },
+                {
+                    "attempt": 2,
+                    "output_validation_status": "valid_json",
+                    "safety_check_status": "passed",
+                    "response_diagnostics": {"parse_error_type": None},
+                    "safety_violation_codes": [],
+                },
+            ],
+            "safety_violation_codes": [],
+        }
+        return days, "completed", "valid_json", "passed", True, [], details
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.worldline_regeneration._regenerate_llm_chunk",
+        fake_regenerate_llm_chunk,
+    )
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    history = response.json()["report"]["worldline_simulation"]["provenance"][
+        "chunk_history"
+    ]
+    assert history[0]["attempt_count"] == 2
+    assert [item["attempt"] for item in history[0]["attempt_history"]] == [1, 2]
+    assert "raw_text" not in json.dumps(history[0])
+
+
 def test_worldline_regenerate_invalid_chunk_returns_400(
     monkeypatch, tmp_path: Path
 ) -> None:
