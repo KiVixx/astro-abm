@@ -89,6 +89,7 @@ def test_worldline_regeneration_uses_local_preset_without_saving_key(
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    monkeypatch.delenv("ASTRO_ABM_LLM_API_KEY", raising=False)
     authorization_headers: list[str] = []
 
     valid_payload = {
@@ -158,6 +159,17 @@ def test_worldline_regeneration_uses_local_preset_without_saving_key(
     assert worldline["generation_config"]["credential_status"] == "stored_local"
     assert authorization_headers == ["Bearer local-secret-key"]
     scenario_path = tmp_path / "scenarios" / f"{report['scenario_id']}.json"
+    assert "local-secret-key" not in scenario_path.read_text(encoding="utf-8")
+
+    reused_response = client.post(
+        f"/scenarios/{report['scenario_id']}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert reused_response.status_code == 200
+    reused_worldline = reused_response.json()["report"]["worldline_simulation"]
+    assert reused_worldline["generation_config"]["preset_id"] == preset["preset_id"]
+    assert authorization_headers == ["Bearer local-secret-key", "Bearer local-secret-key"]
     assert "local-secret-key" not in scenario_path.read_text(encoding="utf-8")
 
 
@@ -232,3 +244,38 @@ def test_worldline_regeneration_missing_preset_returns_404(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "LLM preset not found"
+
+
+def test_worldline_regeneration_missing_original_preset_falls_back_safely(
+    monkeypatch, tmp_path: Path
+) -> None:
+    scenario_dir = tmp_path / "scenarios"
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(scenario_dir))
+    client = TestClient(app)
+    report = client.post("/scenarios", json=scenario_payload()).json()
+    scenario_path = scenario_dir / f"{report['scenario_id']}.json"
+    saved = json.loads(scenario_path.read_text(encoding="utf-8"))
+    saved["worldline_simulation"]["generation_config"].update(
+        {
+            "worldline_provider": "llm",
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": False,
+            "llm_base_url": "http://missing-preset.local/v1",
+            "llm_model": "missing-model",
+            "preset_id": "deleted_preset",
+            "preset_name": "Deleted preset",
+            "credential_status": "stored_local",
+        }
+    )
+    scenario_path.write_text(json.dumps(saved), encoding="utf-8")
+
+    response = client.post(
+        f"/scenarios/{report['scenario_id']}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    assert worldline["generation_config"]["credential_status"] == "unavailable"
+    assert "Original local LLM preset was unavailable" in " ".join(worldline["caveats"])

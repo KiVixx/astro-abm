@@ -15,7 +15,7 @@ from astro_abm_api.models.report import (
 )
 from astro_abm_api.models.scenario import ScenarioWorldlineChunkRequest
 from astro_abm_api.services.worldline_llm_generator import generate_worldline_chunk
-from astro_abm_api.services.llm_preset_store import LlmPresetStore
+from astro_abm_api.services.llm_preset_store import LlmPresetNotFoundError, LlmPresetStore
 from astro_abm_api.services.worldline_simulation import (
     ensure_worldline_state_continuity,
     generate_worldline_days_for_range,
@@ -294,8 +294,20 @@ def _resolve_generation_config(
         )
 
     api_key: str | None = None
-    if preset_id:
-        record = LlmPresetStore().get_record(preset_id)
+    effective_preset_id = preset_id or config.preset_id
+    record: dict[str, object] | None = None
+    if effective_preset_id:
+        try:
+            record = LlmPresetStore().get_record(effective_preset_id)
+        except (LlmPresetNotFoundError, ValueError):
+            if preset_id:
+                raise
+            preset_note = (
+                "Original local LLM preset was unavailable; environment or fallback "
+                "credentials were used."
+            )
+            config = config.model_copy(update={"credential_status": "unavailable"})
+    if record is not None and effective_preset_id:
         api_key = record.get("api_key")
         config = config.model_copy(
             update={
@@ -309,12 +321,12 @@ def _resolve_generation_config(
                 "llm_call_delay_seconds": record.get("call_delay_seconds"),
                 "custom_user_prompt": record.get("custom_user_prompt"),
                 "report_language": report.language,
-                "preset_id": preset_id,
+                "preset_id": effective_preset_id,
                 "preset_name": record.get("name"),
                 "credential_status": "stored_local" if api_key else "env_required",
             }
         )
-        preset_note = f"Local LLM preset reused: {record.get('name') or preset_id}."
+        preset_note = f"Local LLM preset reused: {record.get('name') or effective_preset_id}."
 
     if overrides is not None:
         updates: dict[str, object] = {}
