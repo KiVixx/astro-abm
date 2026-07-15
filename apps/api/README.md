@@ -26,6 +26,11 @@ Scenario reports are saved as JSON and Markdown under:
 astro_research/output/scenarios/
 ```
 
+`GET /scenarios` returns lightweight `ScenarioSummary` records, including
+compact worldline status, generation mode, failed-chunk count, and coverage
+counts. It never returns the full Markdown or daily timeline. Use
+`GET /scenarios/{scenario_id}` only when opening one report or Workbench.
+
 Override the output directory for tests or local experiments:
 
 ```bash

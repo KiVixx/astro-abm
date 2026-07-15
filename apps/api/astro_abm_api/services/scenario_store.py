@@ -35,6 +35,16 @@ def validate_scenario_id(scenario_id: str) -> str:
 
 
 def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
+    worldline = report.worldline_simulation
+    provenance = worldline.provenance if worldline else {}
+    provenance_mode = provenance.get("generation_mode")
+    generation_mode = (
+        provenance_mode
+        if isinstance(provenance_mode, str) and provenance_mode
+        else worldline.mode if worldline else None
+    )
+    failed_chunk_count = provenance.get("failed_chunk_count", 0)
+    coverage = report.coverage_summary
     return ScenarioSummary(
         scenario_id=report.scenario_id,
         title=report.title,
@@ -48,6 +58,16 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         visibility=report.visibility,
         mode=report.mode,
         language=report.language,
+        worldline_status=worldline.status if worldline else None,
+        worldline_generation_mode=generation_mode,
+        worldline_day_count=worldline.horizon_days if worldline else 0,
+        worldline_failed_chunk_count=(
+            int(failed_chunk_count) if isinstance(failed_chunk_count, (int, float)) else 0
+        ),
+        llm_report_status=report.llm_report.status if report.llm_report else None,
+        coverage_total_days=coverage.total_days if coverage else None,
+        coverage_local_research_days=coverage.local_research_days if coverage else None,
+        coverage_future_placeholder_days=coverage.future_placeholder_days if coverage else None,
     )
 
 

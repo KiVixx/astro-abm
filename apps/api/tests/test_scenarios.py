@@ -19,6 +19,7 @@ from astro_abm_api.services.llm_client import (
 )
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
+from astro_abm_api.services.scenario_store import report_to_summary
 from astro_abm_api.services.worldline_llm_prompts import (
     build_worldline_messages,
     build_worldline_retry_messages,
@@ -418,6 +419,33 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     ]
     assert "markdown_report" not in summaries[0]
     assert summaries[0]["language"] == "en"
+    assert summaries[0]["worldline_status"] == "mock_completed"
+    assert summaries[0]["worldline_generation_mode"] == "deterministic_mock_v1"
+    assert summaries[0]["worldline_day_count"] == len(report["daily_timeline"])
+    assert summaries[0]["worldline_failed_chunk_count"] == 0
+    assert summaries[0]["llm_report_status"] is None
+    assert summaries[0]["coverage_total_days"] == len(report["daily_timeline"])
+    assert summaries[0]["coverage_future_placeholder_days"] == report["coverage_summary"][
+        "future_placeholder_days"
+    ]
+
+    report_model = ScenarioReport.model_validate(report)
+    assert report_model.worldline_simulation is not None
+    fallback_worldline = report_model.worldline_simulation.model_copy(
+        update={
+            "mode": "deterministic_mock_v1",
+            "provenance": {
+                **report_model.worldline_simulation.provenance,
+                "generation_mode": "llm_chunk_v1",
+                "failed_chunk_count": 2,
+            },
+        }
+    )
+    fallback_summary = report_to_summary(
+        report_model.model_copy(update={"worldline_simulation": fallback_worldline})
+    )
+    assert fallback_summary.worldline_generation_mode == "llm_chunk_v1"
+    assert fallback_summary.worldline_failed_chunk_count == 2
 
     get_response = client.get(f"/scenarios/{scenario_id}")
     assert get_response.status_code == 200

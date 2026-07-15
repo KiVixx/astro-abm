@@ -7,6 +7,7 @@ import type {
   WorldlineSimulation,
   WorldlineState,
 } from "@/lib/types";
+import { worldlineGenerationMode } from "@/lib/worldline";
 import { formatAgentName } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import { worldlineDisplayStatus } from "@/lib/worldlineStatus";
@@ -162,7 +163,7 @@ function WorldlineProvenanceTags({
     <div className="tag-row">
       <span className="tag">
         {t("worldline.generationMode")}:{" "}
-        {String(provenance.generation_mode || simulation.mode)}
+        {worldlineGenerationMode(simulation)}
       </span>
       <span className="tag">
         {t("worldline.chunkSize")}:{" "}

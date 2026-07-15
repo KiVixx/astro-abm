@@ -452,6 +452,14 @@ export interface ScenarioSummary {
   visibility: Visibility;
   mode: ScenarioMode;
   language?: ReportLanguage | null;
+  worldline_status?: string | null;
+  worldline_generation_mode?: string | null;
+  worldline_day_count?: number;
+  worldline_failed_chunk_count?: number;
+  llm_report_status?: string | null;
+  coverage_total_days?: number | null;
+  coverage_local_research_days?: number | null;
+  coverage_future_placeholder_days?: number | null;
 }
 
 export interface ScenarioReport {

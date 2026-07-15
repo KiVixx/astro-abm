@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { ScenarioReport } from "@/lib/types";
+import type { ScenarioSummary } from "@/lib/types";
 import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
-import { worldlineGenerationMode } from "@/lib/worldline";
 
 export function WorldlineCard({
   isDeleting = false,
@@ -12,12 +11,10 @@ export function WorldlineCard({
   report,
 }: {
   isDeleting?: boolean;
-  onDelete?: (report: ScenarioReport) => void;
-  report: ScenarioReport;
+  onDelete?: (report: ScenarioSummary) => void;
+  report: ScenarioSummary;
 }) {
   const { t } = useI18n();
-  const worldline = report.worldline_simulation;
-  const generationMode = worldlineGenerationMode(worldline);
 
   return (
     <article className="card worldline-card">
@@ -44,19 +41,19 @@ export function WorldlineCard({
       <div className="tag-row">
         <span className="tag">
           {t("worldline.status")}:{" "}
-          {worldline ? worldline.status : t("worldline.noWorldlineShort")}
+          {report.worldline_status || t("worldline.noWorldlineShort")}
         </span>
         <span className="tag">
           {t("worldline.mode")}:{" "}
-          {generationMode || t("worldline.noWorldlineShort")}
+          {report.worldline_generation_mode || t("worldline.noWorldlineShort")}
         </span>
         <span className="tag">
-          {t("worldline.dayCount")}: {worldline?.horizon_days || 0}
+          {t("worldline.dayCount")}: {report.worldline_day_count || 0}
         </span>
         <span className="tag">
           {t("llm.status")}:{" "}
-          {report.llm_report
-            ? formatEnumLabel(t, "llm_status", report.llm_report.status)
+          {report.llm_report_status
+            ? formatEnumLabel(t, "llm_status", report.llm_report_status)
             : t("llm.missing")}
         </span>
       </div>
@@ -67,20 +64,20 @@ export function WorldlineCard({
             {asset}
           </span>
         ))}
-        {report.agents.map((agent) => (
-          <span className="tag" key={agent.agent_id}>
-            {formatAgentName(t, agent.agent_id, agent.name)}
+        {report.agent_names.map((agentName, index) => (
+          <span className="tag" key={report.agent_ids[index] || agentName}>
+            {formatAgentName(t, report.agent_ids[index] || "", agentName)}
           </span>
         ))}
       </div>
 
-      {report.coverage_summary ? (
+      {report.coverage_total_days !== null && report.coverage_total_days !== undefined ? (
         <p className="muted">
-          {t("coverage.totalDays")}: {report.coverage_summary.total_days};{" "}
+          {t("coverage.totalDays")}: {report.coverage_total_days};{" "}
           {t("coverage.localResearchDays")}:{" "}
-          {report.coverage_summary.local_research_days};{" "}
+          {report.coverage_local_research_days || 0};{" "}
           {t("coverage.futurePlaceholderDays")}:{" "}
-          {report.coverage_summary.future_placeholder_days}
+          {report.coverage_future_placeholder_days || 0}
         </p>
       ) : null}
 
