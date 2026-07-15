@@ -182,7 +182,9 @@ def test_worldline_regeneration_halts_network_after_two_failed_chunks(
 
     class UnauthorizedResponse:
         def raise_for_status(self):
-            raise requests.HTTPError("401 Client Error: Unauthorized")
+            response = requests.Response()
+            response.status_code = 401
+            raise requests.HTTPError("401 Client Error: Unauthorized", response=response)
 
     def unauthorized_post(*args, **kwargs):
         nonlocal calls
@@ -219,7 +221,7 @@ def test_worldline_regeneration_halts_network_after_two_failed_chunks(
     assert body["llm_completed_chunk_count"] == 0
     assert body["fallback_chunk_count"] == 2
     assert body["skipped_chunk_count"] == 2
-    assert calls == 6
+    assert calls == 2
     worldline = body["report"]["worldline_simulation"]
     assert worldline["status"] == "fallback"
     assert worldline["last_regeneration"]["generation_halted"] is True

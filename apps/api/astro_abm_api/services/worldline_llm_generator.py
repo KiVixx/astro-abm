@@ -306,6 +306,12 @@ def generate_worldline_chunk(
                 request_diagnostics=last_failure["request_diagnostics"],
             )
         )
+        request_diagnostics = last_failure["request_diagnostics"]
+        if (
+            isinstance(request_diagnostics, dict)
+            and request_diagnostics.get("retryable") is False
+        ):
+            break
         if attempt_count < MAX_WORLDLINE_CHUNK_ATTEMPTS:
             attempt_messages = build_worldline_retry_messages(
                 messages,
@@ -330,7 +336,7 @@ def generate_worldline_chunk(
         output_validation_status=last_failure["output_validation_status"],
         safety_check_status=last_failure["safety_check_status"],
         reason=last_failure["reason"],
-        attempt_count=MAX_WORLDLINE_CHUNK_ATTEMPTS,
+        attempt_count=attempt_count,
         generation_config=generation_config,
         response_diagnostics=last_failure["response_diagnostics"],
         attempt_history=attempt_history,

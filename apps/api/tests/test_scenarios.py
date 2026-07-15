@@ -1651,6 +1651,111 @@ def test_worldline_chunk_timeout_records_safe_request_diagnostics(
     assert "secret-value" not in (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
 
 
+def test_worldline_chunk_does_not_retry_non_retryable_http_error(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    calls = 0
+    sleeps: list[float] = []
+
+    def raise_unauthorized(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        response = requests.Response()
+        response.status_code = 401
+        raise requests.HTTPError("credential detail must not persist", response=response)
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        raise_unauthorized,
+    )
+    monkeypatch.setattr(
+        "astro_abm_api.services.worldline_llm_generator.sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+            "llm_call_delay_seconds": 9,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert calls == 1
+    assert sleeps == []
+    assert worldline["provenance"]["attempt_count"] == 1
+    assert len(history) == 1
+    assert history[0]["request_diagnostics"] == {
+        "error_category": "http_error",
+        "exception_type": "HTTPError",
+        "retryable": False,
+        "http_status": 401,
+    }
+    saved = (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
+    assert "credential detail" not in saved
+
+
+def test_worldline_chunk_retries_retryable_http_error(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    calls = 0
+
+    def raise_unavailable(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        response = requests.Response()
+        response.status_code = 503
+        raise requests.HTTPError("temporary upstream failure", response=response)
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        raise_unavailable,
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert calls == 3
+    assert len(history) == 3
+    assert all(item["request_diagnostics"]["retryable"] is True for item in history)
+
+
 def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
     monkeypatch, tmp_path: Path
 ) -> None:
