@@ -1839,6 +1839,8 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
     assert worldline["provenance"]["chunk_count"] == 5
     assert len(worldline["provenance"]["chunk_history"]) == 5
     assert "two consecutive chunks" in worldline["provenance"]["halt_reason"]
+    assert "retry policy" in worldline["provenance"]["halt_reason"]
+    assert "three attempts" not in worldline["provenance"]["halt_reason"]
 
 
 def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(

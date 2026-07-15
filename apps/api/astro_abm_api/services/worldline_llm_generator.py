@@ -800,7 +800,7 @@ def _provenance(
     consecutive_failures = previous_consecutive_failures + 1 if failed else 0
     generation_halted = consecutive_failures >= MAX_CONSECUTIVE_FAILED_CHUNKS
     halt_reason = (
-        "LLM worldline generation stopped after two consecutive chunks failed after three attempts each."
+        "LLM worldline generation stopped after two consecutive chunks exhausted their applicable retry policy."
         if generation_halted
         else None
     )
