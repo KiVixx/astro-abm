@@ -211,6 +211,103 @@ def export_dataset(dataset: AstroDailyDataset, output_dir: str | Path, *, write_
     return paths
 
 
+def build_moon_phase_component(
+    config: AstroDailyConfig,
+    *,
+    start: date,
+    end: date,
+    backend: EphemerisBackend | None = None,
+) -> tuple[list[dict], list[dict]]:
+    """Build exact lunar phase events and their daily windows without rebuilding positions."""
+    if end < start:
+        raise ValueError("end must be on or after start.")
+
+    backend = backend or SwissEphemerisBackend()
+    calc_start_ts = utc_midnight(start) - pd.Timedelta(days=config.dataset.buffer_days).to_pytimedelta()
+    calc_end_ts = utc_midnight(end) + pd.Timedelta(days=config.dataset.buffer_days, hours=23).to_pytimedelta()
+    events = scan_moon_phase_events(
+        backend=backend,
+        start_ts=calc_start_ts,
+        end_ts=calc_end_ts,
+        step_hours=12,
+        tolerance_seconds=120,
+    )
+    event_rows = moon_phase_event_rows(
+        [event for event in events if start <= event.date <= end],
+        dataset_id=config.dataset.dataset_id,
+        calc_version=config.dataset.calc_version,
+    )
+    window_rows = moon_phase_event_windows(
+        events,
+        dataset_id=config.dataset.dataset_id,
+        calc_version=config.dataset.calc_version,
+        window_days_values=(3, 7),
+    )
+    window_rows = [row for row in window_rows if start <= pd.Timestamp(row["ts"]).date() <= end]
+    return event_rows, window_rows
+
+
+def export_moon_phase_component(
+    moon_phase_events: list[dict],
+    moon_phase_windows: list[dict],
+    output_dir: str | Path,
+    *,
+    write_parquet: bool = True,
+) -> dict[str, Path]:
+    """Atomically replace lunar events while preserving unrelated event-window rows."""
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+
+    events = pd.DataFrame(moon_phase_events, columns=EXPORT_COLUMNS["astro_moon_phase_events"])
+    events = events.drop_duplicates(["exact_ts", "dataset_id", "event_id"], keep="last")
+
+    windows_path = output / "astro_event_windows.csv"
+    if windows_path.exists() and windows_path.stat().st_size > 0:
+        existing_windows = pd.read_csv(windows_path)
+        if "event_type" in existing_windows.columns:
+            existing_windows = existing_windows[existing_windows["event_type"] != "moon_phase"]
+    else:
+        existing_windows = pd.DataFrame(columns=EXPORT_COLUMNS["astro_event_windows"])
+    new_windows = pd.DataFrame(moon_phase_windows, columns=EXPORT_COLUMNS["astro_event_windows"])
+    windows = pd.concat(
+        [
+            existing_windows.reindex(columns=EXPORT_COLUMNS["astro_event_windows"]),
+            new_windows,
+        ],
+        ignore_index=True,
+    )
+    windows = windows.drop_duplicates(["ts", "dataset_id", "event_id"], keep="last")
+
+    paths: dict[str, Path] = {}
+    for table, frame in (
+        ("astro_moon_phase_events", events),
+        ("astro_event_windows", windows),
+    ):
+        csv_path = output / f"{table}.csv"
+        _write_frame_atomic(frame, csv_path, parquet=False)
+        paths[f"{table}.csv"] = csv_path
+        if write_parquet:
+            parquet_path = output / f"{table}.parquet"
+            try:
+                _write_frame_atomic(frame, parquet_path, parquet=True)
+            except ImportError:
+                continue
+            paths[f"{table}.parquet"] = parquet_path
+    return paths
+
+
+def _write_frame_atomic(frame: pd.DataFrame, path: Path, *, parquet: bool) -> None:
+    temporary = path.with_name(f".{path.name}.tmp")
+    try:
+        if parquet:
+            frame.to_parquet(temporary, index=False)
+        else:
+            frame.to_csv(temporary, index=False)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 EXPORT_COLUMNS = {
     "astro_daily_positions": [
         "ts",

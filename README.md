@@ -171,6 +171,19 @@ full-history snapshot is missing. If the canonical snapshot is incomplete, the
 status output names the missing component; the snapshot files already present
 remain usable for research paths that do not depend on that component.
 
+When the only missing component is `astro_moon_phase_events.csv`, `make
+astro-daily` uses the focused lunar-phase repair path. It preserves existing
+station/aspect windows and avoids rebuilding 100 years of positions and facts.
+The lower-level command is:
+
+```bash
+uv run python scripts/build_astro_daily.py \
+  --config astro_research/configs/astro_daily.yaml \
+  --start 1926-01-01 --end 2025-12-31 \
+  --write-parquet astro_research/output/parquet/astro_daily_1926_2025 \
+  --no-parquet --dry-run --moon-phase-only
+```
+
 `make research-store` builds the ignored DuckDB full-history research store at
 `astro_research/output/duckdb/astro_research_full_history.duckdb`. This is the
 canonical local analysis layer for 1926-2025 daily research, including pre-1970

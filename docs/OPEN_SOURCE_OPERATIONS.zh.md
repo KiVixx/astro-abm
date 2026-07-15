@@ -339,6 +339,8 @@ make checkpoint-check
 - `astro_daily_100y_snapshot` 是 canonical（權威本機）1926-2025 研究快照；它顯示 OK，就代表完整日線研究資料仍可供 DuckDB／Python／世界線脈絡使用。若顯示 WARN，狀態會列出實際缺少的檔案；其他已存在的快照仍可供不依賴該元件的研究流程使用。
 - `astro_daily_100y_questdb` 是可選的 1970-2025 查詢副本。只有這項 WARN 時，不代表 100 年資料遺失；只在需要用 QuestDB 查日線資料時才需跑 `make astro-daily` 補齊。
 
+若 canonical 快照只缺 `astro_moon_phase_events.csv`，`make astro-daily` 會自動改用月相元件修復模式：只重算 exact 月相事件與月相事件視窗，保留既有 station／aspect 視窗，不會重算 100 年 positions 與 facts。若缺少其他核心檔案，才會執行完整 build。
+
 這些 warning 不一定是錯誤。它們是在告訴維護者目前處於哪個資料完整度。
 
 ## 安全提交規則

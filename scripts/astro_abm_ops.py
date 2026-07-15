@@ -316,7 +316,8 @@ def command_maintain_now(
 
 
 def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, include_exact_aspects: bool = False) -> int:
-    snapshot_ready = astro_daily_snapshot_ready()
+    snapshot_missing = astro_daily_snapshot_missing()
+    snapshot_ready = not snapshot_missing
     if ingest and not force and snapshot_ready and astro_daily_questdb_ready():
         print(f"astro daily QuestDB slice already complete: {ASTRO_DAILY_QUESTDB_START}..{ASTRO_DAILY_END}")
         return 0
@@ -338,7 +339,9 @@ def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, incl
             "--no-parquet",
             "--dry-run",
         ]
-        if not include_exact_aspects:
+        if not force and snapshot_missing == ("astro_moon_phase_events.csv",):
+            cmd.append("--moon-phase-only")
+        elif not include_exact_aspects:
             cmd.append("--skip-exact-aspects")
         code = run(cmd, check=False).returncode
         if code:

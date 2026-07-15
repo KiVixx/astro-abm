@@ -200,7 +200,7 @@ def test_command_ensure_astro_daily_builds_snapshot_then_ingests(monkeypatch):
         return Result()
 
     monkeypatch.setattr(ops, "astro_daily_questdb_ready", lambda: True)
-    monkeypatch.setattr(ops, "astro_daily_snapshot_ready", lambda: False)
+    monkeypatch.setattr(ops, "astro_daily_snapshot_missing", lambda: tuple(ops.ASTRO_DAILY_REQUIRED_FILES))
     monkeypatch.setattr(ops, "run", fake_run)
 
     code = ops.command_ensure_astro_daily()
@@ -209,6 +209,30 @@ def test_command_ensure_astro_daily_builds_snapshot_then_ingests(monkeypatch):
     assert any("scripts/build_astro_daily.py" in call for call in calls)
     assert any("--skip-exact-aspects" in call for call in calls)
     assert any("scripts/ingest_astro_daily.py" in call for call in calls)
+
+
+def test_command_ensure_astro_daily_repairs_only_missing_moon_component(monkeypatch):
+    ops = load_ops_module()
+
+    class Result:
+        returncode = 0
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(list(cmd))
+        return Result()
+
+    monkeypatch.setattr(ops, "astro_daily_snapshot_missing", lambda: ("astro_moon_phase_events.csv",))
+    monkeypatch.setattr(ops, "run", fake_run)
+
+    code = ops.command_ensure_astro_daily(ingest=False)
+
+    assert code == 0
+    command = calls[0]
+    assert "scripts/build_astro_daily.py" in command
+    assert "--moon-phase-only" in command
+    assert "--skip-exact-aspects" not in command
 
 
 def test_command_research_prepare_builds_selectable_mode_command(monkeypatch):

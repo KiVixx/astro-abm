@@ -1,8 +1,11 @@
 from datetime import UTC, datetime
 
+import pandas as pd
+
 from astro_daily.aspects import active_major_aspects, scan_aspect_events
 from astro_daily.aspect_profiles import parse_aspect_pairs, resolve_aspect_pairs
 from astro_daily.aspect_chunks import AspectBuildTask, aspect_chunk_complete, build_aspect_chunks
+from astro_daily.build import export_moon_phase_component
 from astro_daily.ephemeris_backend import PositionRecord
 from astro_daily.moon_phase import scan_moon_phase_events
 
@@ -44,6 +47,57 @@ def test_scan_moon_phase_events_finds_exact_quarter():
     )
 
     assert any(event.phase_name == "FirstQuarter" for event in events)
+
+
+def test_export_moon_phase_component_replaces_only_moon_windows(tmp_path):
+    output = tmp_path / "snapshot"
+    output.mkdir()
+    pd.DataFrame(
+        [
+            {
+                "ts": "2020-01-01T00:00:00Z",
+                "dataset_id": "test",
+                "event_id": "station_event",
+                "event_type": "mercury_direct_to_retrograde",
+            },
+            {
+                "ts": "2020-01-02T00:00:00Z",
+                "dataset_id": "test",
+                "event_id": "stale_moon_event",
+                "event_type": "moon_phase",
+            },
+        ]
+    ).to_csv(output / "astro_event_windows.csv", index=False)
+    moon_events = [
+        {
+            "exact_ts": "2020-01-03T12:00:00Z",
+            "dataset_id": "test",
+            "event_id": "FullMoon_202001031200",
+            "phase_name": "FullMoon",
+            "elongation_deg": 180.0,
+            "calc_version": "v1",
+            "source_note": "test",
+        }
+    ]
+    moon_windows = [
+        {
+            "ts": "2020-01-03T00:00:00Z",
+            "dataset_id": "test",
+            "event_id": "FullMoon_202001031200_pm3d",
+            "event_type": "moon_phase",
+            "phase_name": "FullMoon",
+            "rel_day": 0,
+        }
+    ]
+
+    export_moon_phase_component(moon_events, moon_windows, output, write_parquet=False)
+    export_moon_phase_component(moon_events, moon_windows, output, write_parquet=False)
+
+    events = pd.read_csv(output / "astro_moon_phase_events.csv")
+    windows = pd.read_csv(output / "astro_event_windows.csv")
+    assert events["event_id"].tolist() == ["FullMoon_202001031200"]
+    assert set(windows["event_id"]) == {"station_event", "FullMoon_202001031200_pm3d"}
+    assert not windows.duplicated(["ts", "dataset_id", "event_id"]).any()
 
 
 def test_scan_aspect_events_finds_exact_major_aspect():
