@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 import stat
 
 import pytest
@@ -35,3 +36,35 @@ def test_atomic_write_preserves_previous_file_when_replace_fails(
 
     assert target.read_text(encoding="utf-8") == "old-valid-json"
     assert list(tmp_path.glob(".scenario.json.*.tmp")) == []
+
+
+def test_list_summaries_logs_safe_diagnostic_for_invalid_json(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    invalid = tmp_path / "broken_report.json"
+    invalid.write_text('{"secret": "must-not-appear"', encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger=scenario_store.__name__):
+        summaries = scenario_store.ScenarioStore(tmp_path).list_summaries()
+
+    assert summaries == []
+    assert "broken_report.json" in caplog.text
+    assert "invalid_json" in caplog.text
+    assert "must-not-appear" not in caplog.text
+
+
+def test_list_summaries_does_not_log_invalid_report_values(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    invalid = tmp_path / "legacy_report.json"
+    invalid.write_text('{"title": "private-title-not-for-logs"}', encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger=scenario_store.__name__):
+        summaries = scenario_store.ScenarioStore(tmp_path).list_summaries()
+
+    assert summaries == []
+    assert "legacy_report.json" in caplog.text
+    assert "invalid_report_schema" in caplog.text
+    assert "private-title-not-for-logs" not in caplog.text

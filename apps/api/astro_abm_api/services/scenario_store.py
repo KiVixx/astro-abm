@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import stat
@@ -13,6 +14,7 @@ from astro_abm_api.models.scenario import ScenarioSummary
 
 SCENARIO_OUTPUT_DIR_ENV = "ASTRO_ABM_SCENARIO_OUTPUT_DIR"
 SCENARIO_ID_PATTERN = re.compile(r"^[a-z0-9_-]+$")
+logger = logging.getLogger(__name__)
 
 
 class ScenarioNotFoundError(FileNotFoundError):
@@ -55,6 +57,16 @@ def _atomic_write_text(path: Path, content: str) -> None:
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _report_read_error_category(error: Exception) -> str:
+    if isinstance(error, json.JSONDecodeError):
+        return "invalid_json"
+    if isinstance(error, UnicodeError):
+        return "invalid_encoding"
+    if isinstance(error, OSError):
+        return "read_error"
+    return "invalid_report_schema"
 
 
 def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
@@ -142,7 +154,12 @@ class ScenarioStore:
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
                 report = ScenarioReport.model_validate(data)
-            except (json.JSONDecodeError, OSError, ValueError):
+            except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
+                logger.warning(
+                    "Skipping unreadable scenario report %s (%s)",
+                    json_path.name,
+                    _report_read_error_category(error),
+                )
                 continue
             summaries.append(report_to_summary(report))
         return sorted(summaries, key=lambda item: item.created_at, reverse=True)
