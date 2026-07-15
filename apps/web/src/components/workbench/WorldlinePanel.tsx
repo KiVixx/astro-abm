@@ -396,12 +396,21 @@ function ChunkRequestDiagnostics({ value }: { value: unknown }) {
   if (!diagnostics || !diagnostics.error_category) {
     return null;
   }
+  const failureKind = diagnostics.failure_kind
+    ? String(diagnostics.failure_kind)
+    : String(diagnostics.error_category);
+  const recommendedAction = diagnostics.recommended_action
+    ? String(diagnostics.recommended_action)
+    : null;
   return (
     <details>
       <summary>{t("worldline.requestDiagnostics")}</summary>
       <div className="tag-row">
         <span className="tag">
           {t("worldline.errorCategory")}: {String(diagnostics.error_category)}
+        </span>
+        <span className="tag">
+          {t("worldline.failureKind")}: {t(`worldline.failureKind.${failureKind}`, failureKind)}
         </span>
         <span className="tag">
           {t("worldline.retryable")}: {diagnostics.retryable === true ? "true" : "false"}
@@ -412,6 +421,12 @@ function ChunkRequestDiagnostics({ value }: { value: unknown }) {
           </span>
         ) : null}
       </div>
+      {recommendedAction ? (
+        <p className="notice warning">
+          <strong>{t("worldline.recommendedAction")}:</strong>{" "}
+          {t(`worldline.requestAction.${recommendedAction}`, recommendedAction)}
+        </p>
+      ) : null}
       <p className="muted">{t("worldline.requestDiagnosticsPrivacyNote")}</p>
     </details>
   );

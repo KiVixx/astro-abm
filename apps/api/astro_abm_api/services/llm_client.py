@@ -47,34 +47,70 @@ def diagnose_llm_request_error(exc: requests.RequestException) -> dict[str, obje
     )
     if isinstance(exc, requests.Timeout):
         category = "timeout"
+        failure_kind = "request_timeout"
+        recommended_action = "retry_later"
         retryable = True
     elif isinstance(exc, requests.ConnectionError):
         category = "connection_error"
+        failure_kind = "endpoint_unreachable"
+        recommended_action = "check_endpoint"
         retryable = True
     elif isinstance(exc, requests.HTTPError):
         category = "http_error"
-        retryable = http_status == 429 or bool(http_status and http_status >= 500)
+        failure_kind, recommended_action, retryable = _classify_http_failure(http_status)
     else:
         category = "request_error"
+        failure_kind = "request_failed"
+        recommended_action = "check_request_settings"
         retryable = False
     return {
         "error_category": category,
+        "failure_kind": failure_kind,
+        "recommended_action": recommended_action,
         "exception_type": type(exc).__name__,
         "retryable": retryable,
         "http_status": http_status,
     }
 
 
+def _classify_http_failure(status: int | None) -> tuple[str, str, bool]:
+    if status == 401:
+        return "authentication_failed", "check_credentials", False
+    if status == 403:
+        return "permission_denied", "check_permissions", False
+    if status == 404:
+        return "endpoint_or_model_not_found", "check_endpoint_or_model", False
+    if status in {408, 504}:
+        return "request_timeout", "retry_later", True
+    if status == 429:
+        return "rate_limited", "wait_and_retry", True
+    if status is not None and status >= 500:
+        return "upstream_unavailable", "retry_later", True
+    if status is not None and 400 <= status < 500:
+        return "request_rejected", "check_request_settings", False
+    return "http_error", "check_endpoint_or_settings", False
+
+
 def safe_llm_request_error_message(exc: requests.RequestException) -> str:
     diagnostics = diagnose_llm_request_error(exc)
-    category = str(diagnostics["error_category"])
-    if category == "timeout":
+    failure_kind = str(diagnostics["failure_kind"])
+    if failure_kind == "request_timeout":
         return "The LLM request timed out before a complete response was received."
-    if category == "connection_error":
+    if failure_kind == "endpoint_unreachable":
         return "The LLM endpoint could not be reached."
-    if category == "http_error":
+    if failure_kind == "authentication_failed":
+        return "The LLM endpoint rejected the configured credentials."
+    if failure_kind == "permission_denied":
+        return "The LLM endpoint denied access to the requested resource."
+    if failure_kind == "endpoint_or_model_not_found":
+        return "The configured LLM endpoint or model was not found."
+    if failure_kind == "rate_limited":
+        return "The LLM endpoint rate limit was reached."
+    if failure_kind == "upstream_unavailable":
+        return "The LLM provider is temporarily unavailable."
+    if diagnostics["error_category"] == "http_error":
         status = diagnostics.get("http_status")
-        return f"The LLM endpoint returned HTTP status {status}." if status else "The LLM endpoint returned an HTTP error."
+        return f"The LLM endpoint rejected the request with HTTP status {status}." if status else "The LLM endpoint returned an HTTP error."
     return "The LLM request failed before a complete response was received."
 
 TRADING_INSTRUCTION_PATTERNS = (

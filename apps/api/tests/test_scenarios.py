@@ -151,11 +151,58 @@ def test_llm_request_diagnostics_classify_timeout_without_retaining_details() ->
 
     assert diagnostics == {
         "error_category": "timeout",
+        "failure_kind": "request_timeout",
+        "recommended_action": "retry_later",
         "exception_type": "Timeout",
         "retryable": True,
         "http_status": None,
     }
     assert secret_detail not in json.dumps(diagnostics)
+
+
+@pytest.mark.parametrize(
+    ("status", "failure_kind", "recommended_action", "retryable"),
+    [
+        (401, "authentication_failed", "check_credentials", False),
+        (403, "permission_denied", "check_permissions", False),
+        (404, "endpoint_or_model_not_found", "check_endpoint_or_model", False),
+        (422, "request_rejected", "check_request_settings", False),
+        (429, "rate_limited", "wait_and_retry", True),
+        (503, "upstream_unavailable", "retry_later", True),
+    ],
+)
+def test_llm_request_diagnostics_classify_http_failures(
+    status: int,
+    failure_kind: str,
+    recommended_action: str,
+    retryable: bool,
+) -> None:
+    response = requests.Response()
+    response.status_code = status
+    error = requests.HTTPError("sensitive provider response", response=response)
+
+    diagnostics = diagnose_llm_request_error(error)
+
+    assert diagnostics == {
+        "error_category": "http_error",
+        "failure_kind": failure_kind,
+        "recommended_action": recommended_action,
+        "exception_type": "HTTPError",
+        "retryable": retryable,
+        "http_status": status,
+    }
+    assert "sensitive provider response" not in json.dumps(diagnostics)
+
+
+def test_llm_request_diagnostics_classify_unreachable_endpoint() -> None:
+    diagnostics = diagnose_llm_request_error(
+        requests.ConnectionError("https://secret-endpoint.example/v1")
+    )
+
+    assert diagnostics["failure_kind"] == "endpoint_unreachable"
+    assert diagnostics["recommended_action"] == "check_endpoint"
+    assert diagnostics["retryable"] is True
+    assert "secret-endpoint" not in json.dumps(diagnostics)
 
 
 def test_scenario_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant() -> None:
@@ -1703,6 +1750,8 @@ def test_worldline_chunk_does_not_retry_non_retryable_http_error(
     assert len(history) == 1
     assert history[0]["request_diagnostics"] == {
         "error_category": "http_error",
+        "failure_kind": "authentication_failed",
+        "recommended_action": "check_credentials",
         "exception_type": "HTTPError",
         "retryable": False,
         "http_status": 401,
