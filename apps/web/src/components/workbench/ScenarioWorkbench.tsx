@@ -78,6 +78,33 @@ export function ScenarioWorkbench({
     currentReport.worldline_simulation?.days.find(
       (day) => day.date === selectedSnapshot?.date,
     ) || null;
+  const interruptedRegeneration = useMemo(() => {
+    const simulation = currentReport.worldline_simulation;
+    const lastRegeneration = simulation?.last_regeneration;
+    if (
+      simulation?.continuity_status !== "rebuilding" ||
+      !lastRegeneration ||
+      typeof lastRegeneration !== "object"
+    ) {
+      return null;
+    }
+    const chunkIndex = Number(lastRegeneration.next_chunk_index);
+    const nextDate = lastRegeneration.next_chunk_date;
+    const chunkSize = normalizeChunkSize(
+      simulation.generation_config?.worldline_chunk_days ??
+        simulation.provenance?.chunk_size_days,
+    );
+    const chunkCount = Math.ceil(timeline.length / chunkSize);
+    if (
+      !Number.isInteger(chunkIndex) ||
+      chunkIndex < 0 ||
+      chunkIndex >= chunkCount ||
+      typeof nextDate !== "string"
+    ) {
+      return null;
+    }
+    return { chunkIndex, nextDate };
+  }, [currentReport.worldline_simulation, timeline.length]);
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
@@ -101,11 +128,13 @@ export function ScenarioWorkbench({
   }, [currentReport.worldline_simulation, selectedIndex, selectedSnapshot, selectedWorldlineDay]);
 
   const openRegenerationSettings = () => {
-    if (!timeline.length || selectedChunkIndex === null) {
+    const targetChunkIndex = interruptedRegeneration?.chunkIndex ?? selectedChunkIndex;
+    const targetDate = interruptedRegeneration?.nextDate ?? selectedDate;
+    if (!timeline.length || targetChunkIndex === null) {
       return;
     }
     router.push(
-      `/worldlines/${currentReport.scenario_id}/regenerate?start_chunk_index=${selectedChunkIndex}&date=${encodeURIComponent(selectedDate)}`,
+      `/worldlines/${currentReport.scenario_id}/regenerate?start_chunk_index=${targetChunkIndex}&date=${encodeURIComponent(targetDate)}`,
     );
   };
 
@@ -239,7 +268,8 @@ export function ScenarioWorkbench({
           worldlineDay={selectedWorldlineDay}
           worldlineSimulation={currentReport.worldline_simulation}
           onRegenerateWorldline={isWorldline ? openRegenerationSettings : undefined}
-          canRegenerateWorldline={isWorldline && selectedChunkIndex !== null}
+          canRegenerateWorldline={isWorldline && (interruptedRegeneration !== null || selectedChunkIndex !== null)}
+          resumeRegeneration={interruptedRegeneration !== null}
           regenerationError={null}
           regenerationMessage=""
           regenerationActive={false}

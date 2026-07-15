@@ -79,6 +79,14 @@ export function WorldlineRegenerationForm({
     totalChunks: affectedChunks,
   });
   const selectedPreset = presets.find((preset) => preset.preset_id === selectedPresetId);
+  const lastRegeneration = report.worldline_simulation?.last_regeneration;
+  const resumableRegenerationId =
+    report.worldline_simulation?.continuity_status === "rebuilding" &&
+    lastRegeneration &&
+    typeof lastRegeneration.regeneration_id === "string" &&
+    Number(lastRegeneration.next_chunk_index) === startChunkIndex
+      ? lastRegeneration.regeneration_id
+      : null;
   const progressPct = progress.totalChunks > 0
     ? Math.round((progress.currentChunk / progress.totalChunks) * 100)
     : 0;
@@ -150,12 +158,17 @@ export function WorldlineRegenerationForm({
       setError(t("worldline.chunkInfoUnavailable"));
       return;
     }
-    if (!window.confirm(t("worldline.regenerateSettingsConfirm"))) return;
+    if (!window.confirm(t(
+      resumableRegenerationId
+        ? "worldline.resumeInterruptedConfirm"
+        : "worldline.regenerateSettingsConfirm",
+    ))) return;
     setActive(true);
     setError("");
     setMessage(t("worldline.regenerationInProgress"));
     try {
-      const regenerationId = `regen_${crypto.randomUUID().replaceAll("-", "_")}`;
+      const regenerationId =
+        resumableRegenerationId || `regen_${crypto.randomUUID().replaceAll("-", "_")}`;
       const callDelaySeconds = Number(settings.callDelaySeconds) || 0;
       let finalStatus = "completed";
       for (let chunkIndex = startChunkIndex; chunkIndex < chunks.length; chunkIndex += 1) {
@@ -295,12 +308,21 @@ export function WorldlineRegenerationForm({
       </section>
 
       <section className="notice warning"><strong>{t("worldline.regenerateDownstreamWarning")}</strong><p>{t("worldline.regenerateLocalSecretNote")}</p></section>
+      {resumableRegenerationId ? (
+        <p className="notice">{t("worldline.resumeUsesSavedRun")}</p>
+      ) : null}
       {settings.realEnabled && !selectedPreset?.has_api_key && !settings.apiKey ? (
         <p className="notice warning">{t("worldline.regenerateCredentialWarning")}</p>
       ) : null}
       {message ? <p className="notice">{message}</p> : null}
       {error ? <p className="notice warning">{error}</p> : null}
-      <button disabled={active || !selectedChunk} type="submit">{active ? t("worldline.regenerationInProgress") : t("worldline.regenerateFromHere")}</button>
+      <button disabled={active || !selectedChunk} type="submit">
+        {active
+          ? t("worldline.regenerationInProgress")
+          : resumableRegenerationId
+            ? t("worldline.resumeInterruptedRegeneration")
+            : t("worldline.regenerateFromHere")}
+      </button>
       {progress.phase !== "idle" ? (
         <section className={`notice scenario-progress ${progress.phase}`}>
           <div className="scenario-progress-header">

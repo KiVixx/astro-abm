@@ -1385,14 +1385,18 @@ def test_progressive_regeneration_marks_downstream_stale_until_final_chunk(
     assert first.json()["continuity_status"] == "rebuilding"
     assert first_worldline["continuity_status"] == "rebuilding"
     assert first_worldline["days"][3:] == original_downstream
-    assert first_worldline["last_regeneration"]["pending_chunk_count"] == 1
+    first_regeneration = first_worldline["last_regeneration"]
+    assert first_regeneration["status"] == "in_progress"
+    assert first_regeneration["regeneration_id"] == "interrupted_progressive_run"
+    assert first_regeneration["pending_chunk_count"] == 1
+    assert first_regeneration["next_chunk_index"] == 1
+    assert first_regeneration["next_chunk_date"] == "2026-07-04"
     assert "Continuity status: rebuilding" in first.json()["report"]["markdown_report"]
 
     final = client.post(
         f"/scenarios/{scenario_id}/worldline/regenerate-from",
         json={
             "start_chunk_index": 1,
-            "regeneration_id": "interrupted_progressive_run",
             "progressive": True,
         },
     )
@@ -1401,7 +1405,12 @@ def test_progressive_regeneration_marks_downstream_stale_until_final_chunk(
     final_worldline = final.json()["report"]["worldline_simulation"]
     assert final.json()["continuity_status"] == "consistent"
     assert final_worldline["continuity_status"] == "consistent"
-    assert final_worldline["last_regeneration"]["pending_chunk_count"] == 0
+    final_regeneration = final_worldline["last_regeneration"]
+    assert final_regeneration["status"] == "completed"
+    assert final_regeneration["regeneration_id"] == "interrupted_progressive_run"
+    assert final_regeneration["pending_chunk_count"] == 0
+    assert final_regeneration["next_chunk_index"] is None
+    assert final_regeneration["next_chunk_date"] is None
     assert_worldline_state_continuity(final_worldline["days"])
     history = final_worldline["provenance"]["chunk_history"]
     assert history[1]["upstream_state_hash"] == history[0]["output_state_hash"]

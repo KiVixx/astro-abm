@@ -15,6 +15,7 @@ interface WorldlinePanelProps {
   primary?: boolean;
   onRegenerateWorldline?: () => void;
   canRegenerateWorldline?: boolean;
+  resumeRegeneration?: boolean;
   regenerationActive?: boolean;
   regenerationMessage?: string;
   regenerationError?: string | null;
@@ -34,6 +35,7 @@ const IMPACT_SCORE_KEYS: Array<keyof WorldlineImpactScores> = [
 export function WorldlinePanel({
   canRegenerateWorldline = true,
   onRegenerateWorldline,
+  resumeRegeneration = false,
   primary = false,
   regenerationActive = false,
   regenerationError = null,
@@ -57,6 +59,7 @@ export function WorldlinePanel({
         <WorldlineReviewHeader
           onRegenerateWorldline={onRegenerateWorldline}
           canRegenerateWorldline={canRegenerateWorldline}
+          resumeRegeneration={resumeRegeneration}
           regenerationActive={regenerationActive}
           regenerationError={regenerationError}
           regenerationMessage={regenerationMessage}
@@ -191,6 +194,7 @@ function WorldlineProvenanceTags({
 
 function WorldlineReviewHeader({
   canRegenerateWorldline,
+  resumeRegeneration,
   onRegenerateWorldline,
   regenerationActive,
   regenerationError,
@@ -199,6 +203,7 @@ function WorldlineReviewHeader({
   simulation,
 }: {
   canRegenerateWorldline: boolean;
+  resumeRegeneration: boolean;
   onRegenerateWorldline?: () => void;
   regenerationActive: boolean;
   regenerationError: string | null;
@@ -230,12 +235,17 @@ function WorldlineReviewHeader({
           >
             {regenerationActive
               ? t("worldline.regenerationInProgress")
-              : t("worldline.regenerateFromHere")}
+              : resumeRegeneration
+                ? t("worldline.resumeInterruptedRegeneration")
+                : t("worldline.regenerateFromHere")}
           </button>
         ) : null}
       </div>
       {onRegenerateWorldline && !canRegenerateWorldline ? (
         <p className="muted">{t("worldline.chunkInfoUnavailable")}</p>
+      ) : null}
+      {resumeRegeneration ? (
+        <p className="notice warning">{t("worldline.interruptedRegenerationDetected")}</p>
       ) : null}
       {simulation.last_regeneration ? (
         <div className={regeneration.status === "completed" ? "notice" : "notice warning"}>

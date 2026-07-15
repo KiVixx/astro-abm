@@ -30,6 +30,7 @@ interface WorkbenchPanelProps {
   worldlinePrimary?: boolean;
   onRegenerateWorldline?: () => void;
   canRegenerateWorldline?: boolean;
+  resumeRegeneration?: boolean;
   regenerationActive?: boolean;
   regenerationMessage?: string;
   regenerationError?: string | null;
@@ -335,6 +336,7 @@ export function WorkbenchPanel({
   worldlinePrimary = false,
   onRegenerateWorldline,
   canRegenerateWorldline = true,
+  resumeRegeneration = false,
   regenerationActive = false,
   regenerationMessage = "",
   regenerationError = null,
@@ -360,6 +362,7 @@ export function WorkbenchPanel({
         <WorldlinePanel
           canRegenerateWorldline={canRegenerateWorldline}
           onRegenerateWorldline={onRegenerateWorldline}
+          resumeRegeneration={resumeRegeneration}
           primary
           regenerationActive={regenerationActive}
           regenerationError={regenerationError}
@@ -385,6 +388,7 @@ export function WorkbenchPanel({
         <WorldlinePanel
           canRegenerateWorldline={canRegenerateWorldline}
           onRegenerateWorldline={onRegenerateWorldline}
+          resumeRegeneration={resumeRegeneration}
           regenerationActive={regenerationActive}
           regenerationError={regenerationError}
           regenerationMessage={regenerationMessage}

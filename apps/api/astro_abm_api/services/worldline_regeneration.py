@@ -56,6 +56,12 @@ def regenerate_worldline_from_chunk(
     if report.worldline_simulation is None:
         raise ValueError("worldline_simulation is required for worldline regeneration")
 
+    regeneration_id = _resolve_regeneration_id(
+        report,
+        requested_id=regeneration_id,
+        start_chunk_index=start_chunk_index,
+        progressive=progressive,
+    )
     generation_config, preset_note, api_key = _resolve_generation_config(
         report,
         preset_id=preset_id,
@@ -236,6 +242,14 @@ def regenerate_worldline_from_chunk(
             regeneration_id=regeneration_id,
             regeneration_complete=chunk.chunk_index == len(chunks),
             pending_chunk_count=len(chunks) - chunk.chunk_index,
+            next_chunk_index=(
+                chunk.chunk_index if chunk.chunk_index < len(chunks) else None
+            ),
+            next_chunk_date=(
+                chunks[chunk.chunk_index].start_date
+                if chunk.chunk_index < len(chunks)
+                else None
+            ),
         )
         rebuilt_count += 1
         delay_seconds = generation_config.llm_call_delay_seconds or 0
@@ -266,6 +280,28 @@ def regenerate_worldline_from_chunk(
         fallback_chunk_count=fallback_count,
         skipped_chunk_count=skipped_count,
     )
+
+
+def _resolve_regeneration_id(
+    report: ScenarioReport,
+    *,
+    requested_id: str | None,
+    start_chunk_index: int,
+    progressive: bool,
+) -> str | None:
+    if requested_id or not progressive:
+        return requested_id
+    simulation = report.worldline_simulation
+    last_regeneration = simulation.last_regeneration if simulation else None
+    if (
+        simulation is None
+        or simulation.continuity_status != "rebuilding"
+        or not isinstance(last_regeneration, dict)
+        or _int_or_none(last_regeneration.get("next_chunk_index")) != start_chunk_index
+    ):
+        return requested_id
+    saved_id = last_regeneration.get("regeneration_id")
+    return saved_id if isinstance(saved_id, str) and saved_id else requested_id
 
 
 def _resolve_generation_config(
@@ -502,6 +538,8 @@ def _replace_worldline_days(
     regeneration_id: str | None,
     regeneration_complete: bool,
     pending_chunk_count: int,
+    next_chunk_index: int | None,
+    next_chunk_date: date | None,
 ) -> ScenarioReport:
     existing = report.worldline_simulation
     if existing is None:
@@ -538,6 +576,8 @@ def _replace_worldline_days(
             "note": note,
             "preset_note": preset_note,
             "pending_chunk_count": pending_chunk_count,
+            "next_chunk_index": next_chunk_index,
+            "next_chunk_date": next_chunk_date.isoformat() if next_chunk_date else None,
         },
     )
     return report.model_copy(update={"worldline_simulation": updated_worldline})
@@ -673,9 +713,14 @@ def _finalize_regeneration(
     worldline = report.worldline_simulation
     if worldline is None:
         return report
+    effective_status = (
+        "in_progress"
+        if worldline.continuity_status == "rebuilding"
+        else regeneration_status
+    )
     last_regeneration = {
         **(worldline.last_regeneration or {}),
-        "status": regeneration_status,
+        "status": effective_status,
         "llm_completed_chunk_count": llm_completed_count,
         "fallback_chunk_count": fallback_count,
         "skipped_chunk_count": skipped_count,
@@ -685,7 +730,7 @@ def _finalize_regeneration(
     }
     provenance = {
         **worldline.provenance,
-        "last_regeneration_status": regeneration_status,
+        "last_regeneration_status": effective_status,
         "last_regeneration_llm_completed_chunk_count": llm_completed_count,
         "last_regeneration_fallback_chunk_count": fallback_count,
         "last_regeneration_skipped_chunk_count": skipped_count,
