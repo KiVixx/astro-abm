@@ -30,6 +30,8 @@ astro_research/output/scenarios/
 compact worldline status, generation mode, failed-chunk count, and coverage
 counts. It never returns the full Markdown or daily timeline. Use
 `GET /scenarios/{scenario_id}` only when opening one report or Workbench.
+Fallback summaries distinguish configuration-only fallback chunks from chunks
+where an enabled LLM call or output actually failed.
 
 Scenario JSON and Markdown updates use same-directory temporary files followed
 by atomic replacement. If the API process stops during a chunk update, readers

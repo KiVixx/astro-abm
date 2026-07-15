@@ -56,6 +56,17 @@ export function WorldlineCard({
             ? formatEnumLabel(t, "llm_status", report.llm_report_status)
             : t("llm.missing")}
         </span>
+        {Number(report.worldline_configuration_fallback_chunk_count || 0) > 0 ? (
+          <span className="tag">
+            {t("worldline.configurationFallbackChunks")}:{" "}
+            {report.worldline_configuration_fallback_chunk_count}
+          </span>
+        ) : null}
+        {Number(report.worldline_llm_failed_chunk_count || 0) > 0 ? (
+          <span className="tag">
+            {t("worldline.failedChunks")}: {report.worldline_llm_failed_chunk_count}
+          </span>
+        ) : null}
       </div>
 
       <div className="tag-row">

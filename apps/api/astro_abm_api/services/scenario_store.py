@@ -85,6 +85,10 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         else worldline.mode if worldline else None
     )
     failed_chunk_count = provenance.get("failed_chunk_count", 0)
+    configuration_fallback_count, llm_failed_count = _summary_fallback_counts(
+        provenance,
+        failed_chunk_count,
+    )
     coverage = report.coverage_summary
     return ScenarioSummary(
         scenario_id=report.scenario_id,
@@ -105,11 +109,63 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         worldline_failed_chunk_count=(
             int(failed_chunk_count) if isinstance(failed_chunk_count, (int, float)) else 0
         ),
+        worldline_configuration_fallback_chunk_count=configuration_fallback_count,
+        worldline_llm_failed_chunk_count=llm_failed_count,
         llm_report_status=report.llm_report.status if report.llm_report else None,
         coverage_total_days=coverage.total_days if coverage else None,
         coverage_local_research_days=coverage.local_research_days if coverage else None,
         coverage_future_placeholder_days=coverage.future_placeholder_days if coverage else None,
     )
+
+
+def _summary_fallback_counts(
+    provenance: dict[str, object],
+    failed_chunk_count: object,
+) -> tuple[int, int]:
+    explicit_configuration = provenance.get("configuration_fallback_chunk_count")
+    explicit_llm_failed = provenance.get("llm_failed_chunk_count")
+    if isinstance(explicit_configuration, (int, float)) and isinstance(
+        explicit_llm_failed,
+        (int, float),
+    ):
+        return max(0, int(explicit_configuration)), max(0, int(explicit_llm_failed))
+
+    configuration_count = 0
+    llm_failed_count = 0
+    history = provenance.get("chunk_history")
+    if isinstance(history, list):
+        for item in history:
+            if not isinstance(item, dict) or item.get("status") != "fallback":
+                continue
+            reason = item.get("fallback_reason")
+            is_configuration = reason in {
+                "unsupported_llm_provider",
+                "real_llm_disabled",
+                "llm_base_url_missing",
+                "llm_model_missing",
+                "legacy_configuration_unavailable",
+            } or (
+                not item.get("network_call_performed")
+                and item.get("output_validation_status")
+                in {
+                    "configuration_missing",
+                    "llm_disabled_or_config_unavailable",
+                    "not_run",
+                }
+            )
+            if is_configuration:
+                configuration_count += 1
+            else:
+                llm_failed_count += 1
+    if configuration_count or llm_failed_count:
+        return configuration_count, llm_failed_count
+
+    legacy_failed_count = (
+        max(0, int(failed_chunk_count))
+        if isinstance(failed_chunk_count, (int, float))
+        else 0
+    )
+    return 0, legacy_failed_count
 
 
 class ScenarioStore:

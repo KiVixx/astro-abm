@@ -456,6 +456,8 @@ export interface ScenarioSummary {
   worldline_generation_mode?: string | null;
   worldline_day_count?: number;
   worldline_failed_chunk_count?: number;
+  worldline_configuration_fallback_chunk_count?: number;
+  worldline_llm_failed_chunk_count?: number;
   llm_report_status?: string | null;
   coverage_total_days?: number | null;
   coverage_local_research_days?: number | null;

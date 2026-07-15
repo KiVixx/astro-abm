@@ -130,7 +130,11 @@ function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter
     return false;
   }
   const generationMode = report.worldline_generation_mode || "";
-  const failedChunks = Number(report.worldline_failed_chunk_count || 0);
+  const failedChunks = Number(
+    report.worldline_llm_failed_chunk_count
+      ?? report.worldline_failed_chunk_count
+      ?? 0,
+  );
   if (filter === "failed") {
     return (
       report.worldline_status === "failed" ||

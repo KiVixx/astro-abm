@@ -446,6 +446,53 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     )
     assert fallback_summary.worldline_generation_mode == "llm_chunk_v1"
     assert fallback_summary.worldline_failed_chunk_count == 2
+    assert fallback_summary.worldline_configuration_fallback_chunk_count == 0
+    assert fallback_summary.worldline_llm_failed_chunk_count == 2
+
+    configuration_worldline = report_model.worldline_simulation.model_copy(
+        update={
+            "provenance": {
+                **report_model.worldline_simulation.provenance,
+                "failed_chunk_count": 2,
+                "configuration_fallback_chunk_count": 2,
+                "llm_failed_chunk_count": 0,
+            },
+        }
+    )
+    configuration_summary = report_to_summary(
+        report_model.model_copy(update={"worldline_simulation": configuration_worldline})
+    )
+    assert configuration_summary.worldline_failed_chunk_count == 2
+    assert configuration_summary.worldline_configuration_fallback_chunk_count == 2
+    assert configuration_summary.worldline_llm_failed_chunk_count == 0
+
+    legacy_configuration_provenance = {
+        **report_model.worldline_simulation.provenance,
+        "failed_chunk_count": 1,
+        "chunk_history": [
+            {
+                "status": "fallback",
+                "network_call_performed": False,
+                "output_validation_status": "llm_disabled_or_config_unavailable",
+            }
+        ],
+    }
+    legacy_configuration_provenance.pop(
+        "configuration_fallback_chunk_count",
+        None,
+    )
+    legacy_configuration_provenance.pop("llm_failed_chunk_count", None)
+    legacy_configuration_summary = report_to_summary(
+        report_model.model_copy(
+            update={
+                "worldline_simulation": report_model.worldline_simulation.model_copy(
+                    update={"provenance": legacy_configuration_provenance}
+                )
+            }
+        )
+    )
+    assert legacy_configuration_summary.worldline_configuration_fallback_chunk_count == 1
+    assert legacy_configuration_summary.worldline_llm_failed_chunk_count == 0
 
     get_response = client.get(f"/scenarios/{scenario_id}")
     assert get_response.status_code == 200
