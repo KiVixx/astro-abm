@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from time import sleep
 from typing import Any
 
 import requests
@@ -281,6 +282,9 @@ def generate_worldline_chunk(
                 safety_check_status=last_failure["safety_check_status"],
                 next_attempt=attempt_count + 1,
             )
+            retry_delay_seconds = request.llm_call_delay_seconds or 0
+            if retry_delay_seconds > 0:
+                sleep(retry_delay_seconds)
 
     failed_simulation = _fallback_chunk(
         report,

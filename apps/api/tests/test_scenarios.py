@@ -1308,6 +1308,7 @@ def test_worldline_chunk_retries_before_fallback(
     }
     calls = 0
     request_payloads: list[dict[str, object]] = []
+    retry_delays: list[float] = []
 
     class Response:
         def raise_for_status(self):
@@ -1325,6 +1326,11 @@ def test_worldline_chunk_retries_before_fallback(
         return Response()
 
     monkeypatch.setattr("astro_abm_api.services.llm_client.requests.post", fake_post)
+    monkeypatch.setattr(
+        "astro_abm_api.services.worldline_llm_generator.sleep",
+        retry_delays.append,
+        raising=False,
+    )
     client = TestClient(app)
     create_response = client.post("/scenarios", json=scenario_payload())
     assert create_response.status_code == 200
@@ -1337,6 +1343,7 @@ def test_worldline_chunk_retries_before_fallback(
             "llm_real_enabled": True,
             "llm_base_url": "http://llm.local/v1",
             "llm_model": "test-model",
+            "llm_call_delay_seconds": 0.25,
             "language": "en",
             "chunk_start_date": "2026-07-01",
             "chunk_end_date": "2026-07-01",
@@ -1360,6 +1367,7 @@ def test_worldline_chunk_retries_before_fallback(
     retry_instruction = request_payloads[1]["messages"][-1]["content"]
     assert "Previous response failed JSON parsing" in retry_instruction
     assert "not json" not in retry_instruction
+    assert retry_delays == [0.25, 0.25]
 
 
 def test_worldline_chunk_invalid_json_falls_back_safely(
