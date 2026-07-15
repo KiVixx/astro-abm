@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createLlmPreset, deleteLlmPreset, updateLlmPreset } from "@/lib/api";
 import { AgentSelector } from "./AgentSelector";
@@ -30,6 +31,7 @@ interface GenerationProgress {
   currentChunk: number;
   totalChunks: number;
   message: string;
+  savedReportPath?: string;
 }
 
 const DEFAULT_LLM_PROVIDER: LlmProvider = "openai_compatible";
@@ -139,6 +141,9 @@ export function ScenarioForm({
     const shouldChunkLlm =
       product !== "worldline" &&
       payload.llm_provider === "openai_compatible" && payload.llm_real_enabled === true;
+    let savedReportPath: string | undefined;
+    let processedChunks = 0;
+    let plannedChunks = 0;
 
     try {
       setProgress({
@@ -160,6 +165,7 @@ export function ScenarioForm({
           }
         : payload;
       const report = await createAction(basePayload);
+      savedReportPath = `${product === "worldline" ? "/worldlines" : "/scenarios"}/${report.scenario_id}`;
 
       if (!shouldChunkLlm && !shouldChunkWorldline) {
         setProgress({
@@ -176,6 +182,7 @@ export function ScenarioForm({
       }
 
       const chunks = buildDateChunks(payload.start_date, payload.end_date, chunkSizeDays);
+      plannedChunks = chunks.length;
       let consecutiveWorldlineFailures = 0;
       for (const [index, chunk] of chunks.entries()) {
         const chunkLabel = shouldChunkWorldline
@@ -211,6 +218,7 @@ export function ScenarioForm({
             total_chunks: chunks.length,
             worldline_chunk_days: chunkSizeDays,
           });
+          processedChunks = index + 1;
           networkCallPerformed = worldlineChunkPerformedNetworkCall(
             response.report,
             index + 1,
@@ -267,6 +275,7 @@ export function ScenarioForm({
             chunk_index: index + 1,
             total_chunks: chunks.length,
           });
+          processedChunks = index + 1;
           networkCallPerformed = Boolean(
             response.report.llm_report?.provenance.network_call_performed,
           );
@@ -308,9 +317,10 @@ export function ScenarioForm({
       setProgress({
         active: true,
         phase: "error",
-        currentChunk: progress.currentChunk,
-        totalChunks: progress.totalChunks,
+        currentChunk: processedChunks,
+        totalChunks: plannedChunks,
         message: error instanceof Error ? error.message : t("common.unknownError"),
+        savedReportPath,
       });
     }
   }
@@ -677,6 +687,18 @@ export function ScenarioForm({
             <div style={{ width: `${progressPct}%` }} />
           </div>
           <p>{progress.message}</p>
+          {progress.phase === "error" && progress.savedReportPath ? (
+            <div className="stack">
+              <p className="muted">{t("scenarioCreate.progressPartialSaved")}</p>
+              <div className="button-row">
+                <Link className="button secondary" href={progress.savedReportPath}>
+                  {product === "worldline"
+                    ? t("scenarioCreate.openSavedWorldline")
+                    : t("scenarioCreate.openSavedScenario")}
+                </Link>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </form>

@@ -359,6 +359,9 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressWorldlineHalted": "Worldline generation stopped after two consecutive chunks exhausted their applicable retry policy. Check the LLM endpoint or preset.",
     "scenarioCreate.progressWorldlineDryRunComplete": "Real LLM calls were not enabled. The deterministic dry-run worldline is ready without additional chunk calls.",
     "scenarioCreate.progressComplete": "Scenario generated. Opening report...",
+    "scenarioCreate.progressPartialSaved": "The base report and every completed chunk remain saved. Open the saved result to review fallback details or resume with regeneration.",
+    "scenarioCreate.openSavedWorldline": "Open saved Worldline",
+    "scenarioCreate.openSavedScenario": "Open saved scenario",
 
     "report.summary": "Summary",
     "report.dailyTimeline": "Daily Timeline",
@@ -966,6 +969,9 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.progressWorldlineHalted": "連續兩個 chunk 已耗盡各自適用的重試策略，世界線生成已停止。請檢查 LLM endpoint 或 preset。",
     "scenarioCreate.progressWorldlineDryRunComplete": "真實 LLM 呼叫未啟用；確定性 dry-run 世界線已完成，沒有再發出多餘的 chunk 呼叫。",
     "scenarioCreate.progressComplete": "情境已生成，正在打開報告...",
+    "scenarioCreate.progressPartialSaved": "基礎報告與所有已完成的 chunk 仍然保存在本機。可打開已保存結果，檢視 fallback 詳情或使用重建功能續跑。",
+    "scenarioCreate.openSavedWorldline": "打開已保存世界線",
+    "scenarioCreate.openSavedScenario": "打開已保存情境",
 
     "report.summary": "摘要",
     "report.dailyTimeline": "每日時間線",
