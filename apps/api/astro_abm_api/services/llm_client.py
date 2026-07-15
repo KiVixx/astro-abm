@@ -38,6 +38,45 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_OUTPUT_TOKENS = 5000
 RAW_TEXT_PREVIEW_LIMIT = 800
 
+
+def diagnose_llm_request_error(exc: requests.RequestException) -> dict[str, object]:
+    http_status = (
+        exc.response.status_code
+        if isinstance(exc, requests.HTTPError) and exc.response is not None
+        else None
+    )
+    if isinstance(exc, requests.Timeout):
+        category = "timeout"
+        retryable = True
+    elif isinstance(exc, requests.ConnectionError):
+        category = "connection_error"
+        retryable = True
+    elif isinstance(exc, requests.HTTPError):
+        category = "http_error"
+        retryable = http_status == 429 or bool(http_status and http_status >= 500)
+    else:
+        category = "request_error"
+        retryable = False
+    return {
+        "error_category": category,
+        "exception_type": type(exc).__name__,
+        "retryable": retryable,
+        "http_status": http_status,
+    }
+
+
+def safe_llm_request_error_message(exc: requests.RequestException) -> str:
+    diagnostics = diagnose_llm_request_error(exc)
+    category = str(diagnostics["error_category"])
+    if category == "timeout":
+        return "The LLM request timed out before a complete response was received."
+    if category == "connection_error":
+        return "The LLM endpoint could not be reached."
+    if category == "http_error":
+        status = diagnostics.get("http_status")
+        return f"The LLM endpoint returned HTTP status {status}." if status else "The LLM endpoint returned an HTTP error."
+    return "The LLM request failed before a complete response was received."
+
 TRADING_INSTRUCTION_PATTERNS = (
     r"\bmust\s+buy\b",
     r"\bmust\s+sell\b",
@@ -214,7 +253,7 @@ def generate_llm_scenario_report(
                 safety_check_status="not_run",
             ),
             executive_summary="The OpenAI-compatible LLM request failed safely.",
-            scenario_reading=f"{type(exc).__name__}: {exc}",
+            scenario_reading=safe_llm_request_error_message(exc),
             language=request.language,
         )
 
@@ -340,7 +379,7 @@ def generate_llm_scenario_report_chunk(
                 safety_check_status="not_run",
             ),
             executive_summary="The OpenAI-compatible LLM request failed safely.",
-            scenario_reading=f"{type(exc).__name__}: {exc}",
+            scenario_reading=safe_llm_request_error_message(exc),
             language=request.language,
         )
 
@@ -539,7 +578,7 @@ def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
             reachable=False,
             dry_run=False,
             status="request_failed",
-            message=f"{type(exc).__name__}: {exc}",
+            message=safe_llm_request_error_message(exc),
             base_url=config.base_url,
             model=config.model,
         )

@@ -327,6 +327,7 @@ function WorldlineReviewHeader({
                   </span>
                 </div>
                 <ChunkAttemptHistory value={chunk.attempt_history} />
+                <ChunkRequestDiagnostics value={chunk.request_diagnostics} />
                 <ChunkResponseDiagnostics value={chunk.response_diagnostics} />
               </div>
             ))}
@@ -380,10 +381,38 @@ function ChunkAttemptHistory({ value }: { value: unknown }) {
               </p>
             ) : null}
             {attempt.reason ? <p className="muted">{String(attempt.reason)}</p> : null}
+            <ChunkRequestDiagnostics value={attempt.request_diagnostics} />
             <ChunkResponseDiagnostics value={attempt.response_diagnostics} />
           </div>
         ))}
       </div>
+    </details>
+  );
+}
+
+function ChunkRequestDiagnostics({ value }: { value: unknown }) {
+  const { t } = useI18n();
+  const diagnostics = recordFromUnknown(value);
+  if (!diagnostics || !diagnostics.error_category) {
+    return null;
+  }
+  return (
+    <details>
+      <summary>{t("worldline.requestDiagnostics")}</summary>
+      <div className="tag-row">
+        <span className="tag">
+          {t("worldline.errorCategory")}: {String(diagnostics.error_category)}
+        </span>
+        <span className="tag">
+          {t("worldline.retryable")}: {diagnostics.retryable === true ? "true" : "false"}
+        </span>
+        {diagnostics.http_status ? (
+          <span className="tag">
+            {t("worldline.httpStatus")}: {String(diagnostics.http_status)}
+          </span>
+        ) : null}
+      </div>
+      <p className="muted">{t("worldline.requestDiagnosticsPrivacyNote")}</p>
     </details>
   );
 }

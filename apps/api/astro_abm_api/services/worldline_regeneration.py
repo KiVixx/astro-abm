@@ -614,6 +614,7 @@ def _safe_generation_details(provenance: dict[str, object]) -> dict[str, object]
         "max_attempts",
         "last_error",
         "response_diagnostics",
+        "request_diagnostics",
         "attempt_history",
         "safety_violation_codes",
         "consecutive_failed_chunk_count",

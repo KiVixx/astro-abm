@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from astro_abm_api.main import app
 from astro_abm_api.models.report import ScenarioReport
 from astro_abm_api.services.llm_client import (
+    diagnose_llm_request_error,
     diagnose_llm_json,
     safety_check_text,
     safety_violation_codes,
@@ -126,6 +127,20 @@ def test_llm_json_diagnostics_identify_truncation_without_retaining_content() ->
     assert diagnostics["probable_truncation"] is True
     assert "raw_text" not in diagnostics
     assert raw_text not in json.dumps(diagnostics)
+
+
+def test_llm_request_diagnostics_classify_timeout_without_retaining_details() -> None:
+    secret_detail = "https://llm.example/v1?api_key=secret-value"
+
+    diagnostics = diagnose_llm_request_error(requests.Timeout(secret_detail))
+
+    assert diagnostics == {
+        "error_category": "timeout",
+        "exception_type": "Timeout",
+        "retryable": True,
+        "http_status": None,
+    }
+    assert secret_detail not in json.dumps(diagnostics)
 
 
 def test_scenario_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant() -> None:
@@ -1537,6 +1552,50 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert worldline["days"][0]["quality_notes"]
     assert worldline["days"][0]["agent_events"]
     assert_worldline_state_continuity(worldline["days"])
+
+
+def test_worldline_chunk_timeout_records_safe_request_diagnostics(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    secret_detail = "https://llm.example/v1?api_key=secret-value"
+
+    def raise_timeout(*args, **kwargs):
+        raise requests.Timeout(secret_detail)
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        raise_timeout,
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    response_text = json.dumps(chunk_response.json())
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert len(history) == 3
+    assert all(item["request_diagnostics"]["error_category"] == "timeout" for item in history)
+    assert all(item["request_diagnostics"]["retryable"] is True for item in history)
+    assert secret_detail not in response_text
+    assert "secret-value" not in (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
 
 
 def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
