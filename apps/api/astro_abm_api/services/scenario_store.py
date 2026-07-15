@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 from pathlib import Path
 
@@ -37,6 +38,7 @@ def validate_scenario_id(scenario_id: str) -> str:
 
 def _atomic_write_text(path: Path, content: str) -> None:
     """Commit a complete UTF-8 file without exposing a partially written target."""
+    existing_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent,
         prefix=f".{path.name}.",
@@ -48,6 +50,8 @@ def _atomic_write_text(path: Path, content: str) -> None:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
+        if existing_mode is not None:
+            temporary.chmod(existing_mode)
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)

@@ -36,6 +36,7 @@ by atomic replacement. If the API process stops during a chunk update, readers
 continue to see the previous complete file rather than a truncated report.
 JSON is the canonical API record; an interruption between the two replacements
 can leave Markdown one revision behind until the next successful save.
+Atomic updates preserve the permissions of existing report files.
 
 Override the output directory for tests or local experiments:
 
