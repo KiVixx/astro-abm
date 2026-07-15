@@ -326,6 +326,7 @@ function WorldlineReviewHeader({
                     {String(chunk.max_attempts || "3")}
                   </span>
                 </div>
+                <ChunkAttemptHistory value={chunk.attempt_history} />
                 <ChunkResponseDiagnostics value={chunk.response_diagnostics} />
               </div>
             ))}
@@ -345,6 +346,39 @@ function WorldlineReviewHeader({
         </ul>
       </details>
     </section>
+  );
+}
+
+function ChunkAttemptHistory({ value }: { value: unknown }) {
+  const { t } = useI18n();
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+  const attempts = value.map(recordFromUnknown).filter((item) => item !== null);
+  if (!attempts.length) {
+    return null;
+  }
+  return (
+    <details>
+      <summary>{t("worldline.attemptHistory")}</summary>
+      <div className="stack">
+        {attempts.map((attempt, index) => (
+          <div className="nested-panel" key={`${String(attempt.attempt || index + 1)}-${index}`}>
+            <div className="tag-row">
+              <span className="tag">
+                {t("worldline.attemptLabel")} {String(attempt.attempt || index + 1)}
+              </span>
+              <span className="tag">
+                {String(attempt.output_validation_status || "unknown")}
+              </span>
+              <span className="tag">{String(attempt.safety_check_status || "unknown")}</span>
+            </div>
+            {attempt.reason ? <p className="muted">{String(attempt.reason)}</p> : null}
+            <ChunkResponseDiagnostics value={attempt.response_diagnostics} />
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

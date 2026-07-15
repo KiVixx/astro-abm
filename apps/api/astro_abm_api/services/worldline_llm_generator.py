@@ -224,6 +224,7 @@ def generate_worldline_chunk(
         "reason": "LLM worldline chunk did not complete.",
         "response_diagnostics": None,
     }
+    attempt_history: list[dict[str, object]] = []
     for attempt_count in range(1, MAX_WORLDLINE_CHUNK_ATTEMPTS + 1):
         attempt = _attempt_worldline_chunk(
             config,
@@ -235,6 +236,15 @@ def generate_worldline_chunk(
             attempt_count=attempt_count,
         )
         if attempt["ok"]:
+            attempt_history.append(
+                _attempt_history_entry(
+                    attempt_count,
+                    output_validation_status="valid_json",
+                    safety_check_status="passed",
+                    reason="Chunk output passed JSON validation and safety review.",
+                    response_diagnostics=attempt.get("response_diagnostics"),
+                )
+            )
             parsed = attempt["parsed"]
             chunk_days = attempt["chunk_days"]
             merged_days = _merge_days(report.worldline_simulation, fallback, chunk_days)
@@ -264,6 +274,7 @@ def generate_worldline_chunk(
                     attempt_count=attempt_count,
                     last_error=None,
                     response_diagnostics=attempt.get("response_diagnostics"),
+                    attempt_history=attempt_history,
                 ),
                 generation_config=generation_config,
                 continuity_status="consistent",
@@ -274,6 +285,15 @@ def generate_worldline_chunk(
             "reason": str(attempt["reason"]),
             "response_diagnostics": attempt.get("response_diagnostics"),
         }
+        attempt_history.append(
+            _attempt_history_entry(
+                attempt_count,
+                output_validation_status=last_failure["output_validation_status"],
+                safety_check_status=last_failure["safety_check_status"],
+                reason=last_failure["reason"],
+                response_diagnostics=last_failure["response_diagnostics"],
+            )
+        )
         if attempt_count < MAX_WORLDLINE_CHUNK_ATTEMPTS:
             attempt_messages = build_worldline_retry_messages(
                 messages,
@@ -301,6 +321,7 @@ def generate_worldline_chunk(
         attempt_count=MAX_WORLDLINE_CHUNK_ATTEMPTS,
         generation_config=generation_config,
         response_diagnostics=last_failure["response_diagnostics"],
+        attempt_history=attempt_history,
     )
     if failed_simulation.provenance.get("generation_halted"):
         return _mark_remaining_chunks_after_halt(failed_simulation, report, request)
@@ -554,6 +575,7 @@ def _fallback_chunk(
     attempt_count: int,
     generation_config: WorldlineGenerationConfig,
     response_diagnostics: dict[str, object] | None = None,
+    attempt_history: list[dict[str, object]] | None = None,
 ) -> WorldlineSimulation:
     chunk_days = [
         _mark_day(
@@ -596,6 +618,7 @@ def _fallback_chunk(
             attempt_count=attempt_count,
             last_error=reason,
             response_diagnostics=response_diagnostics,
+            attempt_history=attempt_history,
         ),
         generation_config=generation_config,
         continuity_status="consistent",
@@ -740,6 +763,7 @@ def _provenance(
     attempt_count: int,
     last_error: str | None,
     response_diagnostics: dict[str, object] | None = None,
+    attempt_history: list[dict[str, object]] | None = None,
 ) -> dict[str, Any]:
     previous = report.worldline_simulation.provenance if report.worldline_simulation else {}
     previous_consecutive_failures = _previous_consecutive_failed_chunk_count(report)
@@ -763,6 +787,7 @@ def _provenance(
         "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
         "last_error": last_error,
         "response_diagnostics": response_diagnostics,
+        "attempt_history": attempt_history or [],
         "consecutive_failed_chunk_count": consecutive_failures,
         "generation_halted": generation_halted,
     }
@@ -784,6 +809,7 @@ def _provenance(
         "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
         "last_error": last_error,
         "response_diagnostics": response_diagnostics,
+        "attempt_history": attempt_history or [],
         "chunk_count": _previous_chunk_count(report) + 1,
         "failed_chunk_count": _previous_failed_chunk_count(report) + (1 if failed else 0),
         "consecutive_failed_chunk_count": consecutive_failures,
@@ -803,6 +829,23 @@ def _provenance(
             ),
         ),
         "chunk_history": _merge_chunk_history(previous.get("chunk_history"), chunk_entry),
+    }
+
+
+def _attempt_history_entry(
+    attempt: int,
+    *,
+    output_validation_status: str,
+    safety_check_status: str,
+    reason: object,
+    response_diagnostics: object,
+) -> dict[str, object]:
+    return {
+        "attempt": attempt,
+        "output_validation_status": output_validation_status,
+        "safety_check_status": safety_check_status,
+        "reason": str(reason),
+        "response_diagnostics": response_diagnostics,
     }
 
 

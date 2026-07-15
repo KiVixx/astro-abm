@@ -1360,6 +1360,15 @@ def test_worldline_chunk_retries_before_fallback(
     assert worldline["provenance"]["attempt_count"] == 3
     assert worldline["provenance"]["failed_chunk_count"] == 0
     assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
+    attempt_history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert [item["attempt"] for item in attempt_history] == [1, 2, 3]
+    assert [item["output_validation_status"] for item in attempt_history] == [
+        "invalid_json",
+        "invalid_json",
+        "valid_json",
+    ]
+    assert attempt_history[-1]["safety_check_status"] == "passed"
+    assert all("raw_text" not in json.dumps(item) for item in attempt_history)
     assert worldline["days"][0]["generation_source"] == "llm_chunk"
     assert "attempt 3" in " ".join(worldline["days"][0]["quality_notes"])
     assert len(request_payloads[0]["messages"]) == 2
@@ -1414,6 +1423,11 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert worldline["provenance"]["failed_chunk_count"] == 1
     assert worldline["provenance"]["attempt_count"] == 3
     assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
+    attempt_history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert len(attempt_history) == 3
+    assert all(item["output_validation_status"] == "invalid_json" for item in attempt_history)
+    assert all(item["response_diagnostics"]["parse_error_type"] == "no_json_object" for item in attempt_history)
+    assert all("raw_text" not in json.dumps(item) for item in attempt_history)
     diagnostics = worldline["provenance"]["chunk_history"][0]["response_diagnostics"]
     assert diagnostics["response_char_count"] == len("not json")
     assert diagnostics["parse_error_type"] == "no_json_object"
