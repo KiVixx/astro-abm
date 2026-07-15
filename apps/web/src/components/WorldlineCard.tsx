@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ScenarioReport } from "@/lib/types";
 import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
+import { worldlineGenerationMode } from "@/lib/worldline";
 
 export function WorldlineCard({
   isDeleting = false,
@@ -16,6 +17,7 @@ export function WorldlineCard({
 }) {
   const { t } = useI18n();
   const worldline = report.worldline_simulation;
+  const generationMode = worldlineGenerationMode(worldline);
 
   return (
     <article className="card worldline-card">
@@ -46,7 +48,7 @@ export function WorldlineCard({
         </span>
         <span className="tag">
           {t("worldline.mode")}:{" "}
-          {worldline?.mode || t("worldline.noWorldlineShort")}
+          {generationMode || t("worldline.noWorldlineShort")}
         </span>
         <span className="tag">
           {t("worldline.dayCount")}: {worldline?.horizon_days || 0}

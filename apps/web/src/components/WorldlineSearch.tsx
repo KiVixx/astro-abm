@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { WorldlineCard } from "./WorldlineCard";
 import { deleteScenario } from "@/lib/api";
 import type { ScenarioReport } from "@/lib/types";
+import { worldlineGenerationMode } from "@/lib/worldline";
 import { useI18n } from "@/i18n/useI18n";
 
 type WorldlineFilter = "all" | "ready" | "llm" | "deterministic" | "failed" | "legacy";
@@ -42,7 +43,7 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
         report.title,
         report.description || "",
         report.worldline_simulation?.status || "",
-        report.worldline_simulation?.mode || "",
+        worldlineGenerationMode(report.worldline_simulation),
         report.llm_report?.status || "",
         ...report.assets,
         ...report.agents.map((agent) => agent.name),
@@ -130,7 +131,7 @@ function matchesWorldlineFilter(report: ScenarioReport, filter: WorldlineFilter)
   if (!worldline) {
     return false;
   }
-  const generationMode = String(worldline.provenance?.generation_mode || worldline.mode || "");
+  const generationMode = worldlineGenerationMode(worldline);
   const failedChunks = Number(worldline.provenance?.failed_chunk_count || 0);
   if (filter === "failed") {
     return (
@@ -141,10 +142,10 @@ function matchesWorldlineFilter(report: ScenarioReport, filter: WorldlineFilter)
     );
   }
   if (filter === "llm") {
-    return generationMode.includes("llm_chunk") || worldline.mode.includes("llm_chunk");
+    return generationMode.includes("llm_chunk");
   }
   if (filter === "deterministic") {
-    return generationMode.includes("deterministic") || worldline.mode.includes("deterministic");
+    return generationMode.includes("deterministic");
   }
   if (filter === "ready") {
     return ["completed", "mock_completed"].includes(worldline.status);
