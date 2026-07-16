@@ -146,7 +146,7 @@ def regenerate_worldline_from_chunk(
             safety_check = "not_run"
             network_call = False
             issues = [
-                "LLM call skipped after two consecutive chunk failures; deterministic fallback chunk was used.",
+                "LLM call skipped after an earlier chunk exhausted its retry policy; user retry is required.",
             ]
             chunk_days = _regenerate_deterministic_chunk(
                 working_report,
@@ -190,7 +190,7 @@ def regenerate_worldline_from_chunk(
                 consecutive_failed_count += 1
                 if first_failure is None:
                     first_failure = next((item for item in issues[1:] if item), issues[0])
-                if consecutive_failed_count >= 2:
+                if consecutive_failed_count >= 1:
                     generation_halted = True
         else:
             configuration_fallback = _llm_configuration_fallback(generation_config)
@@ -662,7 +662,10 @@ def _updated_provenance(
     failed_count = sum(
         1
         for item in chunk_history
-        if item.get("status") in {"fallback", "skipped_after_halt"}
+        if item.get("status") == "fallback"
+    )
+    skipped_count = sum(
+        1 for item in chunk_history if item.get("status") == "skipped_after_halt"
     )
     fallback_reason_counts = _fallback_reason_counts(chunk_history)
     configuration_fallback_count = sum(
@@ -691,6 +694,7 @@ def _updated_provenance(
         "credential_status": generation_config.credential_status,
         "chunk_count": len(chunk_history),
         "failed_chunk_count": failed_count,
+        "skipped_chunk_count": skipped_count,
         "configuration_fallback_chunk_count": configuration_fallback_count,
         "llm_failed_chunk_count": llm_failed_count,
         "fallback_reason_counts": fallback_reason_counts,
@@ -830,7 +834,7 @@ def _finalize_regeneration(
         "last_regeneration_llm_failed_chunk_count": llm_failed_count,
         "generation_halted": generation_halted,
         "halt_reason": (
-            "Two consecutive LLM chunks failed during regeneration; remaining network calls were skipped."
+            "One LLM chunk exhausted its retry policy during regeneration; remaining network calls were skipped until user retry."
             if generation_halted
             else None
         ),

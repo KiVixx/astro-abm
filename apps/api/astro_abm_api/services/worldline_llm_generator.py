@@ -40,7 +40,7 @@ from astro_abm_api.services.worldline_simulation import (
 )
 
 MAX_WORLDLINE_CHUNK_ATTEMPTS = 3
-MAX_CONSECUTIVE_FAILED_CHUNKS = 2
+MAX_CONSECUTIVE_FAILED_CHUNKS = 1
 
 
 def generate_worldline_for_request(
@@ -799,7 +799,7 @@ def _provenance(
     consecutive_failures = previous_consecutive_failures + 1 if failed else 0
     generation_halted = consecutive_failures >= MAX_CONSECUTIVE_FAILED_CHUNKS
     halt_reason = (
-        "LLM worldline generation stopped after two consecutive chunks exhausted their applicable retry policy."
+        "LLM worldline generation stopped after one chunk exhausted its applicable retry policy. User retry is required before downstream generation continues."
         if generation_halted
         else None
     )
@@ -956,7 +956,7 @@ def _mark_remaining_chunks_after_halt(
 ) -> WorldlineSimulation:
     reason = str(
         simulation.provenance.get("halt_reason")
-        or "LLM worldline generation halted after consecutive chunk failures."
+        or "LLM worldline generation halted after a chunk exhausted its retry policy."
     )
     future_dates = sorted(
         snapshot.date
@@ -1048,7 +1048,7 @@ def _halted_generation(
         raise ValueError("worldline simulation is unavailable")
     reason = str(
         simulation.provenance.get("halt_reason")
-        or "LLM worldline generation is halted after consecutive chunk failures."
+        or "LLM worldline generation is halted until the failed chunk is retried by the user."
     )
     return simulation.model_copy(
         update={

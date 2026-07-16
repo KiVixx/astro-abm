@@ -63,6 +63,8 @@ def build_worldline_retry_messages(
                 "閉合且精簡的 JSON object，不要使用 Markdown code fence 或額外說明；"
                 "保留所有必要日期，但縮短各文字欄位。"
             )
+            if next_attempt >= 3:
+                correction += " 這是最後一次自動重試；每個文字欄位最多使用一個短句，優先確保 JSON 完整閉合。"
         elif output_validation_status == "invalid_payload":
             correction = (
                 "上一次回應未符合指定 schema、日期或 agent_id。請嚴格沿用系統訊息中的"
@@ -83,6 +85,8 @@ def build_worldline_retry_messages(
                 "concise JSON object with no Markdown fence or commentary. Keep every required "
                 "date, but shorten user-facing text fields."
             )
+            if next_attempt >= 3:
+                correction += " This is the final automatic retry; use at most one short sentence per text field and prioritize closing the JSON object."
         elif output_validation_status == "invalid_payload":
             correction = (
                 "Previous response did not match the required schema, dates, or agent IDs. "

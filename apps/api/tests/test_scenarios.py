@@ -2025,6 +2025,21 @@ def test_worldline_chunk_retries_before_fallback(
     assert retry_delays == [0.25, 0.25]
 
 
+def test_worldline_final_json_retry_prioritizes_short_complete_output() -> None:
+    base = build_worldline_messages({"language": "zh-Hant", "daily_timeline": []})
+
+    retried = build_worldline_retry_messages(
+        base,
+        language="zh-Hant",
+        output_validation_status="invalid_json",
+        safety_check_status="not_run",
+        next_attempt=3,
+    )
+
+    assert "最後一次自動重試" in retried[-1]["content"]
+    assert "優先確保 JSON 完整閉合" in retried[-1]["content"]
+
+
 def test_worldline_chunk_invalid_json_falls_back_safely(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -2245,7 +2260,7 @@ def test_worldline_chunk_retries_retryable_http_error(
     assert all(item["request_diagnostics"]["retryable"] is True for item in history)
 
 
-def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
+def test_worldline_chunk_stops_after_first_exhausted_chunk(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -2294,29 +2309,30 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
         )
 
     assert all(response.status_code == 200 for response in responses)
-    assert calls == 6
+    assert calls == 3
     assert responses[0].json()["worldline_status"] == "fallback"
     assert responses[0].json()["consecutive_failed_chunk_count"] == 1
-    assert responses[0].json()["generation_halted"] is False
-    assert responses[1].json()["worldline_status"] == "fallback"
-    assert responses[1].json()["consecutive_failed_chunk_count"] == 2
+    assert responses[0].json()["generation_halted"] is True
+    assert responses[1].json()["worldline_status"] == "halted"
+    assert responses[1].json()["consecutive_failed_chunk_count"] == 1
     assert responses[1].json()["generation_halted"] is True
-    halted_worldline = responses[1].json()["report"]["worldline_simulation"]
+    halted_worldline = responses[0].json()["report"]["worldline_simulation"]
     halted_history = halted_worldline["provenance"]["chunk_history"]
     assert [item["status"] for item in halted_history] == [
         "fallback",
-        "fallback",
+        "skipped_after_halt",
         "skipped_after_halt",
         "skipped_after_halt",
         "skipped_after_halt",
     ]
-    assert halted_worldline["provenance"]["failed_chunk_count"] == 2
-    assert halted_worldline["provenance"]["skipped_chunk_count"] == 3
+    assert halted_worldline["provenance"]["failed_chunk_count"] == 1
+    assert halted_worldline["provenance"]["skipped_chunk_count"] == 4
     assert all(
         item["network_call_performed"] is False and item["attempt_count"] == 0
-        for item in halted_history[2:]
+        for item in halted_history[1:]
     )
-    assert [day["chunk_status"] for day in halted_worldline["days"][2:]] == [
+    assert [day["chunk_status"] for day in halted_worldline["days"][1:]] == [
+        "skipped_after_halt",
         "skipped_after_halt",
         "skipped_after_halt",
         "skipped_after_halt",
@@ -2327,9 +2343,9 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
     worldline = responses[2].json()["report"]["worldline_simulation"]
     assert worldline["provenance"]["chunk_count"] == 5
     assert len(worldline["provenance"]["chunk_history"]) == 5
-    assert "two consecutive chunks" in worldline["provenance"]["halt_reason"]
+    assert "one chunk" in worldline["provenance"]["halt_reason"]
     assert "retry policy" in worldline["provenance"]["halt_reason"]
-    assert "three attempts" not in worldline["provenance"]["halt_reason"]
+    assert "User retry is required" in worldline["provenance"]["halt_reason"]
 
 
 def test_worldline_chunk_wording_is_not_filtered(

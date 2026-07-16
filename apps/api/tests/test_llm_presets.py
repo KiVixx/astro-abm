@@ -230,7 +230,7 @@ def test_worldline_regeneration_uses_local_preset_without_saving_key(
     assert "local-secret-key" not in scenario_path.read_text(encoding="utf-8")
 
 
-def test_worldline_regeneration_halts_network_after_two_failed_chunks(
+def test_worldline_regeneration_halts_network_after_first_failed_chunk(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
@@ -282,16 +282,23 @@ def test_worldline_regeneration_halts_network_after_two_failed_chunks(
     body = responses[-1].json()
     assert body["regeneration_status"] == "failed_fallback"
     assert body["llm_completed_chunk_count"] == 0
-    assert body["fallback_chunk_count"] == 2
-    assert body["skipped_chunk_count"] == 2
-    assert calls == 2
+    assert body["fallback_chunk_count"] == 1
+    assert body["skipped_chunk_count"] == 3
+    assert calls == 1
     worldline = body["report"]["worldline_simulation"]
     assert worldline["status"] == "fallback"
+    assert worldline["provenance"]["failed_chunk_count"] == 1
+    assert worldline["provenance"]["skipped_chunk_count"] == 3
     assert worldline["last_regeneration"]["generation_halted"] is True
     assert worldline["last_regeneration"]["status"] == "failed_fallback"
     assert "status=failed_fallback" in body["report"]["markdown_report"]
     statuses = [item["status"] for item in worldline["provenance"]["chunk_history"]]
-    assert statuses == ["fallback", "fallback", "skipped_after_halt", "skipped_after_halt"]
+    assert statuses == [
+        "fallback",
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+    ]
 
 
 def test_worldline_regeneration_missing_preset_returns_404(

@@ -20,6 +20,7 @@ interface WorldlinePanelProps {
   onRegenerateWorldline?: () => void;
   canRegenerateWorldline?: boolean;
   resumeRegeneration?: boolean;
+  retryHaltedGeneration?: boolean;
   regenerationActive?: boolean;
   regenerationMessage?: string;
   regenerationError?: string | null;
@@ -40,6 +41,7 @@ export function WorldlinePanel({
   canRegenerateWorldline = true,
   onRegenerateWorldline,
   resumeRegeneration = false,
+  retryHaltedGeneration = false,
   primary = false,
   regenerationActive = false,
   regenerationError = null,
@@ -64,6 +66,7 @@ export function WorldlinePanel({
           onRegenerateWorldline={onRegenerateWorldline}
           canRegenerateWorldline={canRegenerateWorldline}
           resumeRegeneration={resumeRegeneration}
+          retryHaltedGeneration={retryHaltedGeneration}
           regenerationActive={regenerationActive}
           regenerationError={regenerationError}
           regenerationMessage={regenerationMessage}
@@ -199,6 +202,7 @@ function WorldlineProvenanceTags({
 function WorldlineReviewHeader({
   canRegenerateWorldline,
   resumeRegeneration,
+  retryHaltedGeneration,
   onRegenerateWorldline,
   regenerationActive,
   regenerationError,
@@ -208,6 +212,7 @@ function WorldlineReviewHeader({
 }: {
   canRegenerateWorldline: boolean;
   resumeRegeneration: boolean;
+  retryHaltedGeneration: boolean;
   onRegenerateWorldline?: () => void;
   regenerationActive: boolean;
   regenerationError: string | null;
@@ -249,6 +254,8 @@ function WorldlineReviewHeader({
           >
             {regenerationActive
               ? t("worldline.regenerationInProgress")
+              : retryHaltedGeneration
+                ? t("worldline.retryHaltedGeneration")
               : resumeRegeneration
                 ? t("worldline.resumeInterruptedRegeneration")
                 : t("worldline.regenerateFromHere")}
@@ -260,6 +267,9 @@ function WorldlineReviewHeader({
       ) : null}
       {resumeRegeneration ? (
         <p className="notice warning">{t("worldline.interruptedRegenerationDetected")}</p>
+      ) : null}
+      {retryHaltedGeneration ? (
+        <p className="notice warning">{t("worldline.haltedGenerationDetected")}</p>
       ) : null}
       {simulation.last_regeneration ? (
         <div

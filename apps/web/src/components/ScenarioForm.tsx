@@ -245,7 +245,7 @@ export function ScenarioForm({
               : response.worldline_status === "completed"
                 ? 0
                 : consecutiveWorldlineFailures;
-          if (response.generation_halted || consecutiveWorldlineFailures >= 2) {
+          if (response.generation_halted || consecutiveWorldlineFailures >= 1) {
             setProgress({
               active: true,
               phase: "halted",
