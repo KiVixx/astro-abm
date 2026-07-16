@@ -18,8 +18,11 @@ export default async function NewWorldlinePage() {
       getLlmPresets(),
     ]);
     return (
-      <div className="page stack">
-        <header>
+      <div className="page stack worldline-create-page">
+        <header className="worldline-create-header">
+          <p className="pixel-kicker">
+            <I18nText tKey="worldline.createKicker" />
+          </p>
           <h1>
             <I18nText tKey="worldline.create" />
           </h1>
@@ -40,7 +43,7 @@ export default async function NewWorldlinePage() {
     );
   } catch (error) {
     return (
-      <div className="page stack">
+      <div className="page stack worldline-create-page">
         <h1>
           <I18nText tKey="worldline.create" />
         </h1>

@@ -10,8 +10,10 @@ import requests
 from fastapi.testclient import TestClient
 
 from astro_abm_api.main import app
+from astro_abm_api.models.llm_preset import LlmPresetSaveRequest
 from astro_abm_api.models.report import ScenarioReport
 from astro_abm_api.services.llm_client import (
+    DEFAULT_MAX_OUTPUT_TOKENS,
     diagnose_llm_request_error,
     diagnose_llm_json,
     safety_check_text,
@@ -43,6 +45,15 @@ def inclusive_day_count(start_date: str, end_date: str) -> int:
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
     return (end - start).days + 1
+
+
+def test_product_llm_defaults_are_consistent() -> None:
+    preset = LlmPresetSaveRequest(name="Default Gemini")
+
+    assert preset.chunk_size_days == 1
+    assert preset.max_output_tokens == 32000
+    assert preset.call_delay_seconds == 6
+    assert DEFAULT_MAX_OUTPUT_TOKENS == 32000
 
 
 def assert_worldline_state_continuity(days: list[dict[str, object]]) -> None:

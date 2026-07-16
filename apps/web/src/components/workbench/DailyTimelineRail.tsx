@@ -183,6 +183,9 @@ export function DailyTimelineRail({
     <section className="workbench-card workbench-rail">
       <div className="workbench-rail-header">
         <div>
+          <p className="pixel-kicker workbench-module-kicker">
+            {t("workbench.timelineKicker")}
+          </p>
           <h2>{t("workbench.timelineTitle")}</h2>
           <p className="muted">
             {selectedSnapshot

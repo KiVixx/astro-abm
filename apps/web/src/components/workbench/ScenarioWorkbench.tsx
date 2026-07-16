@@ -213,11 +213,11 @@ export function ScenarioWorkbench({
     <div className="workbench-page">
       <header className="workbench-header">
         <div>
-          <p className="muted">
+          <p className="pixel-kicker workbench-kicker">
             {isWorldline ? t("worldline.workbench") : t("workbench.productName")}
           </p>
           <h1>{currentReport.title}</h1>
-          <div className="tag-row">
+          <div className="tag-row workbench-status-strip">
             <span className="tag">{selectedSnapshot.date}</span>
             {isWorldline && currentReport.worldline_simulation ? (
               <>
@@ -242,7 +242,7 @@ export function ScenarioWorkbench({
             </span>
           </div>
         </div>
-        <div className="button-row">
+        <div className="button-row workbench-header-actions">
           <Link
             className="button secondary"
             href={`/scenarios/${currentReport.scenario_id}/report`}
@@ -255,13 +255,6 @@ export function ScenarioWorkbench({
         </div>
       </header>
 
-      <ContextCoverageSummaryCard
-        compact
-        coverageSummary={currentReport.coverage_summary}
-      />
-
-      {!isWorldline ? <LlmScenarioReportCard compact llmReport={currentReport.llm_report} /> : null}
-
       {isWorldline ? (
         <section className="worldline-playback-bar">
           <strong>{t("worldline.playback")}</strong>
@@ -273,8 +266,8 @@ export function ScenarioWorkbench({
           >
             {t("workbench.previous")}
           </button>
-          <span className="tag">{selectedSnapshot.date}</span>
-          <span className="tag">
+          <span className="worldline-playback-date">{selectedSnapshot.date}</span>
+          <span className="worldline-playback-index">
             {selectedIndex + 1}/{timeline.length}
           </span>
           <button
@@ -287,13 +280,6 @@ export function ScenarioWorkbench({
           </button>
         </section>
       ) : null}
-
-      <DailyTimelineRail
-        assetStressSeries={assetStressSeries}
-        onSelectDate={selectDate}
-        selectedDate={selectedSnapshot.date}
-        timeline={timeline}
-      />
 
       <main className="workbench-layout">
         <DailyGraphCanvas
@@ -324,6 +310,21 @@ export function ScenarioWorkbench({
           worldlinePrimary={isWorldline}
         />
       </main>
+
+      <DailyTimelineRail
+        assetStressSeries={assetStressSeries}
+        onSelectDate={selectDate}
+        selectedDate={selectedSnapshot.date}
+        timeline={timeline}
+      />
+
+      <section className="workbench-supporting-data">
+        <ContextCoverageSummaryCard
+          compact
+          coverageSummary={currentReport.coverage_summary}
+        />
+        {!isWorldline ? <LlmScenarioReportCard compact llmReport={currentReport.llm_report} /> : null}
+      </section>
     </div>
   );
 }

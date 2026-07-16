@@ -64,7 +64,7 @@ ASTRO_ABM_LLM_BASE_URL=http://localhost:11434/v1
 ASTRO_ABM_LLM_MODEL=your-local-model
 ASTRO_ABM_LLM_API_KEY=optional-or-provider-key
 ASTRO_ABM_LLM_TIMEOUT_SECONDS=120
-ASTRO_ABM_LLM_MAX_OUTPUT_TOKENS=5000
+ASTRO_ABM_LLM_MAX_OUTPUT_TOKENS=32000
 ```
 
 If real calls are disabled, `openai_compatible` scenario creation records a
