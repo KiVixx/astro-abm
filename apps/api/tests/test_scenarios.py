@@ -75,7 +75,7 @@ def test_safety_checker_allows_traditional_chinese_safety_disclaimers(
 
 
 @pytest.mark.parametrize(
-    "unsafe_text",
+    "unrestricted_text",
     [
         "go long",
         "enter long",
@@ -103,19 +103,19 @@ def test_safety_checker_allows_traditional_chinese_safety_disclaimers(
         "不建議買入 BTC，但建議賣出 ETH",
     ],
 )
-def test_safety_checker_rejects_explicit_trading_instruction_phrases(
-    unsafe_text: str,
+def test_wording_filter_allows_trading_and_certainty_phrases(
+    unrestricted_text: str,
 ) -> None:
-    assert not safety_check_text(unsafe_text)
+    assert safety_check_text(unrestricted_text)
+    assert safety_violation_codes(unrestricted_text) == []
 
 
-def test_safety_checker_reports_categories_without_retaining_input() -> None:
-    unsafe_text = "You must buy BTC because it will rise."
+def test_wording_filter_returns_no_categories() -> None:
+    unrestricted_text = "You must buy BTC because it will rise."
 
-    codes = safety_violation_codes(unsafe_text)
+    codes = safety_violation_codes(unrestricted_text)
 
-    assert codes == ["trading_instruction", "guaranteed_direction"]
-    assert unsafe_text not in json.dumps(codes)
+    assert codes == []
 
 
 @pytest.mark.parametrize(
@@ -134,7 +134,7 @@ def test_safety_checker_allows_simulated_or_negated_causal_language(
 
 
 @pytest.mark.parametrize(
-    "unsafe_text",
+    "unrestricted_text",
     [
         "Astro activity causes market prices to fall.",
         "This event caused the market crash.",
@@ -148,13 +148,14 @@ def test_safety_checker_allows_simulated_or_negated_causal_language(
         "情境推演證明天象導致市場下跌。",
     ],
 )
-def test_safety_checker_rejects_unqualified_real_world_causal_claims(
-    unsafe_text: str,
+def test_wording_filter_allows_unqualified_causal_language(
+    unrestricted_text: str,
 ) -> None:
-    assert safety_violation_codes(unsafe_text) == ["causal_claim"]
+    assert safety_check_text(unrestricted_text)
+    assert safety_violation_codes(unrestricted_text) == []
 
 
-def test_safety_checker_does_not_let_json_disclaimer_mask_causal_claim() -> None:
+def test_wording_filter_does_not_reject_json_causal_claim() -> None:
     payload = json.dumps(
         {
             "caveat": "Scenario rehearsal only.",
@@ -162,7 +163,7 @@ def test_safety_checker_does_not_let_json_disclaimer_mask_causal_claim() -> None
         }
     )
 
-    assert safety_violation_codes(payload) == ["causal_claim"]
+    assert safety_violation_codes(payload) == []
 
 
 def test_llm_json_diagnostics_identify_truncation_without_retaining_content() -> None:
@@ -1112,7 +1113,7 @@ def test_openai_compatible_mocked_network_parses_valid_json(
     assert report["llm_report"]["status"] == "completed"
     assert report["llm_report"]["provenance"]["network_call_performed"] is True
     assert report["llm_report"]["provenance"]["output_validation_status"] == "valid_json"
-    assert report["llm_report"]["provenance"]["safety_check_status"] == "passed"
+    assert report["llm_report"]["provenance"]["safety_check_status"] == "not_applied"
     assert report["llm_report"]["daily_highlights"][0]["date"] == "2026-07-01"
     assert report["llm_report"]["daily_highlights"][0]["key_context"] == [
         "coverage reviewed"
@@ -1422,7 +1423,7 @@ def test_worldline_chunk_mocked_network_generates_structured_events(
     assert worldline["provenance"]["chunk_count"] == 1
     assert worldline["provenance"]["failed_chunk_count"] == 0
     assert worldline["provenance"]["network_call_performed"] is True
-    assert worldline["provenance"]["safety_check_status"] == "passed"
+    assert worldline["provenance"]["safety_check_status"] == "not_applied"
     assert worldline["provenance"]["llm_output_quality_notes"]
     assert worldline["provenance"]["chunk_history"][0]["status"] == "completed"
     assert first_day["generation_source"] == "llm_chunk"
@@ -2012,7 +2013,7 @@ def test_worldline_chunk_retries_before_fallback(
         "invalid_json",
         "valid_json",
     ]
-    assert attempt_history[-1]["safety_check_status"] == "passed"
+    assert attempt_history[-1]["safety_check_status"] == "not_applied"
     assert all("raw_text" not in json.dumps(item) for item in attempt_history)
     assert worldline["days"][0]["generation_source"] == "llm_chunk"
     assert "attempt 3" in " ".join(worldline["days"][0]["quality_notes"])
@@ -2326,7 +2327,7 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
     assert "three attempts" not in worldline["provenance"]["halt_reason"]
 
 
-def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
+def test_worldline_chunk_wording_is_not_filtered(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -2352,7 +2353,14 @@ def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
                                                     "what_happened": "must buy BTC",
                                                     "why_it_happened": "unsafe",
                                                     "impact_on_tomorrow": "unsafe",
-                                                    "impact_scores": {},
+                                                    "impact_scores": {
+                                                        "sentiment_delta": 0,
+                                                        "narrative_pressure_delta": 0,
+                                                        "leverage_pressure_delta": 0,
+                                                        "liquidity_pressure_delta": 0,
+                                                        "volatility_pressure_delta": 0,
+                                                        "stress_pressure_delta": 0,
+                                                    },
                                                     "confidence": "low",
                                                     "caveats": [],
                                                 }
@@ -2396,15 +2404,14 @@ def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
     )
 
     assert chunk_response.status_code == 200
-    response_text = json.dumps(chunk_response.json())
     worldline = chunk_response.json()["report"]["worldline_simulation"]
-    assert chunk_response.json()["worldline_status"] == "fallback"
-    assert worldline["provenance"]["safety_check_status"] == "failed"
-    assert worldline["provenance"]["safety_violation_codes"] == ["trading_instruction"]
+    assert chunk_response.json()["worldline_status"] == "completed"
+    assert worldline["provenance"]["safety_check_status"] == "not_applied"
+    assert worldline["provenance"]["safety_violation_codes"] == []
     assert worldline["provenance"]["chunk_history"][0]["attempt_history"][0][
         "safety_violation_codes"
-    ] == ["trading_instruction"]
-    assert "must buy BTC" not in response_text
+    ] == []
+    assert worldline["days"][0]["agent_events"][0]["what_happened"] == "must buy BTC"
 
 
 def test_openai_compatible_invalid_json_marks_invalid_output(
@@ -2439,7 +2446,7 @@ def test_openai_compatible_invalid_json_marks_invalid_output(
     assert llm_report["raw_text_preview"] == "not json"
 
 
-def test_openai_compatible_safety_failure_fails_safe(
+def test_openai_compatible_wording_is_not_filtered(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -2485,9 +2492,9 @@ def test_openai_compatible_safety_failure_fails_safe(
 
     assert response.status_code == 200
     llm_report = response.json()["llm_report"]
-    assert llm_report["status"] == "safety_review_failed"
-    assert llm_report["provenance"]["safety_check_status"] == "failed"
-    assert "buy BTC" not in llm_report["executive_summary"]
+    assert llm_report["status"] == "completed"
+    assert llm_report["provenance"]["safety_check_status"] == "not_applied"
+    assert "buy BTC" in llm_report["executive_summary"]
 
 
 def test_invalid_date_range_fails(monkeypatch, tmp_path: Path) -> None:

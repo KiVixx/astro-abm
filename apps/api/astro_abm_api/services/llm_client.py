@@ -113,87 +113,6 @@ def safe_llm_request_error_message(exc: requests.RequestException) -> str:
         return f"The LLM endpoint rejected the request with HTTP status {status}." if status else "The LLM endpoint returned an HTTP error."
     return "The LLM request failed before a complete response was received."
 
-TRADING_INSTRUCTION_PATTERNS = (
-    r"\bmust\s+buy\b",
-    r"\bmust\s+sell\b",
-    r"\byou\s+should\s+buy\b",
-    r"\byou\s+should\s+sell\b",
-    r"\byou\s+should\s+short\b",
-    r"\byou\s+should\s+go\s+long\b",
-    r"\bgo\s+long\b",
-    r"\benter\s+long\b",
-    r"\bgo\s+short\b",
-    r"\benter\s+short\b",
-    r"\blong\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"\bshort\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"\bbuy\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"\bsell\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"you should buy",
-    r"you should sell",
-    r"you should short",
-    r"you should go long",
-    r"\bbuy signal\b",
-    r"\bsell signal\b",
-    r"\bshort signal\b",
-    r"\blong signal\b",
-    r"price target",
-    r"trading recommendation",
-)
-
-CERTAINTY_PATTERNS = (
-    r"guaranteed",
-    r"predicts with certainty",
-)
-
-CAUSAL_CLAIM_PATTERN = re.compile(r"\b(?:caused|causes)\b", re.IGNORECASE)
-CAUSAL_SAFE_CONTEXT_PATTERN = re.compile(
-    r"(?:\b(?:within|in)\s+this\s+(?:simulated\s+)?(?:worldline|scenario)\b|"
-    r"\bsimulated\s+(?:worldline|causal\s+link|agent\s+event|pressure\s+update)\b|"
-    r"\bscenario-internal\b|\bhypothetical\s+(?:worldline|scenario)\b)",
-    re.IGNORECASE,
-)
-CAUSAL_NEGATION_PATTERN = re.compile(
-    r"(?:\b(?:does\s+not|did\s+not|cannot|can't)\s+$|"
-    r"\b(?:does\s+not|did\s+not|do\s+not|not)\s+claim(?:ing|ed)?\s+that\b.{0,64}$)",
-    re.IGNORECASE,
-)
-CAUSAL_CLAUSE_SPLIT_PATTERN = re.compile(
-    r"[.!?;\n]|[}\]]\s*,\s*[{\[]|\bbut\b|\bhowever\b",
-    re.IGNORECASE,
-)
-
-GUARANTEED_DIRECTION_PATTERNS = (
-    r"will rise",
-    r"will fall",
-)
-
-CHINESE_TRADING_INSTRUCTION_TERMS = (
-    "買入",
-    "賣出",
-    "做多",
-    "做空",
-    "目標價",
-    "保證",
-    "一定會漲",
-    "一定會跌",
-)
-CHINESE_SAFETY_CONTEXT_PATTERN = re.compile(
-    r"不構成|不得(?:提供)?|不應(?:提供)?|不會|不能|不提供|未提供|"
-    r"沒有|並非|不是|勿|禁止|避免|不保證"
-)
-CHINESE_CLAUSE_SPLIT_PATTERN = re.compile(r"[，,；;。.!?\n]|但|然而|可是")
-CHINESE_CAUSAL_CLAUSE_SPLIT_PATTERN = re.compile(r"[；;。.!?\n]|但|然而|可是")
-CHINESE_CAUSAL_CLAIM_PATTERN = re.compile(r"導致|造成")
-CHINESE_CAUSAL_SAFE_CONTEXT_PATTERN = re.compile(
-    r"在(?:這|本)(?:條)?(?:模擬)?(?:世界線|情境|推演)(?:中|內)|"
-    r"模擬(?:世界線|因果鏈|群體事件|壓力更新)|情境內部|"
-    r"假設(?:情境|世界線)"
-)
-CHINESE_CAUSAL_NEGATION_PATTERN = re.compile(
-    r"不代表|不表示|不構成|不能|無法|並非|不是|未能|不可"
-)
-
-
 @dataclass(frozen=True)
 class LLMConfig:
     provider: LLMProvider = "mock"
@@ -335,28 +254,15 @@ def generate_llm_scenario_report(
             input_context_hash=context_hash,
             network_call_performed=True,
             output_validation_status="valid_json",
-            safety_check_status="pending",
+            safety_check_status="not_applied",
         ),
         raw_text_preview=_preview(raw_text),
     )
-    if not safety_check_text(report_candidate.model_dump_json()):
-        return report_candidate.model_copy(
-            update={
-                "status": "safety_review_failed",
-                "executive_summary": "The LLM output failed safety review.",
-                "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
-                "daily_highlights": [],
-                "agent_interpretations": [],
-                "asset_stress_indicators": [],
-                "risk_themes": [],
-                "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
-            }
-        )
     return report_candidate.model_copy(
         update={
             "status": "completed",
             "scenario_reading": _normalize_multiline_text(report_candidate.scenario_reading),
-            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
+            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "not_applied"}),
         }
     )
 
@@ -461,23 +367,10 @@ def generate_llm_scenario_report_chunk(
             input_context_hash=context_hash,
             network_call_performed=True,
             output_validation_status="valid_json",
-            safety_check_status="pending",
+            safety_check_status="not_applied",
         ),
         raw_text_preview=_preview(raw_text),
     )
-    if not safety_check_text(report_candidate.model_dump_json()):
-        return report_candidate.model_copy(
-            update={
-                "status": "safety_review_failed",
-                "executive_summary": "The LLM output failed safety review.",
-                "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
-                "daily_highlights": [],
-                "agent_interpretations": [],
-                "asset_stress_indicators": [],
-                "risk_themes": [],
-                "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
-            }
-        )
     readable_reading = _format_chunk_scenario_reading(
         report_candidate.scenario_reading,
         start_date=request.chunk_start_date,
@@ -488,7 +381,7 @@ def generate_llm_scenario_report_chunk(
         update={
             "status": "completed",
             "scenario_reading": readable_reading,
-            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
+            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "not_applied"}),
         }
     )
 
@@ -806,98 +699,13 @@ def build_report_from_payload(
 
 
 def safety_check_text(text: str) -> bool:
-    return not safety_violation_codes(text)
+    """Compatibility hook; wording-based output rejection is disabled."""
+    return True
 
 
 def safety_violation_codes(text: str) -> list[str]:
-    lowered = text.lower()
-    checks = (
-        ("trading_instruction", TRADING_INSTRUCTION_PATTERNS),
-        ("certainty_claim", CERTAINTY_PATTERNS),
-        ("guaranteed_direction", GUARANTEED_DIRECTION_PATTERNS),
-    )
-    codes = [
-        code
-        for code, patterns in checks
-        if any(re.search(pattern, lowered) for pattern in patterns)
-    ]
-    if _contains_unsafe_chinese_trading_language(text):
-        codes.append("chinese_trading_instruction")
-    if _contains_unsafe_causal_claim(text):
-        codes.append("causal_claim")
-    return codes
-
-
-def _contains_unsafe_causal_claim(text: str) -> bool:
-    for segment in _causal_text_segments(text):
-        for clause in CAUSAL_CLAUSE_SPLIT_PATTERN.split(segment):
-            for match in CAUSAL_CLAIM_PATTERN.finditer(clause):
-                prefix = clause[: match.start()]
-                if CAUSAL_SAFE_CONTEXT_PATTERN.search(prefix):
-                    continue
-                if CAUSAL_NEGATION_PATTERN.search(prefix[-96:]):
-                    continue
-                return True
-
-        for clause in CHINESE_CAUSAL_CLAUSE_SPLIT_PATTERN.split(segment):
-            claim = CHINESE_CAUSAL_CLAIM_PATTERN.search(clause)
-            if claim is None:
-                continue
-            prefix = clause[: claim.start()]
-            if CHINESE_CAUSAL_SAFE_CONTEXT_PATTERN.search(prefix):
-                continue
-            if CHINESE_CAUSAL_NEGATION_PATTERN.search(prefix[-24:]):
-                continue
-            return True
-    return False
-
-
-def _causal_text_segments(text: str) -> list[str]:
-    try:
-        payload = json.loads(text)
-    except (json.JSONDecodeError, TypeError):
-        return [text]
-
-    segments: list[str] = []
-
-    def collect(value: Any) -> None:
-        if isinstance(value, str):
-            segments.append(value)
-        elif isinstance(value, dict):
-            for item in value.values():
-                collect(item)
-        elif isinstance(value, list):
-            for item in value:
-                collect(item)
-
-    collect(payload)
-    return segments
-
-
-def _contains_unsafe_chinese_trading_language(text: str) -> bool:
-    for clause in CHINESE_CLAUSE_SPLIT_PATTERN.split(text):
-        matched_terms = [
-            (clause.find(term), term)
-            for term in CHINESE_TRADING_INSTRUCTION_TERMS
-            if term in clause
-        ]
-        if not matched_terms:
-            continue
-
-        stripped_clause = clause.strip()
-        if stripped_clause in CHINESE_TRADING_INSTRUCTION_TERMS:
-            return True
-
-        first_term_index = min(index for index, _ in matched_terms)
-        safety_contexts = list(CHINESE_SAFETY_CONTEXT_PATTERN.finditer(clause))
-        has_nearby_safety_context = any(
-            context.start() <= first_term_index
-            and first_term_index - context.end() <= 24
-            for context in safety_contexts
-        )
-        if not has_nearby_safety_context:
-            return True
-    return False
+    """Return no wording violations; structural validation remains active elsewhere."""
+    return []
 
 
 def credential_status(config: LLMConfig) -> str:
