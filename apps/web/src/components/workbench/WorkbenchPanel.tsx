@@ -352,7 +352,11 @@ export function WorkbenchPanel({
   return (
     <aside className="workbench-card workbench-panel">
       <div className="workbench-card-header">
+        <span className="workbench-console-signal" aria-hidden="true" />
         <div>
+          <p className="pixel-kicker workbench-module-kicker">
+            {t("workbench.consoleKicker")}
+          </p>
           <h2>{worldlinePrimary ? t("worldline.console") : t("workbench.panelTitle")}</h2>
           <p className="muted">
             {selectedNode || selectedEdge ? selectedLabel : t("workbench.dailyOverview")}{" "}

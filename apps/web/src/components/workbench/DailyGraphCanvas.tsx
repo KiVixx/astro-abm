@@ -395,6 +395,9 @@ export function DailyGraphCanvas({
     <section className="workbench-card workbench-graph-card">
       <div className="workbench-card-header">
         <div>
+          <p className="pixel-kicker workbench-module-kicker">
+            {t("workbench.graphKicker")}
+          </p>
           <h2>{t("workbench.graphTitle")}</h2>
           <p className="muted">
             {t("workbench.graphHelp")}
