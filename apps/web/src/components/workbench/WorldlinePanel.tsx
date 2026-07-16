@@ -220,6 +220,15 @@ function WorldlineReviewHeader({
   const fallbackBreakdown = worldlineFallbackBreakdown(simulation);
   const failedChunks = fallbackBreakdown.llmFailed;
   const chunkHistory = arrayOfRecords(provenance.chunk_history);
+  const selectedChunk = chunkHistory.find(
+    (chunk) => numberFromUnknown(chunk.chunk_index) === selectedDay.chunk_index,
+  );
+  const selectedAttemptCount = selectedChunk
+    ? numberFromUnknown(selectedChunk.attempt_count)
+    : 0;
+  const selectedMaxAttempts = selectedChunk
+    ? numberFromUnknown(selectedChunk.max_attempts)
+    : 0;
   const regeneration = regenerationOutcome(simulation.last_regeneration, chunkHistory);
   const qualityNotes = stringArray(provenance.llm_output_quality_notes);
   const sourceCounts = countDaySources(simulation.days);
@@ -341,10 +350,10 @@ function WorldlineReviewHeader({
             {t("worldline.chunkStatus")}: {selectedDay.chunk_status}
           </span>
         ) : null}
-        {provenance.attempt_count ? (
+        {selectedAttemptCount > 0 ? (
           <span className="tag">
-            {t("worldline.attemptCount")}: {String(provenance.attempt_count)}/
-            {String(provenance.max_attempts || "3")}
+            {t("worldline.attemptCount")}: {selectedAttemptCount}/
+            {selectedMaxAttempts || 3}
           </span>
         ) : null}
       </div>

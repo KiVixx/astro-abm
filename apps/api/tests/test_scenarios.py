@@ -2085,6 +2085,11 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert worldline["days"][0]["generation_source"] == "fallback"
     assert worldline["days"][0]["chunk_status"] == "invalid_json"
     assert worldline["days"][0]["quality_notes"]
+    assert "LLM chunk generation attempted 3 time(s)." in worldline["days"][0]["quality_notes"]
+    assert (
+        "No LLM network call was performed for this day."
+        not in worldline["days"][0]["quality_notes"]
+    )
     assert worldline["days"][0]["agent_events"]
     assert_worldline_state_continuity(worldline["days"])
 

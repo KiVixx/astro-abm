@@ -592,7 +592,7 @@ def _fallback_chunk(
 ) -> WorldlineSimulation:
     chunk_days = [
         _mark_day(
-            day,
+            _remove_mock_no_network_note(day) if network_call_performed else day,
             generation_source="fallback",
             chunk_index=request.chunk_index,
             chunk_status=output_validation_status,
@@ -637,6 +637,18 @@ def _fallback_chunk(
         ),
         generation_config=generation_config,
         continuity_status="consistent",
+    )
+
+
+def _remove_mock_no_network_note(day: WorldlineDay) -> WorldlineDay:
+    return day.model_copy(
+        update={
+            "quality_notes": [
+                note
+                for note in day.quality_notes
+                if note != "No LLM network call was performed for this day."
+            ]
+        }
     )
 
 
