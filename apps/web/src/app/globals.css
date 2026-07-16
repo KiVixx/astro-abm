@@ -1515,6 +1515,222 @@ pre {
   position: relative;
 }
 
+.agents-page {
+  gap: 28px;
+  max-width: 1180px;
+  padding-bottom: 72px;
+  position: relative;
+}
+
+.agents-page::before {
+  background-image:
+    linear-gradient(var(--pixel-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pixel-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  content: "";
+  height: 240px;
+  left: 50%;
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  pointer-events: none;
+  position: absolute;
+  top: -28px;
+  transform: translateX(-50%);
+  width: 100vw;
+  z-index: -1;
+}
+
+.agents-header {
+  border-bottom: 1px solid var(--border-strong);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 20px 0 26px;
+  position: relative;
+}
+
+.agents-header::after {
+  background: var(--signal-green);
+  bottom: -2px;
+  box-shadow: 16px 0 0 var(--signal-cyan), 32px 0 0 var(--signal-magenta);
+  content: "";
+  height: 3px;
+  position: absolute;
+  right: 32px;
+  width: 9px;
+}
+
+.agents-header .pixel-kicker,
+.agents-header h1,
+.agents-header .lead {
+  grid-column: 1;
+}
+
+.agents-header .pixel-kicker {
+  color: var(--accent-dark);
+  margin: 0;
+}
+
+.agents-header h1 {
+  font-family: var(--font-signal);
+  font-size: 38px;
+  margin: 0;
+}
+
+.agents-directory-count {
+  align-self: end;
+  border-left: 1px solid var(--border-strong);
+  color: var(--muted);
+  display: grid;
+  font-family: var(--font-signal);
+  font-size: 11px;
+  gap: 2px;
+  grid-column: 2;
+  grid-row: 1 / 4;
+  margin: 0;
+  min-width: 136px;
+  padding: 10px 0 10px 20px;
+  text-transform: uppercase;
+}
+
+.agents-directory-count strong {
+  color: var(--text);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.agent-directory {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agent-profile-record {
+  --agent-signal: var(--signal-cyan);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--agent-signal);
+  border-radius: var(--radius-panel);
+  display: grid;
+  gap: 17px;
+  min-width: 0;
+  padding: 18px;
+  position: relative;
+}
+
+.agent-category-trading {
+  --agent-signal: var(--signal-magenta);
+}
+
+.agent-category-institutional {
+  --agent-signal: var(--signal-green);
+}
+
+.agent-category-company_type {
+  --agent-signal: var(--signal-amber);
+}
+
+.agent-record-header {
+  align-items: flex-start;
+  display: grid;
+  gap: 13px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.agent-record-id {
+  align-items: center;
+  background: var(--text);
+  color: var(--surface);
+  display: inline-flex;
+  font-family: var(--font-signal);
+  font-size: 11px;
+  font-weight: 800;
+  height: 25px;
+  justify-content: center;
+  min-width: 50px;
+}
+
+.agent-record-header h2 {
+  font-family: var(--font-signal);
+  font-size: 21px;
+  line-height: 1.2;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-record-header p {
+  color: var(--agent-signal);
+  font-family: var(--font-signal);
+  font-size: 11px;
+  font-weight: 800;
+  margin: 5px 0 0;
+  text-transform: uppercase;
+}
+
+.agent-record-description {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+  min-height: 52px;
+}
+
+.agent-core-facts {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agent-core-facts > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px 10px 12px 0;
+}
+
+.agent-core-facts > div + div {
+  border-left: 1px solid var(--border);
+  padding-left: 14px;
+}
+
+.agent-core-facts span,
+.agent-sensitivity-grid dt {
+  color: var(--muted);
+  font-family: var(--font-signal);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.agent-core-facts strong {
+  overflow-wrap: anywhere;
+}
+
+.agent-sensitivity-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.agent-sensitivity-grid > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agent-sensitivity-grid dd {
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-sensitivity-grid .agent-decision-style {
+  background: var(--surface-muted);
+  border-left: 3px solid var(--agent-signal);
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+}
+
 .report-page::before {
   background-image:
     linear-gradient(var(--pixel-grid) 1px, transparent 1px),
@@ -2989,6 +3205,58 @@ pre {
 
   .report-page {
     padding-bottom: 44px;
+  }
+
+  .agents-page {
+    gap: 22px;
+    padding-bottom: 44px;
+  }
+
+  .agents-header {
+    grid-template-columns: 1fr;
+    padding: 10px 0 22px;
+  }
+
+  .agents-header h1 {
+    font-size: 30px;
+  }
+
+  .agents-directory-count {
+    align-items: center;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    grid-column: 1;
+    grid-row: auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    margin-top: 8px;
+    padding: 12px 0 0;
+  }
+
+  .agents-directory-count strong {
+    font-size: 26px;
+  }
+
+  .agent-directory {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-profile-record {
+    padding: 16px 14px;
+  }
+
+  .agent-core-facts,
+  .agent-sensitivity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-core-facts > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+  }
+
+  .agent-sensitivity-grid .agent-decision-style {
+    grid-column: 1;
   }
 
   .report-action-bar {

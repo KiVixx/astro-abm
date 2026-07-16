@@ -34,6 +34,29 @@ const enumLabels: Record<string, LabelMap> = {
     institutional: "value.agentCategory.institutional",
     company_type: "value.agentCategory.companyType",
   },
+  agent_level: {
+    low: "value.agentLevel.low",
+    low_to_medium: "value.agentLevel.lowToMedium",
+    medium: "value.agentLevel.medium",
+    high: "value.agentLevel.high",
+    very_high: "value.agentLevel.veryHigh",
+  },
+  time_horizon: {
+    intraday_to_days: "value.timeHorizon.intradayToDays",
+    hours_to_days: "value.timeHorizon.hoursToDays",
+    weeks_to_quarters: "value.timeHorizon.weeksToQuarters",
+    months_to_years: "value.timeHorizon.monthsToYears",
+    quarters_to_years: "value.timeHorizon.quartersToYears",
+  },
+  decision_style: {
+    "reactive narrative-following": "value.decisionStyle.reactiveNarrative",
+    "slow conviction-based review": "value.decisionStyle.slowConviction",
+    "fast risk-adjustment": "value.decisionStyle.fastRiskAdjustment",
+    "scenario-weighted allocation review": "value.decisionStyle.scenarioWeighted",
+    "committee-based strategic planning": "value.decisionStyle.committeeStrategic",
+    "risk committee balance-sheet review": "value.decisionStyle.riskCommittee",
+    "operational hedging and capital planning": "value.decisionStyle.operationalHedging",
+  },
   stress_regime: {
     stress: "value.stress.stress",
     elevated: "value.stress.elevated",
@@ -115,6 +138,16 @@ export const agentNameLabels: Record<string, TranslationKey> = {
   energy_company_type: "agent.energyCompanyType",
 };
 
+const agentDescriptionLabels: Record<string, TranslationKey> = {
+  crypto_retail_fomo: "agentDescription.cryptoRetailFomo",
+  long_term_holder: "agentDescription.longTermHolder",
+  leveraged_trader: "agentDescription.leveragedTrader",
+  macro_allocator: "agentDescription.macroAllocator",
+  big_tech_company_type: "agentDescription.bigTechCompanyType",
+  global_bank_type: "agentDescription.globalBankType",
+  energy_company_type: "agentDescription.energyCompanyType",
+};
+
 export function enumLabelKey(group: string, value?: string | null): TranslationKey | null {
   if (!value) {
     return null;
@@ -148,4 +181,13 @@ export function formatAgentProfileName(
   agent: Pick<AgentProfile, "agent_id" | "name">,
 ): string {
   return formatAgentName(t, agent.agent_id, agent.name);
+}
+
+export function formatAgentDescription(
+  t: (key: string, fallback?: string) => string,
+  agentId: string,
+  fallback: string,
+): string {
+  const key = agentDescriptionLabels[agentId];
+  return key ? t(key, fallback) : fallback;
 }
