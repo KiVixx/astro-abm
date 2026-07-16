@@ -15,6 +15,12 @@ export function WorldlineCard({
   report: ScenarioSummary;
 }) {
   const { t } = useI18n();
+  const generationMode = report.worldline_generation_mode || "";
+  const generationModeLabel = generationMode.includes("llm_chunk")
+    ? t("worldline.llmChunk")
+    : generationMode.includes("deterministic")
+      ? t("worldline.deterministicMock")
+      : generationMode || t("worldline.noWorldlineShort");
 
   return (
     <article className="card worldline-card">
@@ -45,17 +51,16 @@ export function WorldlineCard({
         </span>
         <span className="tag">
           {t("worldline.mode")}:{" "}
-          {report.worldline_generation_mode || t("worldline.noWorldlineShort")}
+          {generationModeLabel}
         </span>
         <span className="tag">
           {t("worldline.dayCount")}: {report.worldline_day_count || 0}
         </span>
-        <span className="tag">
-          {t("llm.status")}:{" "}
-          {report.llm_report_status
-            ? formatEnumLabel(t, "llm_status", report.llm_report_status)
-            : t("llm.missing")}
-        </span>
+        {report.llm_report_status ? (
+          <span className="tag">
+            {t("llm.title")}: {formatEnumLabel(t, "llm_status", report.llm_report_status)}
+          </span>
+        ) : null}
         {Number(report.worldline_configuration_fallback_chunk_count || 0) > 0 ? (
           <span className="tag">
             {t("worldline.configurationFallbackChunks")}:{" "}
