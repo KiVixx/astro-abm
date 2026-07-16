@@ -314,7 +314,7 @@ pre {
 }
 
 .home-core h1 {
-  font-size: clamp(46px, 6.3vw, 86px);
+  font-size: 72px;
   line-height: 1.02;
   margin: 0;
   max-width: 920px;
@@ -322,7 +322,7 @@ pre {
 
 .home-lead {
   color: #3f494b;
-  font-size: clamp(16px, 1.7vw, 20px);
+  font-size: 18px;
   line-height: 1.65;
   margin: 24px 0 0;
   max-width: 680px;
@@ -399,7 +399,7 @@ pre {
 }
 
 .home-system-intro h2 {
-  font-size: clamp(28px, 4vw, 48px);
+  font-size: 40px;
   line-height: 1.08;
   margin: 0;
 }
@@ -466,7 +466,7 @@ pre {
 }
 
 .hero h1 {
-  font-size: clamp(40px, 6vw, 72px);
+  font-size: 60px;
   line-height: 1;
   margin: 0 0 18px;
 }
@@ -1119,7 +1119,7 @@ pre {
 }
 
 .worldline-index-copy h1 {
-  font-size: clamp(48px, 7vw, 86px);
+  font-size: 72px;
   line-height: 0.95;
   margin: 0;
 }
@@ -1258,7 +1258,7 @@ pre {
 }
 
 .worldline-record-heading h3 {
-  font-size: clamp(20px, 2.2vw, 28px);
+  font-size: 24px;
   line-height: 1.12;
   margin: 0;
 }
@@ -3033,7 +3033,7 @@ pre {
   }
 
   .home-core h1 {
-    font-size: clamp(40px, 12vw, 58px);
+    font-size: 46px;
   }
 
   .home-lead {
@@ -3101,7 +3101,7 @@ pre {
   }
 
   .worldline-index-copy h1 {
-    font-size: clamp(44px, 17vw, 68px);
+    font-size: 52px;
   }
 
   .worldline-index-actions,
