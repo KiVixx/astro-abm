@@ -46,6 +46,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "home.title": "Astro ABM Worldline Simulator",
     "home.lead":
       "Build daily market worldlines from research context, agent groups, and simulated causal chains.",
+    "home.kicker": "LOCAL WORLDLINE TERMINAL // 01",
+    "home.localStatus": "Local research context ready",
+    "home.openSystem": "Inspect the worldline system",
+    "home.systemKicker": "SIGNAL LAYERS // READ-ONLY CONTEXT",
+    "home.systemTitle": "One worldline. Multiple ways to read uncertainty.",
     "home.searchScenarios": "Search scenarios",
     "home.createScenario": "Create scenario",
     "home.createWorldline": "Create Worldline",
@@ -665,6 +670,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "home.title": "Astro ABM 世界線推演器",
     "home.lead":
       "基於日線研究資料、代理群體與模擬因果鏈，生成逐日市場情境世界線。",
+    "home.kicker": "本地世界線終端 // 01",
+    "home.localStatus": "本地研究脈絡已就緒",
+    "home.openSystem": "檢視世界線系統",
+    "home.systemKicker": "訊號層 // 唯讀研究脈絡",
+    "home.systemTitle": "一條世界線，多種理解不確定性的視角。",
     "home.searchScenarios": "搜尋情境",
     "home.createScenario": "建立情境",
     "home.createWorldline": "創建世界線",
