@@ -795,9 +795,18 @@ pre {
 }
 
 .worldline-panel-primary {
-  background: linear-gradient(180deg, #ffffff 0%, #f6fafb 100%);
-  border-color: rgba(23, 107, 135, 0.3);
-  box-shadow: 0 12px 28px rgba(29, 37, 45, 0.08);
+  border: 0;
+  gap: 0;
+  padding: 0;
+}
+
+.worldline-panel-date {
+  margin: 0;
+}
+
+.worldline-review-panel {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
 }
 
 .worldline-panel summary {

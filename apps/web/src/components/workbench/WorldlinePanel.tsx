@@ -52,10 +52,9 @@ export function WorldlinePanel({
   const { t } = useI18n();
   if (!worldlineDay) {
     return primary ? (
-      <section className="worldline-panel nested-panel">
-        <h3>{t("worldline.console")}</h3>
+      <div className="worldline-panel worldline-panel-primary">
         <p className="muted">{t("worldline.noWorldline")}</p>
-      </section>
+      </div>
     ) : null;
   }
 
@@ -135,15 +134,12 @@ export function WorldlinePanel({
 
   if (primary) {
     return (
-      <section className="worldline-panel nested-panel worldline-panel-primary">
-        <div>
-          <h3>{t("worldline.console")}</h3>
-          <p className="muted">
-            {t("worldline.playback")} · {worldlineDay.date}
-          </p>
-        </div>
+      <div className="worldline-panel worldline-panel-primary">
+        <p className="muted worldline-panel-date">
+          {t("worldline.playback")} · {worldlineDay.date}
+        </p>
         {body}
-      </section>
+      </div>
     );
   }
 
@@ -238,7 +234,7 @@ function WorldlineReviewHeader({
   const qualityNotes = stringArray(provenance.llm_output_quality_notes);
   const sourceCounts = countDaySources(simulation.days);
   return (
-    <section className="nested-panel worldline-review-panel">
+    <section className="worldline-review-panel">
       <div className="scenario-progress-header">
         <div>
           <h3>{t("worldline.reviewTitle")}</h3>
