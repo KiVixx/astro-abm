@@ -85,6 +85,16 @@ class ScenarioSummary(BaseModel):
     visibility: Visibility
     mode: ScenarioMode
     language: ReportLanguage | None = None
+    worldline_status: str | None = None
+    worldline_generation_mode: str | None = None
+    worldline_day_count: int = 0
+    worldline_failed_chunk_count: int = 0
+    worldline_configuration_fallback_chunk_count: int = 0
+    worldline_llm_failed_chunk_count: int = 0
+    llm_report_status: str | None = None
+    coverage_total_days: int | None = None
+    coverage_local_research_days: int | None = None
+    coverage_future_placeholder_days: int | None = None
 
 
 class ScenarioLlmChunkRequest(BaseModel):

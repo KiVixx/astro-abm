@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import stat
+import tempfile
 from pathlib import Path
 
 from astro_abm_api.models.report import ScenarioReport
@@ -11,10 +14,17 @@ from astro_abm_api.models.scenario import ScenarioSummary
 
 SCENARIO_OUTPUT_DIR_ENV = "ASTRO_ABM_SCENARIO_OUTPUT_DIR"
 SCENARIO_ID_PATTERN = re.compile(r"^[a-z0-9_-]+$")
+logger = logging.getLogger(__name__)
 
 
 class ScenarioNotFoundError(FileNotFoundError):
     pass
+
+
+class ScenarioUnreadableError(RuntimeError):
+    def __init__(self, category: str) -> None:
+        self.category = category
+        super().__init__(f"scenario report is unreadable ({category})")
 
 
 def repo_root() -> Path:
@@ -34,7 +44,52 @@ def validate_scenario_id(scenario_id: str) -> str:
     return scenario_id
 
 
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Commit a complete UTF-8 file without exposing a partially written target."""
+    existing_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if existing_mode is not None:
+            temporary.chmod(existing_mode)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _report_read_error_category(error: Exception) -> str:
+    if isinstance(error, json.JSONDecodeError):
+        return "invalid_json"
+    if isinstance(error, UnicodeError):
+        return "invalid_encoding"
+    if isinstance(error, OSError):
+        return "read_error"
+    return "invalid_report_schema"
+
+
 def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
+    worldline = report.worldline_simulation
+    provenance = worldline.provenance if worldline else {}
+    provenance_mode = provenance.get("generation_mode")
+    generation_mode = (
+        provenance_mode
+        if isinstance(provenance_mode, str) and provenance_mode
+        else worldline.mode if worldline else None
+    )
+    failed_chunk_count = provenance.get("failed_chunk_count", 0)
+    configuration_fallback_count, llm_failed_count = _summary_fallback_counts(
+        provenance,
+        failed_chunk_count,
+    )
+    coverage = report.coverage_summary
     return ScenarioSummary(
         scenario_id=report.scenario_id,
         title=report.title,
@@ -48,7 +103,69 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         visibility=report.visibility,
         mode=report.mode,
         language=report.language,
+        worldline_status=worldline.status if worldline else None,
+        worldline_generation_mode=generation_mode,
+        worldline_day_count=worldline.horizon_days if worldline else 0,
+        worldline_failed_chunk_count=(
+            int(failed_chunk_count) if isinstance(failed_chunk_count, (int, float)) else 0
+        ),
+        worldline_configuration_fallback_chunk_count=configuration_fallback_count,
+        worldline_llm_failed_chunk_count=llm_failed_count,
+        llm_report_status=report.llm_report.status if report.llm_report else None,
+        coverage_total_days=coverage.total_days if coverage else None,
+        coverage_local_research_days=coverage.local_research_days if coverage else None,
+        coverage_future_placeholder_days=coverage.future_placeholder_days if coverage else None,
     )
+
+
+def _summary_fallback_counts(
+    provenance: dict[str, object],
+    failed_chunk_count: object,
+) -> tuple[int, int]:
+    explicit_configuration = provenance.get("configuration_fallback_chunk_count")
+    explicit_llm_failed = provenance.get("llm_failed_chunk_count")
+    if isinstance(explicit_configuration, (int, float)) and isinstance(
+        explicit_llm_failed,
+        (int, float),
+    ):
+        return max(0, int(explicit_configuration)), max(0, int(explicit_llm_failed))
+
+    configuration_count = 0
+    llm_failed_count = 0
+    history = provenance.get("chunk_history")
+    if isinstance(history, list):
+        for item in history:
+            if not isinstance(item, dict) or item.get("status") != "fallback":
+                continue
+            reason = item.get("fallback_reason")
+            is_configuration = reason in {
+                "unsupported_llm_provider",
+                "real_llm_disabled",
+                "llm_base_url_missing",
+                "llm_model_missing",
+                "legacy_configuration_unavailable",
+            } or (
+                not item.get("network_call_performed")
+                and item.get("output_validation_status")
+                in {
+                    "configuration_missing",
+                    "llm_disabled_or_config_unavailable",
+                    "not_run",
+                }
+            )
+            if is_configuration:
+                configuration_count += 1
+            else:
+                llm_failed_count += 1
+    if configuration_count or llm_failed_count:
+        return configuration_count, llm_failed_count
+
+    legacy_failed_count = (
+        max(0, int(failed_chunk_count))
+        if isinstance(failed_chunk_count, (int, float))
+        else 0
+    )
+    return 0, legacy_failed_count
 
 
 class ScenarioStore:
@@ -71,15 +188,25 @@ class ScenarioStore:
         self.ensure_output_dir()
         json_path = self._path_for(report.scenario_id, ".json")
         markdown_path = self._path_for(report.scenario_id, ".md")
-        json_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
-        markdown_path.write_text(report.markdown_report, encoding="utf-8")
+        _atomic_write_text(json_path, report.model_dump_json(indent=2))
+        _atomic_write_text(markdown_path, report.markdown_report)
         return report
 
     def load(self, scenario_id: str) -> ScenarioReport:
         json_path = self._path_for(scenario_id, ".json")
         if not json_path.exists():
             raise ScenarioNotFoundError(scenario_id)
-        return ScenarioReport.model_validate_json(json_path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            return ScenarioReport.model_validate(data)
+        except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
+            category = _report_read_error_category(error)
+            logger.warning(
+                "Unable to load scenario report %s (%s)",
+                json_path.name,
+                category,
+            )
+            raise ScenarioUnreadableError(category) from error
 
     def delete(self, scenario_id: str) -> None:
         json_path = self._path_for(scenario_id, ".json")
@@ -99,7 +226,12 @@ class ScenarioStore:
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
                 report = ScenarioReport.model_validate(data)
-            except (json.JSONDecodeError, OSError, ValueError):
+            except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
+                logger.warning(
+                    "Skipping unreadable scenario report %s (%s)",
+                    json_path.name,
+                    _report_read_error_category(error),
+                )
                 continue
             summaries.append(report_to_summary(report))
         return sorted(summaries, key=lambda item: item.created_at, reverse=True)

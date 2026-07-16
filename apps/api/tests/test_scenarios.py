@@ -11,10 +11,19 @@ from fastapi.testclient import TestClient
 
 from astro_abm_api.main import app
 from astro_abm_api.models.report import ScenarioReport
-from astro_abm_api.services.llm_client import safety_check_text
+from astro_abm_api.services.llm_client import (
+    diagnose_llm_request_error,
+    diagnose_llm_json,
+    safety_check_text,
+    safety_violation_codes,
+)
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
-from astro_abm_api.services.worldline_llm_prompts import build_worldline_messages
+from astro_abm_api.services.scenario_store import report_to_summary
+from astro_abm_api.services.worldline_llm_prompts import (
+    build_worldline_messages,
+    build_worldline_retry_messages,
+)
 
 
 def scenario_payload() -> dict[str, object]:
@@ -36,6 +45,11 @@ def inclusive_day_count(start_date: str, end_date: str) -> int:
     return (end - start).days + 1
 
 
+def assert_worldline_state_continuity(days: list[dict[str, object]]) -> None:
+    for previous_day, current_day in zip(days, days[1:]):
+        assert current_day["world_state_before"] == previous_day["world_state_after"]
+
+
 def test_safety_checker_allows_benign_horizon_language() -> None:
     benign_text = (
         "Long-Term Holder reviews a long-term horizon with a longer-term view. "
@@ -46,7 +60,22 @@ def test_safety_checker_allows_benign_horizon_language() -> None:
 
 
 @pytest.mark.parametrize(
-    "unsafe_text",
+    "safe_text",
+    [
+        "不得提供買入、賣出、做多、做空等交易建議。",
+        "這不是買入或賣出建議，也不構成做多或做空訊號。",
+        "本報告不提供目標價，也不保證任何情境一定會漲或一定會跌。",
+        "請避免把模擬結果解讀成買入訊號。",
+    ],
+)
+def test_safety_checker_allows_traditional_chinese_safety_disclaimers(
+    safe_text: str,
+) -> None:
+    assert safety_check_text(safe_text)
+
+
+@pytest.mark.parametrize(
+    "unrestricted_text",
     [
         "go long",
         "enter long",
@@ -66,12 +95,184 @@ def test_safety_checker_allows_benign_horizon_language() -> None:
         "保證",
         "一定會漲",
         "一定會跌",
+        "建議立即買入 BTC",
+        "可以考慮賣出 ETH",
+        "這是做多訊號",
+        "BTC 的目標價是 100000",
+        "保證 BTC 一定會漲",
+        "不建議買入 BTC，但建議賣出 ETH",
     ],
 )
-def test_safety_checker_rejects_explicit_trading_instruction_phrases(
-    unsafe_text: str,
+def test_wording_filter_allows_trading_and_certainty_phrases(
+    unrestricted_text: str,
 ) -> None:
-    assert not safety_check_text(unsafe_text)
+    assert safety_check_text(unrestricted_text)
+    assert safety_violation_codes(unrestricted_text) == []
+
+
+def test_wording_filter_returns_no_categories() -> None:
+    unrestricted_text = "You must buy BTC because it will rise."
+
+    codes = safety_violation_codes(unrestricted_text)
+
+    assert codes == []
+
+
+@pytest.mark.parametrize(
+    "safe_text",
+    [
+        "Within this simulated worldline, liquidity pressure causes a simulated agent reaction.",
+        "This scenario rehearsal does not claim that astro activity causes market moves.",
+        "在這條模擬世界線中，流動性壓力造成群體事件的模擬變化。",
+        "本報告不代表天象導致市場變動。",
+    ],
+)
+def test_safety_checker_allows_simulated_or_negated_causal_language(
+    safe_text: str,
+) -> None:
+    assert safety_check_text(safe_text)
+
+
+@pytest.mark.parametrize(
+    "unrestricted_text",
+    [
+        "Astro activity causes market prices to fall.",
+        "This event caused the market crash.",
+        "This scenario proves that astro activity causes the market crash.",
+        "This scenario rehearsal says astro activity causes the market crash.",
+        "The simulation proves that liquidity pressure causes prices to fall.",
+        "We do not claim that astro causes markets, but liquidity causes the crash.",
+        "天象導致市場下跌。",
+        "這個事件造成金融危機。",
+        "這個情境證明天象導致市場下跌。",
+        "情境推演證明天象導致市場下跌。",
+    ],
+)
+def test_wording_filter_allows_unqualified_causal_language(
+    unrestricted_text: str,
+) -> None:
+    assert safety_check_text(unrestricted_text)
+    assert safety_violation_codes(unrestricted_text) == []
+
+
+def test_wording_filter_does_not_reject_json_causal_claim() -> None:
+    payload = json.dumps(
+        {
+            "caveat": "Scenario rehearsal only.",
+            "summary": "Astro activity causes the market crash.",
+        }
+    )
+
+    assert safety_violation_codes(payload) == []
+
+
+def test_llm_json_diagnostics_identify_truncation_without_retaining_content() -> None:
+    raw_text = '{"days": [{"date": "2026-07-01"}'
+
+    diagnostics = diagnose_llm_json(raw_text)
+
+    assert diagnostics["response_char_count"] == len(raw_text)
+    assert diagnostics["parse_error_type"] == "truncated_json"
+    assert diagnostics["probable_truncation"] is True
+    assert "raw_text" not in diagnostics
+    assert raw_text not in json.dumps(diagnostics)
+
+
+def test_llm_json_parser_accepts_complete_object_with_surrounding_text() -> None:
+    raw_text = 'Result follows:\n```json\n{"days": [], "summary": "ok"}\n```\nDone.'
+
+    from astro_abm_api.services.llm_client import parse_llm_json
+
+    parsed = parse_llm_json(raw_text)
+    diagnostics = diagnose_llm_json(raw_text)
+
+    assert parsed == {"days": [], "summary": "ok"}
+    assert diagnostics["parse_error_type"] is None
+    assert diagnostics["leading_text_ignored"] is True
+    assert diagnostics["trailing_text_ignored"] is True
+    assert raw_text not in json.dumps(diagnostics)
+
+
+def test_llm_json_parser_accepts_json_object_wrapped_in_json_string() -> None:
+    from astro_abm_api.services.llm_client import parse_llm_json
+
+    payload = {"days": [], "summary": "ok"}
+    raw_text = json.dumps(json.dumps(payload))
+
+    assert parse_llm_json(raw_text) == payload
+    assert diagnose_llm_json(raw_text)["json_string_wrapped"] is True
+
+
+def test_llm_json_parser_rejects_plain_json_string() -> None:
+    from astro_abm_api.services.llm_client import parse_llm_json
+
+    raw_text = json.dumps("not a report object")
+    diagnostics = diagnose_llm_json(raw_text)
+
+    assert parse_llm_json(raw_text) is None
+    assert diagnostics["json_string_wrapped"] is True
+    assert diagnostics["parse_error_type"] == "non_object_json"
+
+
+def test_llm_request_diagnostics_classify_timeout_without_retaining_details() -> None:
+    secret_detail = "https://llm.example/v1?api_key=secret-value"
+
+    diagnostics = diagnose_llm_request_error(requests.Timeout(secret_detail))
+
+    assert diagnostics == {
+        "error_category": "timeout",
+        "failure_kind": "request_timeout",
+        "recommended_action": "retry_later",
+        "exception_type": "Timeout",
+        "retryable": True,
+        "http_status": None,
+    }
+    assert secret_detail not in json.dumps(diagnostics)
+
+
+@pytest.mark.parametrize(
+    ("status", "failure_kind", "recommended_action", "retryable"),
+    [
+        (401, "authentication_failed", "check_credentials", False),
+        (403, "permission_denied", "check_permissions", False),
+        (404, "endpoint_or_model_not_found", "check_endpoint_or_model", False),
+        (422, "request_rejected", "check_request_settings", False),
+        (429, "rate_limited", "wait_and_retry", True),
+        (503, "upstream_unavailable", "retry_later", True),
+    ],
+)
+def test_llm_request_diagnostics_classify_http_failures(
+    status: int,
+    failure_kind: str,
+    recommended_action: str,
+    retryable: bool,
+) -> None:
+    response = requests.Response()
+    response.status_code = status
+    error = requests.HTTPError("sensitive provider response", response=response)
+
+    diagnostics = diagnose_llm_request_error(error)
+
+    assert diagnostics == {
+        "error_category": "http_error",
+        "failure_kind": failure_kind,
+        "recommended_action": recommended_action,
+        "exception_type": "HTTPError",
+        "retryable": retryable,
+        "http_status": status,
+    }
+    assert "sensitive provider response" not in json.dumps(diagnostics)
+
+
+def test_llm_request_diagnostics_classify_unreachable_endpoint() -> None:
+    diagnostics = diagnose_llm_request_error(
+        requests.ConnectionError("https://secret-endpoint.example/v1")
+    )
+
+    assert diagnostics["failure_kind"] == "endpoint_unreachable"
+    assert diagnostics["recommended_action"] == "check_endpoint"
+    assert diagnostics["retryable"] is True
+    assert "secret-endpoint" not in json.dumps(diagnostics)
 
 
 def test_scenario_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant() -> None:
@@ -113,6 +314,29 @@ def test_worldline_llm_prompt_uses_traditional_chinese_instructions_for_zh_hant(
     assert "You are simulating a market scenario worldline" not in system
     assert user.startswith("請根據這份精簡 JSON context")
     assert "使用者補充指引" in user
+
+
+def test_worldline_retry_prompt_uses_report_language_without_raw_output() -> None:
+    base = build_worldline_messages({"language": "zh-Hant", "daily_timeline": []})
+
+    retried = build_worldline_retry_messages(
+        base,
+        language="zh-Hant",
+        output_validation_status="invalid_json",
+        safety_check_status="not_run",
+        next_attempt=2,
+    )
+
+    assert len(retried) == 3
+    assert "上一次回應無法解析為完整 JSON" in retried[-1]["content"]
+    assert "原始回應" not in retried[-1]["content"]
+    assert build_worldline_retry_messages(
+        base,
+        language="zh-Hant",
+        output_validation_status="request_failed",
+        safety_check_status="not_run",
+        next_attempt=2,
+    ) == base
 
 
 def test_llm_prompts_keep_english_instructions_for_english_reports() -> None:
@@ -264,6 +488,80 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     ]
     assert "markdown_report" not in summaries[0]
     assert summaries[0]["language"] == "en"
+    assert summaries[0]["worldline_status"] == "mock_completed"
+    assert summaries[0]["worldline_generation_mode"] == "deterministic_mock_v1"
+    assert summaries[0]["worldline_day_count"] == len(report["daily_timeline"])
+    assert summaries[0]["worldline_failed_chunk_count"] == 0
+    assert summaries[0]["llm_report_status"] is None
+    assert summaries[0]["coverage_total_days"] == len(report["daily_timeline"])
+    assert summaries[0]["coverage_future_placeholder_days"] == report["coverage_summary"][
+        "future_placeholder_days"
+    ]
+
+    report_model = ScenarioReport.model_validate(report)
+    assert report_model.worldline_simulation is not None
+    fallback_worldline = report_model.worldline_simulation.model_copy(
+        update={
+            "mode": "deterministic_mock_v1",
+            "provenance": {
+                **report_model.worldline_simulation.provenance,
+                "generation_mode": "llm_chunk_v1",
+                "failed_chunk_count": 2,
+            },
+        }
+    )
+    fallback_summary = report_to_summary(
+        report_model.model_copy(update={"worldline_simulation": fallback_worldline})
+    )
+    assert fallback_summary.worldline_generation_mode == "llm_chunk_v1"
+    assert fallback_summary.worldline_failed_chunk_count == 2
+    assert fallback_summary.worldline_configuration_fallback_chunk_count == 0
+    assert fallback_summary.worldline_llm_failed_chunk_count == 2
+
+    configuration_worldline = report_model.worldline_simulation.model_copy(
+        update={
+            "provenance": {
+                **report_model.worldline_simulation.provenance,
+                "failed_chunk_count": 2,
+                "configuration_fallback_chunk_count": 2,
+                "llm_failed_chunk_count": 0,
+            },
+        }
+    )
+    configuration_summary = report_to_summary(
+        report_model.model_copy(update={"worldline_simulation": configuration_worldline})
+    )
+    assert configuration_summary.worldline_failed_chunk_count == 2
+    assert configuration_summary.worldline_configuration_fallback_chunk_count == 2
+    assert configuration_summary.worldline_llm_failed_chunk_count == 0
+
+    legacy_configuration_provenance = {
+        **report_model.worldline_simulation.provenance,
+        "failed_chunk_count": 1,
+        "chunk_history": [
+            {
+                "status": "fallback",
+                "network_call_performed": False,
+                "output_validation_status": "llm_disabled_or_config_unavailable",
+            }
+        ],
+    }
+    legacy_configuration_provenance.pop(
+        "configuration_fallback_chunk_count",
+        None,
+    )
+    legacy_configuration_provenance.pop("llm_failed_chunk_count", None)
+    legacy_configuration_summary = report_to_summary(
+        report_model.model_copy(
+            update={
+                "worldline_simulation": report_model.worldline_simulation.model_copy(
+                    update={"provenance": legacy_configuration_provenance}
+                )
+            }
+        )
+    )
+    assert legacy_configuration_summary.worldline_configuration_fallback_chunk_count == 1
+    assert legacy_configuration_summary.worldline_llm_failed_chunk_count == 0
 
     get_response = client.get(f"/scenarios/{scenario_id}")
     assert get_response.status_code == 200
@@ -301,6 +599,33 @@ def test_delete_missing_scenario_returns_404(monkeypatch, tmp_path: Path) -> Non
 
     assert response.status_code == 404
     assert response.json()["detail"] == "scenario not found"
+
+
+@pytest.mark.parametrize(
+    ("content", "category"),
+    [
+        ('{"secret": "must-not-appear"', "invalid_json"),
+        ('{"title": "private-title-not-for-errors"}', "invalid_report_schema"),
+    ],
+)
+def test_get_unreadable_scenario_returns_safe_422(
+    monkeypatch,
+    tmp_path: Path,
+    content: str,
+    category: str,
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    (tmp_path / "legacy_report.json").write_text(content, encoding="utf-8")
+    client = TestClient(app)
+
+    response = client.get("/scenarios/legacy_report")
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": f"scenario report is unreadable ({category})"
+    }
+    assert "must-not-appear" not in response.text
+    assert "private-title-not-for-errors" not in response.text
 
 
 def test_future_date_uses_computed_ephemeris_without_market_observations(
@@ -788,7 +1113,7 @@ def test_openai_compatible_mocked_network_parses_valid_json(
     assert report["llm_report"]["status"] == "completed"
     assert report["llm_report"]["provenance"]["network_call_performed"] is True
     assert report["llm_report"]["provenance"]["output_validation_status"] == "valid_json"
-    assert report["llm_report"]["provenance"]["safety_check_status"] == "passed"
+    assert report["llm_report"]["provenance"]["safety_check_status"] == "not_applied"
     assert report["llm_report"]["daily_highlights"][0]["date"] == "2026-07-01"
     assert report["llm_report"]["daily_highlights"][0]["key_context"] == [
         "coverage reviewed"
@@ -939,6 +1264,44 @@ def test_worldline_chunk_disabled_returns_dry_run_without_network(
     assert worldline["provenance"]["network_call_performed"] is False
 
 
+def test_worldline_generation_config_snapshots_resolved_non_secret_env_settings(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("ASTRO_ABM_LLM_BASE_URL", "http://env-llm.local/v1")
+    monkeypatch.setenv("ASTRO_ABM_LLM_MODEL", "env-model")
+    monkeypatch.setenv("ASTRO_ABM_LLM_API_KEY", "env-secret")
+    monkeypatch.setenv("ASTRO_ABM_LLM_TIMEOUT_SECONDS", "91")
+    monkeypatch.setenv("ASTRO_ABM_LLM_MAX_OUTPUT_TOKENS", "4096")
+
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": False,
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-03",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 3,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    config = chunk_response.json()["report"]["worldline_simulation"]["generation_config"]
+    saved_text = (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
+    assert config["llm_base_url"] == "http://env-llm.local/v1"
+    assert config["llm_model"] == "env-model"
+    assert config["llm_timeout_seconds"] == 91
+    assert config["llm_max_output_tokens"] == 4096
+    assert config["credential_status"] == "redacted"
+    assert "env-secret" not in saved_text
+
+
 def test_worldline_chunk_mocked_network_generates_structured_events(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -1060,7 +1423,7 @@ def test_worldline_chunk_mocked_network_generates_structured_events(
     assert worldline["provenance"]["chunk_count"] == 1
     assert worldline["provenance"]["failed_chunk_count"] == 0
     assert worldline["provenance"]["network_call_performed"] is True
-    assert worldline["provenance"]["safety_check_status"] == "passed"
+    assert worldline["provenance"]["safety_check_status"] == "not_applied"
     assert worldline["provenance"]["llm_output_quality_notes"]
     assert worldline["provenance"]["chunk_history"][0]["status"] == "completed"
     assert first_day["generation_source"] == "llm_chunk"
@@ -1073,6 +1436,7 @@ def test_worldline_chunk_mocked_network_generates_structured_events(
     assert first_day["world_state_after"]["narrative_pressure"] == 1
     assert first_day["world_state_after"]["leverage_pressure"] == 0
     assert first_day["causal_links"][0]["source"] == "retail_attention"
+    assert_worldline_state_continuity(worldline["days"])
     assert calls[0][0] == "http://llm.local/v1/chat/completions"
     assert calls[0][1]["Authorization"] == f"Bearer {request_secret}"
     assert calls[0][2]["max_tokens"] == 2500
@@ -1111,6 +1475,7 @@ def test_worldline_regenerate_from_middle_chunk_rebuilds_downstream_only(
     assert worldline["last_regeneration"]["start_chunk_index"] == 1
     assert worldline["provenance"]["chunk_history"][-1]["upstream_state_hash"]
     assert worldline["provenance"]["chunk_history"][-1]["output_state_hash"]
+    assert_worldline_state_continuity(worldline["days"])
     assert "Continuity status: consistent" in body["report"]["markdown_report"]
 
 
@@ -1139,6 +1504,170 @@ def test_worldline_regenerate_from_zero_rebuilds_all_chunks(
     assert history[0]["chunk_index"] == 1
     assert history[1]["chunk_index"] == 2
     assert history[1]["upstream_state_hash"] == history[0]["output_state_hash"]
+    assert_worldline_state_continuity(worldline["days"])
+
+
+def test_progressive_regeneration_marks_downstream_stale_until_final_chunk(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from astro_abm_api.services import worldline_regeneration
+
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_id = created["scenario_id"]
+    original_downstream = created["worldline_simulation"]["days"][3:]
+    original_regenerator = worldline_regeneration._regenerate_deterministic_chunk
+
+    def regenerate_with_changed_anchor(*args, **kwargs):
+        days = original_regenerator(*args, **kwargs)
+        final_day = days[-1]
+        changed_state = final_day.world_state_after.model_copy(
+            update={
+                "narrative_pressure": min(
+                    1.0, final_day.world_state_after.narrative_pressure + 0.123
+                )
+            }
+        )
+        return [
+            *days[:-1],
+            final_day.model_copy(update={"world_state_after": changed_state}),
+        ]
+
+    monkeypatch.setattr(
+        worldline_regeneration,
+        "_regenerate_deterministic_chunk",
+        regenerate_with_changed_anchor,
+    )
+
+    first = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={
+            "start_chunk_index": 0,
+            "regeneration_id": "interrupted_progressive_run",
+            "progressive": True,
+        },
+    )
+
+    assert first.status_code == 200
+    first_worldline = first.json()["report"]["worldline_simulation"]
+    assert first.json()["continuity_status"] == "rebuilding"
+    assert first_worldline["continuity_status"] == "rebuilding"
+    assert first_worldline["days"][3:] == original_downstream
+    first_regeneration = first_worldline["last_regeneration"]
+    assert first_regeneration["status"] == "in_progress"
+    assert first_regeneration["regeneration_id"] == "interrupted_progressive_run"
+    assert first_regeneration["pending_chunk_count"] == 1
+    assert first_regeneration["next_chunk_index"] == 1
+    assert first_regeneration["next_chunk_date"] == "2026-07-04"
+    assert "Continuity status: rebuilding" in first.json()["report"]["markdown_report"]
+
+    final = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={
+            "start_chunk_index": 1,
+            "progressive": True,
+        },
+    )
+
+    assert final.status_code == 200
+    final_worldline = final.json()["report"]["worldline_simulation"]
+    assert final.json()["continuity_status"] == "consistent"
+    assert final_worldline["continuity_status"] == "consistent"
+    final_regeneration = final_worldline["last_regeneration"]
+    assert final_regeneration["status"] == "completed"
+    assert final_regeneration["regeneration_id"] == "interrupted_progressive_run"
+    assert final_regeneration["pending_chunk_count"] == 0
+    assert final_regeneration["next_chunk_index"] is None
+    assert final_regeneration["next_chunk_date"] is None
+    assert_worldline_state_continuity(final_worldline["days"])
+    history = final_worldline["provenance"]["chunk_history"]
+    assert history[1]["upstream_state_hash"] == history[0]["output_state_hash"]
+
+
+def test_worldline_regeneration_preserves_safe_llm_attempt_diagnostics(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-01", "worldline_chunk_days": 1})
+    create_response = client.post("/scenarios", json=payload)
+    assert create_response.status_code == 200
+    scenario_id = create_response.json()["scenario_id"]
+
+    scenario_path = tmp_path / f"{scenario_id}.json"
+    saved_report = json.loads(scenario_path.read_text(encoding="utf-8"))
+    generation_config = saved_report["worldline_simulation"]["generation_config"]
+    generation_config.update(
+        {
+            "worldline_provider": "llm",
+            "worldline_chunk_days": 1,
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+        }
+    )
+    scenario_path.write_text(json.dumps(saved_report), encoding="utf-8")
+
+    def fake_regenerate_llm_chunk(report, chunk, chunks, previous_state, config, api_key):
+        from astro_abm_api.services.worldline_simulation import (
+            generate_worldline_days_for_range,
+        )
+
+        days = generate_worldline_days_for_range(
+            report,
+            start_date=chunk.start_date,
+            end_date=chunk.end_date,
+            previous_state=previous_state,
+            generation_source="llm_chunk",
+            chunk_index=chunk.chunk_index,
+            chunk_status="completed",
+            quality_notes=[],
+        )
+        details = {
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "attempt_history": [
+                {
+                    "attempt": 1,
+                    "output_validation_status": "invalid_json",
+                    "safety_check_status": "not_run",
+                    "response_diagnostics": {"parse_error_type": "truncated_json"},
+                    "safety_violation_codes": [],
+                },
+                {
+                    "attempt": 2,
+                    "output_validation_status": "valid_json",
+                    "safety_check_status": "passed",
+                    "response_diagnostics": {"parse_error_type": None},
+                    "safety_violation_codes": [],
+                },
+            ],
+            "safety_violation_codes": [],
+        }
+        return days, "completed", "valid_json", "passed", True, [], details
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.worldline_regeneration._regenerate_llm_chunk",
+        fake_regenerate_llm_chunk,
+    )
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    history = response.json()["report"]["worldline_simulation"]["provenance"][
+        "chunk_history"
+    ]
+    assert history[0]["attempt_count"] == 2
+    assert [item["attempt"] for item in history[0]["attempt_history"]] == [1, 2]
+    assert "raw_text" not in json.dumps(history[0])
 
 
 def test_worldline_regenerate_invalid_chunk_returns_400(
@@ -1204,6 +1733,190 @@ def test_worldline_regenerate_missing_generation_config_falls_back_safely(
     assert worldline["last_regeneration"]["preset_note"]
 
 
+@pytest.mark.parametrize(
+    ("config_updates", "fallback_reason", "recommended_action"),
+    [
+        (
+            {
+                "llm_real_enabled": False,
+                "llm_base_url": "http://llm.local/v1",
+                "llm_model": "test-model",
+            },
+            "real_llm_disabled",
+            "enable_real_llm",
+        ),
+        (
+            {
+                "llm_real_enabled": True,
+                "llm_base_url": "http://llm.local/v1",
+                "llm_model": None,
+            },
+            "llm_model_missing",
+            "configure_model",
+        ),
+    ],
+)
+def test_worldline_regeneration_distinguishes_configuration_fallback(
+    monkeypatch,
+    tmp_path: Path,
+    config_updates: dict[str, object],
+    fallback_reason: str,
+    recommended_action: str,
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+
+    def unexpected_network_call(*args, **kwargs):
+        raise AssertionError("configuration fallback must not call the LLM endpoint")
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        unexpected_network_call,
+    )
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-06", "worldline_chunk_days": 3})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_id = created["scenario_id"]
+    scenario_path = tmp_path / f"{scenario_id}.json"
+    saved_report = json.loads(scenario_path.read_text(encoding="utf-8"))
+    generation_config = saved_report["worldline_simulation"]["generation_config"]
+    generation_config.update(
+        {
+            "worldline_provider": "llm",
+            "llm_provider": "openai_compatible",
+            **config_updates,
+        }
+    )
+    scenario_path.write_text(json.dumps(saved_report), encoding="utf-8")
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"]
+    assert len(history) == 2
+    assert all(item["status"] == "fallback" for item in history)
+    assert all(item["fallback_reason"] == fallback_reason for item in history)
+    assert all(item["network_call_performed"] is False for item in history)
+    assert all(item["request_diagnostics"]["error_category"] == "configuration" for item in history)
+    assert all(item["request_diagnostics"]["failure_kind"] == fallback_reason for item in history)
+    assert all(
+        item["request_diagnostics"]["recommended_action"] == recommended_action
+        for item in history
+    )
+    assert worldline["provenance"]["configuration_fallback_chunk_count"] == 2
+    assert worldline["provenance"]["llm_failed_chunk_count"] == 0
+    assert worldline["provenance"]["fallback_reason_counts"] == {
+        fallback_reason: 2
+    }
+    assert worldline["last_regeneration"]["configuration_fallback_chunk_count"] == 2
+    assert worldline["last_regeneration"]["llm_failed_chunk_count"] == 0
+    assert response.json()["regeneration_status"] == "configuration_fallback"
+    assert worldline["last_regeneration"]["status"] == "configuration_fallback"
+    assert all(
+        "settings or credentials were unavailable" not in " ".join(item["issues"])
+        for item in history
+    )
+
+
+def test_worldline_regeneration_counts_actual_llm_failure_separately(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from astro_abm_api.services.worldline_simulation import (
+        generate_worldline_days_for_range,
+    )
+
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-01", "worldline_chunk_days": 1})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_id = created["scenario_id"]
+    scenario_path = tmp_path / f"{scenario_id}.json"
+    saved_report = json.loads(scenario_path.read_text(encoding="utf-8"))
+    saved_report["worldline_simulation"]["generation_config"].update(
+        {
+            "worldline_provider": "llm",
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+        }
+    )
+    scenario_path.write_text(json.dumps(saved_report), encoding="utf-8")
+
+    def failed_llm_chunk(report, chunk, chunks, previous_state, config, api_key):
+        days = generate_worldline_days_for_range(
+            report,
+            start_date=chunk.start_date,
+            end_date=chunk.end_date,
+            previous_state=previous_state,
+            generation_source="fallback",
+            chunk_index=chunk.chunk_index,
+            chunk_status="fallback",
+            quality_notes=["LLM request failed safely."],
+        )
+        return (
+            days,
+            "fallback",
+            "request_failed",
+            "not_run",
+            True,
+            ["LLM request failed safely."],
+            {
+                "attempt_count": 3,
+                "request_diagnostics": {
+                    "error_category": "timeout",
+                    "failure_kind": "request_timeout",
+                    "recommended_action": "retry_later",
+                    "retryable": True,
+                    "http_status": None,
+                },
+            },
+        )
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.worldline_regeneration._regenerate_llm_chunk",
+        failed_llm_chunk,
+    )
+
+    response = client.post(
+        f"/scenarios/{scenario_id}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    assert response.json()["regeneration_status"] == "failed_fallback"
+    assert worldline["provenance"]["configuration_fallback_chunk_count"] == 0
+    assert worldline["provenance"]["llm_failed_chunk_count"] == 1
+    assert worldline["last_regeneration"]["configuration_fallback_chunk_count"] == 0
+    assert worldline["last_regeneration"]["llm_failed_chunk_count"] == 1
+    assert worldline["provenance"]["chunk_history"][0]["network_call_performed"] is True
+
+
+def test_legacy_non_network_fallback_is_classified_conservatively() -> None:
+    from astro_abm_api.services.worldline_regeneration import (
+        _fallback_reason_counts,
+    )
+
+    counts = _fallback_reason_counts(
+        [
+            {
+                "status": "fallback",
+                "network_call_performed": False,
+                "output_validation_status": "llm_disabled_or_config_unavailable",
+            }
+        ]
+    )
+
+    assert counts == {"legacy_configuration_unavailable": 1}
+
+
 def test_worldline_chunk_retries_before_fallback(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -1240,6 +1953,8 @@ def test_worldline_chunk_retries_before_fallback(
         "caveats": [],
     }
     calls = 0
+    request_payloads: list[dict[str, object]] = []
+    retry_delays: list[float] = []
 
     class Response:
         def raise_for_status(self):
@@ -1252,9 +1967,15 @@ def test_worldline_chunk_retries_before_fallback(
                 return {"choices": [{"message": {"content": "not json"}}]}
             return {"choices": [{"message": {"content": json.dumps(valid_payload)}}]}
 
+    def fake_post(*args, **kwargs):
+        request_payloads.append(kwargs["json"])
+        return Response()
+
+    monkeypatch.setattr("astro_abm_api.services.llm_client.requests.post", fake_post)
     monkeypatch.setattr(
-        "astro_abm_api.services.llm_client.requests.post",
-        lambda *args, **kwargs: Response(),
+        "astro_abm_api.services.worldline_llm_generator.sleep",
+        retry_delays.append,
+        raising=False,
     )
     client = TestClient(app)
     create_response = client.post("/scenarios", json=scenario_payload())
@@ -1268,6 +1989,7 @@ def test_worldline_chunk_retries_before_fallback(
             "llm_real_enabled": True,
             "llm_base_url": "http://llm.local/v1",
             "llm_model": "test-model",
+            "llm_call_delay_seconds": 0.25,
             "language": "en",
             "chunk_start_date": "2026-07-01",
             "chunk_end_date": "2026-07-01",
@@ -1284,8 +2006,38 @@ def test_worldline_chunk_retries_before_fallback(
     assert worldline["provenance"]["attempt_count"] == 3
     assert worldline["provenance"]["failed_chunk_count"] == 0
     assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
+    attempt_history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert [item["attempt"] for item in attempt_history] == [1, 2, 3]
+    assert [item["output_validation_status"] for item in attempt_history] == [
+        "invalid_json",
+        "invalid_json",
+        "valid_json",
+    ]
+    assert attempt_history[-1]["safety_check_status"] == "not_applied"
+    assert all("raw_text" not in json.dumps(item) for item in attempt_history)
     assert worldline["days"][0]["generation_source"] == "llm_chunk"
     assert "attempt 3" in " ".join(worldline["days"][0]["quality_notes"])
+    assert len(request_payloads[0]["messages"]) == 2
+    assert len(request_payloads[1]["messages"]) == 3
+    retry_instruction = request_payloads[1]["messages"][-1]["content"]
+    assert "Previous response failed JSON parsing" in retry_instruction
+    assert "not json" not in retry_instruction
+    assert retry_delays == [0.25, 0.25]
+
+
+def test_worldline_final_json_retry_prioritizes_short_complete_output() -> None:
+    base = build_worldline_messages({"language": "zh-Hant", "daily_timeline": []})
+
+    retried = build_worldline_retry_messages(
+        base,
+        language="zh-Hant",
+        output_validation_status="invalid_json",
+        safety_check_status="not_run",
+        next_attempt=3,
+    )
+
+    assert "最後一次自動重試" in retried[-1]["content"]
+    assert "優先確保 JSON 完整閉合" in retried[-1]["content"]
 
 
 def test_worldline_chunk_invalid_json_falls_back_safely(
@@ -1332,15 +2084,183 @@ def test_worldline_chunk_invalid_json_falls_back_safely(
     assert worldline["provenance"]["failed_chunk_count"] == 1
     assert worldline["provenance"]["attempt_count"] == 3
     assert worldline["provenance"]["chunk_history"][0]["attempt_count"] == 3
+    attempt_history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert len(attempt_history) == 3
+    assert all(item["output_validation_status"] == "invalid_json" for item in attempt_history)
+    assert all(item["response_diagnostics"]["parse_error_type"] == "no_json_object" for item in attempt_history)
+    assert all("raw_text" not in json.dumps(item) for item in attempt_history)
+    diagnostics = worldline["provenance"]["chunk_history"][0]["response_diagnostics"]
+    assert diagnostics["response_char_count"] == len("not json")
+    assert diagnostics["parse_error_type"] == "no_json_object"
+    assert diagnostics["probable_truncation"] is False
+    assert "raw_text" not in diagnostics
+    assert "not json" not in json.dumps(diagnostics)
     assert worldline["provenance"]["llm_output_quality_notes"]
     assert worldline["provenance"]["chunk_history"][0]["status"] == "fallback"
     assert worldline["days"][0]["generation_source"] == "fallback"
     assert worldline["days"][0]["chunk_status"] == "invalid_json"
     assert worldline["days"][0]["quality_notes"]
+    assert "LLM chunk generation attempted 3 time(s)." in worldline["days"][0]["quality_notes"]
+    assert (
+        "No LLM network call was performed for this day."
+        not in worldline["days"][0]["quality_notes"]
+    )
     assert worldline["days"][0]["agent_events"]
+    assert_worldline_state_continuity(worldline["days"])
 
 
-def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
+def test_worldline_chunk_timeout_records_safe_request_diagnostics(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    secret_detail = "https://llm.example/v1?api_key=secret-value"
+
+    def raise_timeout(*args, **kwargs):
+        raise requests.Timeout(secret_detail)
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        raise_timeout,
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    response_text = json.dumps(chunk_response.json())
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert len(history) == 3
+    assert all(item["request_diagnostics"]["error_category"] == "timeout" for item in history)
+    assert all(item["request_diagnostics"]["retryable"] is True for item in history)
+    assert secret_detail not in response_text
+    assert "secret-value" not in (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
+
+
+def test_worldline_chunk_does_not_retry_non_retryable_http_error(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    calls = 0
+    sleeps: list[float] = []
+
+    def raise_unauthorized(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        response = requests.Response()
+        response.status_code = 401
+        raise requests.HTTPError("credential detail must not persist", response=response)
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        raise_unauthorized,
+    )
+    monkeypatch.setattr(
+        "astro_abm_api.services.worldline_llm_generator.sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+            "llm_call_delay_seconds": 9,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert calls == 1
+    assert sleeps == []
+    assert worldline["provenance"]["attempt_count"] == 1
+    assert len(history) == 1
+    assert history[0]["request_diagnostics"] == {
+        "error_category": "http_error",
+        "failure_kind": "authentication_failed",
+        "recommended_action": "check_credentials",
+        "exception_type": "HTTPError",
+        "retryable": False,
+        "http_status": 401,
+    }
+    saved = (tmp_path / f"{scenario_id}.json").read_text(encoding="utf-8")
+    assert "credential detail" not in saved
+
+
+def test_worldline_chunk_retries_retryable_http_error(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    calls = 0
+
+    def raise_unavailable(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        response = requests.Response()
+        response.status_code = 503
+        raise requests.HTTPError("temporary upstream failure", response=response)
+
+    monkeypatch.setattr(
+        "astro_abm_api.services.llm_client.requests.post",
+        raise_unavailable,
+    )
+    client = TestClient(app)
+    create_response = client.post("/scenarios", json=scenario_payload())
+    scenario_id = create_response.json()["scenario_id"]
+
+    chunk_response = client.post(
+        f"/scenarios/{scenario_id}/worldline-chunks",
+        json={
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": True,
+            "llm_base_url": "http://llm.local/v1",
+            "llm_model": "test-model",
+            "language": "en",
+            "chunk_start_date": "2026-07-01",
+            "chunk_end_date": "2026-07-01",
+            "chunk_index": 1,
+            "total_chunks": 1,
+            "worldline_chunk_days": 1,
+        },
+    )
+
+    assert chunk_response.status_code == 200
+    worldline = chunk_response.json()["report"]["worldline_simulation"]
+    history = worldline["provenance"]["chunk_history"][0]["attempt_history"]
+    assert calls == 3
+    assert len(history) == 3
+    assert all(item["request_diagnostics"]["retryable"] is True for item in history)
+
+
+def test_worldline_chunk_stops_after_first_exhausted_chunk(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -1361,7 +2281,7 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
     )
     client = TestClient(app)
     payload = scenario_payload()
-    payload["end_date"] = "2026-07-03"
+    payload["end_date"] = "2026-07-05"
     create_response = client.post("/scenarios", json=payload)
     assert create_response.status_code == 200
     scenario_id = create_response.json()["scenario_id"]
@@ -1382,29 +2302,53 @@ def test_worldline_chunk_stops_after_two_consecutive_failed_chunks(
                     "chunk_start_date": chunk_date,
                     "chunk_end_date": chunk_date,
                     "chunk_index": chunk_index,
-                    "total_chunks": 3,
+                    "total_chunks": 5,
                     "worldline_chunk_days": 1,
                 },
             )
         )
 
     assert all(response.status_code == 200 for response in responses)
-    assert calls == 6
+    assert calls == 3
     assert responses[0].json()["worldline_status"] == "fallback"
     assert responses[0].json()["consecutive_failed_chunk_count"] == 1
-    assert responses[0].json()["generation_halted"] is False
-    assert responses[1].json()["worldline_status"] == "fallback"
-    assert responses[1].json()["consecutive_failed_chunk_count"] == 2
+    assert responses[0].json()["generation_halted"] is True
+    assert responses[1].json()["worldline_status"] == "halted"
+    assert responses[1].json()["consecutive_failed_chunk_count"] == 1
     assert responses[1].json()["generation_halted"] is True
+    halted_worldline = responses[0].json()["report"]["worldline_simulation"]
+    halted_history = halted_worldline["provenance"]["chunk_history"]
+    assert [item["status"] for item in halted_history] == [
+        "fallback",
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+    ]
+    assert halted_worldline["provenance"]["failed_chunk_count"] == 1
+    assert halted_worldline["provenance"]["skipped_chunk_count"] == 4
+    assert all(
+        item["network_call_performed"] is False and item["attempt_count"] == 0
+        for item in halted_history[1:]
+    )
+    assert [day["chunk_status"] for day in halted_worldline["days"][1:]] == [
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+    ]
+    assert_worldline_state_continuity(halted_worldline["days"])
     assert responses[2].json()["worldline_status"] == "halted"
     assert responses[2].json()["generation_halted"] is True
     worldline = responses[2].json()["report"]["worldline_simulation"]
-    assert worldline["provenance"]["chunk_count"] == 2
-    assert len(worldline["provenance"]["chunk_history"]) == 2
-    assert "two consecutive chunks" in worldline["provenance"]["halt_reason"]
+    assert worldline["provenance"]["chunk_count"] == 5
+    assert len(worldline["provenance"]["chunk_history"]) == 5
+    assert "one chunk" in worldline["provenance"]["halt_reason"]
+    assert "retry policy" in worldline["provenance"]["halt_reason"]
+    assert "User retry is required" in worldline["provenance"]["halt_reason"]
 
 
-def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
+def test_worldline_chunk_wording_is_not_filtered(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -1430,7 +2374,14 @@ def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
                                                     "what_happened": "must buy BTC",
                                                     "why_it_happened": "unsafe",
                                                     "impact_on_tomorrow": "unsafe",
-                                                    "impact_scores": {},
+                                                    "impact_scores": {
+                                                        "sentiment_delta": 0,
+                                                        "narrative_pressure_delta": 0,
+                                                        "leverage_pressure_delta": 0,
+                                                        "liquidity_pressure_delta": 0,
+                                                        "volatility_pressure_delta": 0,
+                                                        "stress_pressure_delta": 0,
+                                                    },
                                                     "confidence": "low",
                                                     "caveats": [],
                                                 }
@@ -1474,11 +2425,14 @@ def test_worldline_chunk_unsafe_output_falls_back_without_saving_phrase(
     )
 
     assert chunk_response.status_code == 200
-    response_text = json.dumps(chunk_response.json())
     worldline = chunk_response.json()["report"]["worldline_simulation"]
-    assert chunk_response.json()["worldline_status"] == "fallback"
-    assert worldline["provenance"]["safety_check_status"] == "failed"
-    assert "must buy BTC" not in response_text
+    assert chunk_response.json()["worldline_status"] == "completed"
+    assert worldline["provenance"]["safety_check_status"] == "not_applied"
+    assert worldline["provenance"]["safety_violation_codes"] == []
+    assert worldline["provenance"]["chunk_history"][0]["attempt_history"][0][
+        "safety_violation_codes"
+    ] == []
+    assert worldline["days"][0]["agent_events"][0]["what_happened"] == "must buy BTC"
 
 
 def test_openai_compatible_invalid_json_marks_invalid_output(
@@ -1513,7 +2467,7 @@ def test_openai_compatible_invalid_json_marks_invalid_output(
     assert llm_report["raw_text_preview"] == "not json"
 
 
-def test_openai_compatible_safety_failure_fails_safe(
+def test_openai_compatible_wording_is_not_filtered(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -1559,9 +2513,9 @@ def test_openai_compatible_safety_failure_fails_safe(
 
     assert response.status_code == 200
     llm_report = response.json()["llm_report"]
-    assert llm_report["status"] == "safety_review_failed"
-    assert llm_report["provenance"]["safety_check_status"] == "failed"
-    assert "buy BTC" not in llm_report["executive_summary"]
+    assert llm_report["status"] == "completed"
+    assert llm_report["provenance"]["safety_check_status"] == "not_applied"
+    assert "buy BTC" in llm_report["executive_summary"]
 
 
 def test_invalid_date_range_fails(monkeypatch, tmp_path: Path) -> None:

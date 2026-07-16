@@ -5,7 +5,7 @@ WEB_PORT ?= 3000
 NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL ?= http://$(API_HOST):$(API_PORT)
 export NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL
 
-.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check api web product-smoke scenario-demo test
+.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check check-api-port check-web-port api web product-smoke scenario-demo test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -76,10 +76,16 @@ checkpoint:
 checkpoint-check:
 	uv run python scripts/astro_abm_ops.py checkpoint --check-only
 
-api:
+check-api-port:
+	uv run python scripts/check_local_port.py --host $(API_HOST) --port $(API_PORT) --service "Astro ABM API" --retry-command "make api API_PORT=18000"
+
+check-web-port:
+	uv run python scripts/check_local_port.py --host $(WEB_HOST) --port $(WEB_PORT) --service "Astro ABM Web" --retry-command "make web WEB_PORT=13000 API_PORT=$(API_PORT)"
+
+api: check-api-port
 	uv run uvicorn astro_abm_api.main:app --app-dir apps/api --host $(API_HOST) --port $(API_PORT) --reload --reload-dir apps/api
 
-web:
+web: check-web-port
 	cd apps/web && npm run dev -- --hostname $(WEB_HOST) --port $(WEB_PORT)
 
 product-smoke:

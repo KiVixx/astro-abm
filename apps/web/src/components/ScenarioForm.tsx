@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createLlmPreset, deleteLlmPreset, updateLlmPreset } from "@/lib/api";
 import { AgentSelector } from "./AgentSelector";
@@ -30,6 +31,7 @@ interface GenerationProgress {
   currentChunk: number;
   totalChunks: number;
   message: string;
+  savedReportPath?: string;
 }
 
 const DEFAULT_LLM_PROVIDER: LlmProvider = "openai_compatible";
@@ -132,10 +134,16 @@ export function ScenarioForm({
       120,
     );
     const shouldChunkWorldline =
-      product === "worldline" && payload.worldline_provider === "llm";
+      product === "worldline" &&
+      payload.worldline_provider === "llm" &&
+      payload.llm_provider === "openai_compatible" &&
+      payload.llm_real_enabled === true;
     const shouldChunkLlm =
       product !== "worldline" &&
       payload.llm_provider === "openai_compatible" && payload.llm_real_enabled === true;
+    let savedReportPath: string | undefined;
+    let processedChunks = 0;
+    let plannedChunks = 0;
 
     try {
       setProgress({
@@ -157,6 +165,7 @@ export function ScenarioForm({
           }
         : payload;
       const report = await createAction(basePayload);
+      savedReportPath = `${product === "worldline" ? "/worldlines" : "/scenarios"}/${report.scenario_id}`;
 
       if (!shouldChunkLlm && !shouldChunkWorldline) {
         setProgress({
@@ -173,6 +182,7 @@ export function ScenarioForm({
       }
 
       const chunks = buildDateChunks(payload.start_date, payload.end_date, chunkSizeDays);
+      plannedChunks = chunks.length;
       let consecutiveWorldlineFailures = 0;
       for (const [index, chunk] of chunks.entries()) {
         const chunkLabel = shouldChunkWorldline
@@ -185,6 +195,7 @@ export function ScenarioForm({
           totalChunks: chunks.length,
           message: `${chunkLabel} ${index + 1}/${chunks.length}: ${chunk.start} → ${chunk.end}`,
         });
+        let networkCallPerformed = false;
         if (shouldChunkWorldline) {
           if (!worldlineChunkAction) {
             throw new Error("Worldline chunk action is not configured.");
@@ -207,10 +218,26 @@ export function ScenarioForm({
             total_chunks: chunks.length,
             worldline_chunk_days: chunkSizeDays,
           });
+          processedChunks = index + 1;
+          networkCallPerformed = worldlineChunkPerformedNetworkCall(
+            response.report,
+            index + 1,
+          );
           if (!["completed", "fallback", "dry_run", "halted"].includes(response.worldline_status)) {
             throw new Error(
               `${t("scenarioCreate.progressChunkFailed")}: ${response.worldline_status}`,
             );
+          }
+          if (response.worldline_status === "dry_run") {
+            setProgress({
+              active: true,
+              phase: "done",
+              currentChunk: index + 1,
+              totalChunks: chunks.length,
+              message: t("scenarioCreate.progressWorldlineDryRunComplete"),
+            });
+            router.push(`/worldlines/${report.scenario_id}`);
+            return;
           }
           consecutiveWorldlineFailures =
             response.worldline_status === "fallback"
@@ -218,7 +245,7 @@ export function ScenarioForm({
               : response.worldline_status === "completed"
                 ? 0
                 : consecutiveWorldlineFailures;
-          if (response.generation_halted || consecutiveWorldlineFailures >= 2) {
+          if (response.generation_halted || consecutiveWorldlineFailures >= 1) {
             setProgress({
               active: true,
               phase: "halted",
@@ -248,6 +275,10 @@ export function ScenarioForm({
             chunk_index: index + 1,
             total_chunks: chunks.length,
           });
+          processedChunks = index + 1;
+          networkCallPerformed = Boolean(
+            response.report.llm_report?.provenance.network_call_performed,
+          );
           if (response.llm_status !== "completed") {
             throw new Error(`${t("scenarioCreate.progressChunkFailed")}: ${response.llm_status}`);
           }
@@ -260,7 +291,7 @@ export function ScenarioForm({
           message: `${t("scenarioCreate.progressLlmChunkDone")} ${index + 1}/${chunks.length}`,
         });
         const hasNextChunk = index < chunks.length - 1;
-        if (hasNextChunk && callDelaySeconds > 0) {
+        if (hasNextChunk && callDelaySeconds > 0 && networkCallPerformed) {
           setProgress({
             active: true,
             phase: "delay",
@@ -286,9 +317,10 @@ export function ScenarioForm({
       setProgress({
         active: true,
         phase: "error",
-        currentChunk: progress.currentChunk,
-        totalChunks: progress.totalChunks,
+        currentChunk: processedChunks,
+        totalChunks: plannedChunks,
         message: error instanceof Error ? error.message : t("common.unknownError"),
+        savedReportPath,
       });
     }
   }
@@ -655,6 +687,18 @@ export function ScenarioForm({
             <div style={{ width: `${progressPct}%` }} />
           </div>
           <p>{progress.message}</p>
+          {progress.phase === "error" && progress.savedReportPath ? (
+            <div className="stack">
+              <p className="muted">{t("scenarioCreate.progressPartialSaved")}</p>
+              <div className="button-row">
+                <Link className="button secondary" href={progress.savedReportPath}>
+                  {product === "worldline"
+                    ? t("scenarioCreate.openSavedWorldline")
+                    : t("scenarioCreate.openSavedScenario")}
+                </Link>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </form>
@@ -752,6 +796,26 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function worldlineChunkPerformedNetworkCall(
+  report: ScenarioReport,
+  chunkIndex: number,
+): boolean {
+  const provenance = report.worldline_simulation?.provenance;
+  const history = Array.isArray(provenance?.chunk_history)
+    ? provenance.chunk_history
+    : [];
+  const currentChunk = history.find(
+    (item): item is Record<string, unknown> =>
+      typeof item === "object"
+      && item !== null
+      && !Array.isArray(item)
+      && Number(item.chunk_index) === chunkIndex,
+  );
+  return currentChunk
+    ? currentChunk.network_call_performed === true
+    : provenance?.network_call_performed === true;
+}
+
 function getDefaultScenarioTitle(language: string): string {
   return language === "zh-Hant" ? "未來 30 日市場世界線推演" : "30-Day Market Worldline";
 }
@@ -792,7 +856,9 @@ function readLlmPresetFromForm(
     real_enabled: formData.get("llm_real_enabled") === "on",
     base_url: optionalString(getString(formData, "llm_base_url")),
     model: getString(formData, "llm_model"),
-    chunk_size_days: Number(getString(formData, "llm_chunk_size_days") || "3"),
+    chunk_size_days: normalizePresetChunkSize(
+      Number(getString(formData, "llm_chunk_size_days") || "3"),
+    ),
     call_delay_seconds: Number(getString(formData, "llm_call_delay_seconds") || DEFAULT_LLM_CALL_DELAY_SECONDS),
     timeout_seconds: Number(getString(formData, "llm_timeout_seconds") || "120"),
     max_output_tokens: Number(getString(formData, "llm_max_output_tokens") || "5000"),
@@ -809,7 +875,11 @@ function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmPresetSummary) {
   setFormChecked(form, "llm_real_enabled", preset.real_enabled);
   setFormValue(form, "llm_base_url", preset.base_url || "");
   setFormValue(form, "llm_model", preset.model || "");
-  setFormValue(form, "llm_chunk_size_days", String(preset.chunk_size_days));
+  setFormValue(
+    form,
+    "llm_chunk_size_days",
+    String(normalizePresetChunkSize(preset.chunk_size_days)),
+  );
   setFormValue(
     form,
     "llm_call_delay_seconds",
@@ -820,6 +890,10 @@ function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmPresetSummary) {
   setFormValue(form, "llm_user_prompt", preset.custom_user_prompt || "");
   setFormValue(form, "worldline_provider", preset.worldline_provider || "deterministic_mock");
   setFormValue(form, "llm_api_key", "");
+}
+
+function normalizePresetChunkSize(value: number): 1 | 2 | 3 | 5 {
+  return value === 1 || value === 2 || value === 3 || value === 5 ? value : 3;
 }
 
 function setFormValue(form: HTMLFormElement, name: string, value: string) {

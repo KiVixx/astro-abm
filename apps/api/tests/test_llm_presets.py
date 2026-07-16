@@ -4,6 +4,7 @@ import json
 import stat
 from pathlib import Path
 
+import pytest
 import requests
 from fastapi.testclient import TestClient
 
@@ -84,11 +85,68 @@ def test_local_llm_preset_crud_redacts_key(monkeypatch, tmp_path: Path) -> None:
     assert client.get("/llm/presets").json() == []
 
 
+@pytest.mark.parametrize("chunk_size_days", [1, 2, 3, 5])
+def test_llm_preset_accepts_supported_chunk_sizes(
+    monkeypatch, tmp_path: Path, chunk_size_days: int
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    response = TestClient(app).post(
+        "/llm/presets",
+        json=preset_payload(chunk_size_days=chunk_size_days),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["chunk_size_days"] == chunk_size_days
+
+
+def test_llm_preset_rejects_unsupported_chunk_size(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    response = TestClient(app).post(
+        "/llm/presets",
+        json=preset_payload(chunk_size_days=4),
+    )
+
+    assert response.status_code == 422
+
+
+def test_regeneration_keeps_original_chunk_boundaries_when_preset_differs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    client = TestClient(app)
+    preset = client.post(
+        "/llm/presets",
+        json=preset_payload(real_enabled=False, chunk_size_days=5),
+    ).json()
+    payload = scenario_payload()
+    payload.update({"end_date": "2026-07-05", "worldline_chunk_days": 1})
+    report = client.post("/scenarios", json=payload).json()
+
+    response = client.post(
+        f"/scenarios/{report['scenario_id']}/worldline/regenerate-from",
+        json={"start_chunk_index": 0, "preset_id": preset["preset_id"]},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    assert worldline["generation_config"]["worldline_chunk_days"] == 1
+    assert len(worldline["provenance"]["chunk_history"]) == 5
+    assert [item["chunk_index"] for item in worldline["provenance"]["chunk_history"]] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+    ]
+
+
 def test_worldline_regeneration_uses_local_preset_without_saving_key(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    monkeypatch.delenv("ASTRO_ABM_LLM_API_KEY", raising=False)
     authorization_headers: list[str] = []
 
     valid_payload = {
@@ -160,8 +218,19 @@ def test_worldline_regeneration_uses_local_preset_without_saving_key(
     scenario_path = tmp_path / "scenarios" / f"{report['scenario_id']}.json"
     assert "local-secret-key" not in scenario_path.read_text(encoding="utf-8")
 
+    reused_response = client.post(
+        f"/scenarios/{report['scenario_id']}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
 
-def test_worldline_regeneration_halts_network_after_two_failed_chunks(
+    assert reused_response.status_code == 200
+    reused_worldline = reused_response.json()["report"]["worldline_simulation"]
+    assert reused_worldline["generation_config"]["preset_id"] == preset["preset_id"]
+    assert authorization_headers == ["Bearer local-secret-key", "Bearer local-secret-key"]
+    assert "local-secret-key" not in scenario_path.read_text(encoding="utf-8")
+
+
+def test_worldline_regeneration_halts_network_after_first_failed_chunk(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
@@ -170,7 +239,9 @@ def test_worldline_regeneration_halts_network_after_two_failed_chunks(
 
     class UnauthorizedResponse:
         def raise_for_status(self):
-            raise requests.HTTPError("401 Client Error: Unauthorized")
+            response = requests.Response()
+            response.status_code = 401
+            raise requests.HTTPError("401 Client Error: Unauthorized", response=response)
 
     def unauthorized_post(*args, **kwargs):
         nonlocal calls
@@ -202,19 +273,32 @@ def test_worldline_regeneration_halts_network_after_two_failed_chunks(
 
     assert all(response.status_code == 200 for response in responses)
     assert [response.json()["rebuilt_chunk_count"] for response in responses] == [1, 2, 3, 4]
+    assert [response.json()["continuity_status"] for response in responses] == [
+        "rebuilding",
+        "rebuilding",
+        "rebuilding",
+        "consistent",
+    ]
     body = responses[-1].json()
     assert body["regeneration_status"] == "failed_fallback"
     assert body["llm_completed_chunk_count"] == 0
-    assert body["fallback_chunk_count"] == 2
-    assert body["skipped_chunk_count"] == 2
-    assert calls == 6
+    assert body["fallback_chunk_count"] == 1
+    assert body["skipped_chunk_count"] == 3
+    assert calls == 1
     worldline = body["report"]["worldline_simulation"]
     assert worldline["status"] == "fallback"
+    assert worldline["provenance"]["failed_chunk_count"] == 1
+    assert worldline["provenance"]["skipped_chunk_count"] == 3
     assert worldline["last_regeneration"]["generation_halted"] is True
     assert worldline["last_regeneration"]["status"] == "failed_fallback"
     assert "status=failed_fallback" in body["report"]["markdown_report"]
     statuses = [item["status"] for item in worldline["provenance"]["chunk_history"]]
-    assert statuses == ["fallback", "fallback", "skipped_after_halt", "skipped_after_halt"]
+    assert statuses == [
+        "fallback",
+        "skipped_after_halt",
+        "skipped_after_halt",
+        "skipped_after_halt",
+    ]
 
 
 def test_worldline_regeneration_missing_preset_returns_404(
@@ -232,3 +316,38 @@ def test_worldline_regeneration_missing_preset_returns_404(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "LLM preset not found"
+
+
+def test_worldline_regeneration_missing_original_preset_falls_back_safely(
+    monkeypatch, tmp_path: Path
+) -> None:
+    scenario_dir = tmp_path / "scenarios"
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(scenario_dir))
+    client = TestClient(app)
+    report = client.post("/scenarios", json=scenario_payload()).json()
+    scenario_path = scenario_dir / f"{report['scenario_id']}.json"
+    saved = json.loads(scenario_path.read_text(encoding="utf-8"))
+    saved["worldline_simulation"]["generation_config"].update(
+        {
+            "worldline_provider": "llm",
+            "llm_provider": "openai_compatible",
+            "llm_real_enabled": False,
+            "llm_base_url": "http://missing-preset.local/v1",
+            "llm_model": "missing-model",
+            "preset_id": "deleted_preset",
+            "preset_name": "Deleted preset",
+            "credential_status": "stored_local",
+        }
+    )
+    scenario_path.write_text(json.dumps(saved), encoding="utf-8")
+
+    response = client.post(
+        f"/scenarios/{report['scenario_id']}/worldline/regenerate-from",
+        json={"start_chunk_index": 0},
+    )
+
+    assert response.status_code == 200
+    worldline = response.json()["report"]["worldline_simulation"]
+    assert worldline["generation_config"]["credential_status"] == "unavailable"
+    assert "Original local LLM preset was unavailable" in " ".join(worldline["caveats"])

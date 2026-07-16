@@ -1,25 +1,13 @@
 import Link from "next/link";
 import { WorldlineSearch } from "@/components/WorldlineSearch";
 import { I18nText } from "@/i18n/useI18n";
-import { getScenario, getScenarios } from "@/lib/api";
-import type { ScenarioReport } from "@/lib/types";
+import { getScenarios } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function WorldlinesPage() {
   try {
     const summaries = await getScenarios();
-    const reports = (
-      await Promise.all(
-        summaries.map(async (summary) => {
-          try {
-            return await getScenario(summary.scenario_id);
-          } catch {
-            return null;
-          }
-        }),
-      )
-    ).filter((report): report is ScenarioReport => report !== null);
 
     return (
       <div className="page stack">
@@ -39,7 +27,7 @@ export default async function WorldlinesPage() {
             </Link>
           </div>
         </header>
-        <WorldlineSearch reports={reports} />
+        <WorldlineSearch summaries={summaries} />
       </div>
     );
   } catch (error) {

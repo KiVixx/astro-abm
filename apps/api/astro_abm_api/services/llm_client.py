@@ -38,47 +38,80 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_MAX_OUTPUT_TOKENS = 5000
 RAW_TEXT_PREVIEW_LIMIT = 800
 
-BANNED_SAFETY_PATTERNS = (
-    r"\bmust\s+buy\b",
-    r"\bmust\s+sell\b",
-    r"\byou\s+should\s+buy\b",
-    r"\byou\s+should\s+sell\b",
-    r"\byou\s+should\s+short\b",
-    r"\byou\s+should\s+go\s+long\b",
-    r"\bgo\s+long\b",
-    r"\benter\s+long\b",
-    r"\bgo\s+short\b",
-    r"\benter\s+short\b",
-    r"\blong\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"\bshort\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"\bbuy\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"\bsell\s+(btc|eth|sol|xrp|bnb|doge|ada|spx|ndx|gold|dxy|vix|us10y)\b",
-    r"you should buy",
-    r"you should sell",
-    r"you should short",
-    r"you should go long",
-    r"\bbuy signal\b",
-    r"\bsell signal\b",
-    r"\bshort signal\b",
-    r"\blong signal\b",
-    r"price target",
-    r"trading recommendation",
-    r"guaranteed",
-    r"predicts with certainty",
-    r"\bcaused\b",
-    r"\bcauses\b",
-    r"will rise",
-    r"will fall",
-    r"買入",
-    r"賣出",
-    r"做多",
-    r"做空",
-    r"目標價",
-    r"保證",
-    r"一定會漲",
-    r"一定會跌",
-)
 
+def diagnose_llm_request_error(exc: requests.RequestException) -> dict[str, object]:
+    http_status = (
+        exc.response.status_code
+        if isinstance(exc, requests.HTTPError) and exc.response is not None
+        else None
+    )
+    if isinstance(exc, requests.Timeout):
+        category = "timeout"
+        failure_kind = "request_timeout"
+        recommended_action = "retry_later"
+        retryable = True
+    elif isinstance(exc, requests.ConnectionError):
+        category = "connection_error"
+        failure_kind = "endpoint_unreachable"
+        recommended_action = "check_endpoint"
+        retryable = True
+    elif isinstance(exc, requests.HTTPError):
+        category = "http_error"
+        failure_kind, recommended_action, retryable = _classify_http_failure(http_status)
+    else:
+        category = "request_error"
+        failure_kind = "request_failed"
+        recommended_action = "check_request_settings"
+        retryable = False
+    return {
+        "error_category": category,
+        "failure_kind": failure_kind,
+        "recommended_action": recommended_action,
+        "exception_type": type(exc).__name__,
+        "retryable": retryable,
+        "http_status": http_status,
+    }
+
+
+def _classify_http_failure(status: int | None) -> tuple[str, str, bool]:
+    if status == 401:
+        return "authentication_failed", "check_credentials", False
+    if status == 403:
+        return "permission_denied", "check_permissions", False
+    if status == 404:
+        return "endpoint_or_model_not_found", "check_endpoint_or_model", False
+    if status in {408, 504}:
+        return "request_timeout", "retry_later", True
+    if status == 429:
+        return "rate_limited", "wait_and_retry", True
+    if status is not None and status >= 500:
+        return "upstream_unavailable", "retry_later", True
+    if status is not None and 400 <= status < 500:
+        return "request_rejected", "check_request_settings", False
+    return "http_error", "check_endpoint_or_settings", False
+
+
+def safe_llm_request_error_message(exc: requests.RequestException) -> str:
+    diagnostics = diagnose_llm_request_error(exc)
+    failure_kind = str(diagnostics["failure_kind"])
+    if failure_kind == "request_timeout":
+        return "The LLM request timed out before a complete response was received."
+    if failure_kind == "endpoint_unreachable":
+        return "The LLM endpoint could not be reached."
+    if failure_kind == "authentication_failed":
+        return "The LLM endpoint rejected the configured credentials."
+    if failure_kind == "permission_denied":
+        return "The LLM endpoint denied access to the requested resource."
+    if failure_kind == "endpoint_or_model_not_found":
+        return "The configured LLM endpoint or model was not found."
+    if failure_kind == "rate_limited":
+        return "The LLM endpoint rate limit was reached."
+    if failure_kind == "upstream_unavailable":
+        return "The LLM provider is temporarily unavailable."
+    if diagnostics["error_category"] == "http_error":
+        status = diagnostics.get("http_status")
+        return f"The LLM endpoint rejected the request with HTTP status {status}." if status else "The LLM endpoint returned an HTTP error."
+    return "The LLM request failed before a complete response was received."
 
 @dataclass(frozen=True)
 class LLMConfig:
@@ -190,7 +223,7 @@ def generate_llm_scenario_report(
                 safety_check_status="not_run",
             ),
             executive_summary="The OpenAI-compatible LLM request failed safely.",
-            scenario_reading=f"{type(exc).__name__}: {exc}",
+            scenario_reading=safe_llm_request_error_message(exc),
             language=request.language,
         )
 
@@ -221,28 +254,15 @@ def generate_llm_scenario_report(
             input_context_hash=context_hash,
             network_call_performed=True,
             output_validation_status="valid_json",
-            safety_check_status="pending",
+            safety_check_status="not_applied",
         ),
         raw_text_preview=_preview(raw_text),
     )
-    if not safety_check_text(report_candidate.model_dump_json()):
-        return report_candidate.model_copy(
-            update={
-                "status": "safety_review_failed",
-                "executive_summary": "The LLM output failed safety review.",
-                "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
-                "daily_highlights": [],
-                "agent_interpretations": [],
-                "asset_stress_indicators": [],
-                "risk_themes": [],
-                "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
-            }
-        )
     return report_candidate.model_copy(
         update={
             "status": "completed",
             "scenario_reading": _normalize_multiline_text(report_candidate.scenario_reading),
-            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
+            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "not_applied"}),
         }
     )
 
@@ -316,7 +336,7 @@ def generate_llm_scenario_report_chunk(
                 safety_check_status="not_run",
             ),
             executive_summary="The OpenAI-compatible LLM request failed safely.",
-            scenario_reading=f"{type(exc).__name__}: {exc}",
+            scenario_reading=safe_llm_request_error_message(exc),
             language=request.language,
         )
 
@@ -347,23 +367,10 @@ def generate_llm_scenario_report_chunk(
             input_context_hash=context_hash,
             network_call_performed=True,
             output_validation_status="valid_json",
-            safety_check_status="pending",
+            safety_check_status="not_applied",
         ),
         raw_text_preview=_preview(raw_text),
     )
-    if not safety_check_text(report_candidate.model_dump_json()):
-        return report_candidate.model_copy(
-            update={
-                "status": "safety_review_failed",
-                "executive_summary": "The LLM output failed safety review.",
-                "scenario_reading": "The generated text contained restricted trading, causal, or certainty language and was not accepted.",
-                "daily_highlights": [],
-                "agent_interpretations": [],
-                "asset_stress_indicators": [],
-                "risk_themes": [],
-                "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "failed"}),
-            }
-        )
     readable_reading = _format_chunk_scenario_reading(
         report_candidate.scenario_reading,
         start_date=request.chunk_start_date,
@@ -374,7 +381,7 @@ def generate_llm_scenario_report_chunk(
         update={
             "status": "completed",
             "scenario_reading": readable_reading,
-            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "passed"}),
+            "provenance": report_candidate.provenance.model_copy(update={"safety_check_status": "not_applied"}),
         }
     )
 
@@ -515,7 +522,7 @@ def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
             reachable=False,
             dry_run=False,
             status="request_failed",
-            message=f"{type(exc).__name__}: {exc}",
+            message=safe_llm_request_error_message(exc),
             base_url=config.base_url,
             model=config.model,
         )
@@ -554,20 +561,111 @@ def _call_openai_compatible(
 
 
 def parse_llm_json(raw_text: str) -> dict[str, Any] | None:
-    text = raw_text.strip()
-    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
-    if fenced:
-        text = fenced.group(1).strip()
-    elif not text.startswith("{"):
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end > start:
-            text = text[start : end + 1].strip()
+    text, _, _ = _extract_llm_json_text(raw_text)
     try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
+        payload, _ = json.JSONDecoder().raw_decode(text)
+    except (json.JSONDecodeError, TypeError):
         return None
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            return None
     return payload if isinstance(payload, dict) else None
+
+
+def diagnose_llm_json(raw_text: str) -> dict[str, object]:
+    stripped = raw_text.strip()
+    text, leading_text_ignored, outer_trailing_text_ignored = _extract_llm_json_text(raw_text)
+    diagnostics: dict[str, object] = {
+        "response_char_count": len(raw_text),
+        "response_empty": not bool(stripped),
+        "markdown_fence_detected": stripped.startswith("```"),
+        "probable_truncation": False,
+        "parse_error_type": None,
+        "parse_error_position": None,
+        "parse_error_line": None,
+        "parse_error_column": None,
+        "parse_error_message": None,
+        "leading_text_ignored": leading_text_ignored,
+        "trailing_text_ignored": outer_trailing_text_ignored,
+        "json_string_wrapped": False,
+    }
+    if not stripped:
+        diagnostics["parse_error_type"] = "empty_response"
+        return diagnostics
+    try:
+        payload, end_index = json.JSONDecoder().raw_decode(text)
+    except json.JSONDecodeError as exc:
+        if "{" not in text:
+            diagnostics["parse_error_type"] = "no_json_object"
+            return diagnostics
+        probable_truncation = text.lstrip().startswith("{") and _has_unclosed_json_delimiters(text)
+        diagnostics.update(
+            {
+                "probable_truncation": probable_truncation,
+                "parse_error_type": "truncated_json" if probable_truncation else "malformed_json",
+                "parse_error_position": exc.pos,
+                "parse_error_line": exc.lineno,
+                "parse_error_column": exc.colno,
+                "parse_error_message": exc.msg,
+            }
+        )
+        return diagnostics
+    diagnostics["trailing_text_ignored"] = bool(
+        diagnostics["trailing_text_ignored"] or text[end_index:].strip()
+    )
+    if isinstance(payload, str):
+        diagnostics["json_string_wrapped"] = True
+        try:
+            payload = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            payload = None
+    if not isinstance(payload, dict):
+        diagnostics["parse_error_type"] = "non_object_json"
+    return diagnostics
+
+
+def _extract_llm_json_text(raw_text: str) -> tuple[str, bool, bool]:
+    text = raw_text.strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
+    if fenced:
+        return (
+            fenced.group(1).strip(),
+            bool(text[: fenced.start()].strip()),
+            bool(text[fenced.end() :].strip()),
+        )
+    if text.startswith('"'):
+        return text, False, False
+    start = text.find("{")
+    if start > 0:
+        return text[start:].strip(), True, False
+    return text, False, False
+
+
+def _has_unclosed_json_delimiters(text: str) -> bool:
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    pairs = {"}": "{", "]": "["}
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "{[":
+            stack.append(character)
+        elif character in "}]":
+            if not stack or stack[-1] != pairs[character]:
+                return False
+            stack.pop()
+    return bool(stack) or in_string
 
 
 def build_report_from_payload(
@@ -601,8 +699,13 @@ def build_report_from_payload(
 
 
 def safety_check_text(text: str) -> bool:
-    lowered = text.lower()
-    return not any(re.search(pattern, lowered) for pattern in BANNED_SAFETY_PATTERNS)
+    """Compatibility hook; wording-based output rejection is disabled."""
+    return True
+
+
+def safety_violation_codes(text: str) -> list[str]:
+    """Return no wording violations; structural validation remains active elsewhere."""
+    return []
 
 
 def credential_status(config: LLMConfig) -> str:

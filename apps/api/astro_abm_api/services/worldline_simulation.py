@@ -37,7 +37,56 @@ def hash_worldline_state(state: WorldlineState) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def generate_worldline_simulation(report: ScenarioReport) -> WorldlineSimulation | None:
+def ensure_worldline_state_continuity(days: list[WorldlineDay]) -> list[WorldlineDay]:
+    ordered = sorted(days, key=lambda day: day.date)
+    if not ordered:
+        return []
+
+    continuous = [ordered[0]]
+    previous_state = ordered[0].world_state_after
+    pressure_fields = (
+        "narrative_pressure",
+        "leverage_pressure",
+        "liquidity_pressure",
+        "volatility_pressure",
+        "stress_pressure",
+    )
+    for day in ordered[1:]:
+        if day.world_state_before == previous_state:
+            continuous.append(day)
+            previous_state = day.world_state_after
+            continue
+
+        pressure_updates = {
+            field: clamp_pressure(
+                getattr(previous_state, field)
+                + getattr(day.world_state_after, field)
+                - getattr(day.world_state_before, field)
+            )
+            for field in pressure_fields
+        }
+        rebased_after = day.world_state_after.model_copy(update=pressure_updates)
+        continuity_note = (
+            "World state was rebased from the previous day's output while preserving "
+            "this day's pressure deltas."
+        )
+        rebased_day = day.model_copy(
+            update={
+                "world_state_before": previous_state,
+                "world_state_after": rebased_after,
+                "quality_notes": list(dict.fromkeys([*day.quality_notes, continuity_note])),
+            }
+        )
+        continuous.append(rebased_day)
+        previous_state = rebased_after
+    return continuous
+
+
+def generate_worldline_simulation(
+    report: ScenarioReport,
+    *,
+    chunk_days: int = 3,
+) -> WorldlineSimulation | None:
     if not report.daily_timeline:
         return None
 
@@ -90,7 +139,7 @@ def generate_worldline_simulation(report: ScenarioReport) -> WorldlineSimulation
         },
         generation_config=WorldlineGenerationConfig(
             worldline_provider="deterministic_mock",
-            worldline_chunk_days=3,
+            worldline_chunk_days=chunk_days,
             llm_provider="mock",
             report_language=report.language,
             credential_status="not_configured",

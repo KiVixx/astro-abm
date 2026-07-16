@@ -11,6 +11,7 @@ import { WorkbenchPanel } from "./WorkbenchPanel";
 import type {
   DailyScenarioSnapshot,
   ScenarioReport,
+  WorldlineSimulation,
 } from "@/lib/types";
 import { worldlineDisplayStatus } from "@/lib/worldlineStatus";
 import { buildAssetStressSeries } from "@/lib/assetStressSentiment";
@@ -37,6 +38,38 @@ function getInitialSnapshot(
   return timeline[0];
 }
 
+function haltedGenerationPoint(simulation?: WorldlineSimulation | null) {
+  if (!simulation?.provenance?.generation_halted) {
+    return null;
+  }
+  const history = Array.isArray(simulation.provenance.chunk_history)
+    ? simulation.provenance.chunk_history
+    : [];
+  const failedChunk = history.find(
+    (entry) =>
+      typeof entry === "object"
+      && entry !== null
+      && !Array.isArray(entry)
+      && entry.status === "fallback"
+      && entry.generation_halted === true,
+  );
+  if (!failedChunk || typeof failedChunk !== "object" || Array.isArray(failedChunk)) {
+    return null;
+  }
+  const storedIndex = Number(failedChunk.chunk_index);
+  const startDate = failedChunk.chunk_start_date;
+  const endDate = failedChunk.chunk_end_date;
+  if (
+    !Number.isInteger(storedIndex)
+    || storedIndex < 1
+    || typeof startDate !== "string"
+    || typeof endDate !== "string"
+  ) {
+    return null;
+  }
+  return { chunkIndex: storedIndex - 1, startDate, endDate };
+}
+
 export function ScenarioWorkbench({
   report,
   initialDate,
@@ -46,7 +79,17 @@ export function ScenarioWorkbench({
   const router = useRouter();
   const isWorldline = product === "worldline";
   const [currentReport, setCurrentReport] = useState(report);
-  const timeline = currentReport.daily_timeline || [];
+  const fullTimeline = currentReport.daily_timeline || [];
+  const haltedGeneration = useMemo(
+    () => haltedGenerationPoint(currentReport.worldline_simulation),
+    [currentReport.worldline_simulation],
+  );
+  const timeline = useMemo(
+    () => haltedGeneration
+      ? fullTimeline.filter((snapshot) => snapshot.date <= haltedGeneration.endDate)
+      : fullTimeline,
+    [fullTimeline, haltedGeneration],
+  );
   const initialSnapshot = getInitialSnapshot(timeline, initialDate);
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -78,6 +121,33 @@ export function ScenarioWorkbench({
     currentReport.worldline_simulation?.days.find(
       (day) => day.date === selectedSnapshot?.date,
     ) || null;
+  const interruptedRegeneration = useMemo(() => {
+    const simulation = currentReport.worldline_simulation;
+    const lastRegeneration = simulation?.last_regeneration;
+    if (
+      simulation?.continuity_status !== "rebuilding" ||
+      !lastRegeneration ||
+      typeof lastRegeneration !== "object"
+    ) {
+      return null;
+    }
+    const chunkIndex = Number(lastRegeneration.next_chunk_index);
+    const nextDate = lastRegeneration.next_chunk_date;
+    const chunkSize = normalizeChunkSize(
+      simulation.generation_config?.worldline_chunk_days ??
+        simulation.provenance?.chunk_size_days,
+    );
+    const chunkCount = Math.ceil(fullTimeline.length / chunkSize);
+    if (
+      !Number.isInteger(chunkIndex) ||
+      chunkIndex < 0 ||
+      chunkIndex >= chunkCount ||
+      typeof nextDate !== "string"
+    ) {
+      return null;
+    }
+    return { chunkIndex, nextDate };
+  }, [currentReport.worldline_simulation, fullTimeline.length]);
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
@@ -101,11 +171,17 @@ export function ScenarioWorkbench({
   }, [currentReport.worldline_simulation, selectedIndex, selectedSnapshot, selectedWorldlineDay]);
 
   const openRegenerationSettings = () => {
-    if (!timeline.length || selectedChunkIndex === null) {
+    const targetChunkIndex = interruptedRegeneration?.chunkIndex
+      ?? haltedGeneration?.chunkIndex
+      ?? selectedChunkIndex;
+    const targetDate = interruptedRegeneration?.nextDate
+      ?? haltedGeneration?.startDate
+      ?? selectedDate;
+    if (!fullTimeline.length || targetChunkIndex === null) {
       return;
     }
     router.push(
-      `/worldlines/${currentReport.scenario_id}/regenerate?start_chunk_index=${selectedChunkIndex}&date=${encodeURIComponent(selectedDate)}`,
+      `/worldlines/${currentReport.scenario_id}/regenerate?start_chunk_index=${targetChunkIndex}&date=${encodeURIComponent(targetDate)}`,
     );
   };
 
@@ -150,7 +226,7 @@ export function ScenarioWorkbench({
                 </span>
                 <span className="tag">
                   {t("worldline.dayCount")}: {selectedIndex + 1}/
-                  {currentReport.worldline_simulation.horizon_days}
+                  {timeline.length}
                 </span>
               </>
             ) : null}
@@ -239,7 +315,9 @@ export function ScenarioWorkbench({
           worldlineDay={selectedWorldlineDay}
           worldlineSimulation={currentReport.worldline_simulation}
           onRegenerateWorldline={isWorldline ? openRegenerationSettings : undefined}
-          canRegenerateWorldline={isWorldline && selectedChunkIndex !== null}
+          canRegenerateWorldline={isWorldline && (interruptedRegeneration !== null || selectedChunkIndex !== null)}
+          resumeRegeneration={interruptedRegeneration !== null}
+          retryHaltedGeneration={haltedGeneration !== null}
           regenerationError={null}
           regenerationMessage=""
           regenerationActive={false}

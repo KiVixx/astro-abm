@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from time import sleep
 from typing import Any
 
 import requests
@@ -21,21 +22,25 @@ from astro_abm_api.services.llm_client import (
     _call_openai_compatible,
     build_llm_config,
     credential_status,
+    diagnose_llm_request_error,
+    diagnose_llm_json,
     parse_llm_json,
-    safety_check_text,
+    safe_llm_request_error_message,
 )
 from astro_abm_api.services.worldline_llm_context import build_worldline_llm_context
 from astro_abm_api.services.worldline_llm_prompts import (
     WORLDLINE_PROMPT_TEMPLATE_VERSION,
     build_worldline_messages,
+    build_worldline_retry_messages,
 )
 from astro_abm_api.services.worldline_simulation import (
     WORLDLINE_DISCLAIMER,
+    ensure_worldline_state_continuity,
     generate_worldline_simulation,
 )
 
 MAX_WORLDLINE_CHUNK_ATTEMPTS = 3
-MAX_CONSECUTIVE_FAILED_CHUNKS = 2
+MAX_CONSECUTIVE_FAILED_CHUNKS = 1
 
 
 def generate_worldline_for_request(
@@ -43,7 +48,10 @@ def generate_worldline_for_request(
     report: ScenarioReport,
 ) -> WorldlineSimulation | None:
     if request.worldline_provider == "deterministic_mock":
-        return generate_worldline_simulation(report)
+        return generate_worldline_simulation(
+            report,
+            chunk_days=request.worldline_chunk_days,
+        )
 
     config = build_llm_config(
         provider=request.llm_provider,
@@ -61,11 +69,11 @@ def generate_worldline_for_request(
         worldline_provider="llm",
         chunk_days=request.worldline_chunk_days,
         llm_provider=request.llm_provider,
-        llm_real_enabled=request.llm_real_enabled,
-        llm_base_url=request.llm_base_url,
-        llm_model=request.llm_model,
-        llm_timeout_seconds=request.llm_timeout_seconds,
-        llm_max_output_tokens=request.llm_max_output_tokens,
+        llm_real_enabled=config.real_calls_enabled,
+        llm_base_url=config.base_url,
+        llm_model=config.model,
+        llm_timeout_seconds=config.timeout_seconds,
+        llm_max_output_tokens=config.max_output_tokens,
         llm_call_delay_seconds=request.llm_call_delay_seconds,
         report_language=request.language,
         custom_user_prompt=request.llm_user_prompt,
@@ -126,11 +134,11 @@ def generate_worldline_chunk(
         worldline_provider="llm",
         chunk_days=request.worldline_chunk_days,
         llm_provider=request.llm_provider,
-        llm_real_enabled=request.llm_real_enabled,
-        llm_base_url=request.llm_base_url,
-        llm_model=request.llm_model,
-        llm_timeout_seconds=request.llm_timeout_seconds,
-        llm_max_output_tokens=request.llm_max_output_tokens,
+        llm_real_enabled=config.real_calls_enabled,
+        llm_base_url=config.base_url,
+        llm_model=config.model,
+        llm_timeout_seconds=config.timeout_seconds,
+        llm_max_output_tokens=config.max_output_tokens,
         llm_call_delay_seconds=request.llm_call_delay_seconds,
         report_language=request.language,
         custom_user_prompt=request.llm_user_prompt,
@@ -213,15 +221,20 @@ def generate_worldline_chunk(
     context_hash = str(context["input_context_hash"])
 
     messages = build_worldline_messages(context)
+    attempt_messages = messages
     last_failure = {
         "output_validation_status": "not_run",
         "safety_check_status": "not_run",
         "reason": "LLM worldline chunk did not complete.",
+        "response_diagnostics": None,
+        "safety_violation_codes": [],
+        "request_diagnostics": None,
     }
+    attempt_history: list[dict[str, object]] = []
     for attempt_count in range(1, MAX_WORLDLINE_CHUNK_ATTEMPTS + 1):
         attempt = _attempt_worldline_chunk(
             config,
-            messages,
+            attempt_messages,
             report,
             fallback,
             request,
@@ -229,6 +242,17 @@ def generate_worldline_chunk(
             attempt_count=attempt_count,
         )
         if attempt["ok"]:
+            attempt_history.append(
+                _attempt_history_entry(
+                    attempt_count,
+                    output_validation_status="valid_json",
+                    safety_check_status="not_applied",
+                    reason="Chunk output passed JSON and payload validation; wording filtering is disabled.",
+                    response_diagnostics=attempt.get("response_diagnostics"),
+                    safety_violation_codes=[],
+                    request_diagnostics=None,
+                )
+            )
             parsed = attempt["parsed"]
             chunk_days = attempt["chunk_days"]
             merged_days = _merge_days(report.worldline_simulation, fallback, chunk_days)
@@ -253,10 +277,14 @@ def generate_worldline_chunk(
                     network_call_performed=True,
                     input_context_hash=context_hash,
                     output_validation_status="valid_json",
-                    safety_check_status="passed",
+                    safety_check_status="not_applied",
                     failed=False,
                     attempt_count=attempt_count,
                     last_error=None,
+                    response_diagnostics=attempt.get("response_diagnostics"),
+                    attempt_history=attempt_history,
+                    safety_violation_codes=[],
+                    request_diagnostics=None,
                 ),
                 generation_config=generation_config,
                 continuity_status="consistent",
@@ -265,9 +293,40 @@ def generate_worldline_chunk(
             "output_validation_status": str(attempt["output_validation_status"]),
             "safety_check_status": str(attempt["safety_check_status"]),
             "reason": str(attempt["reason"]),
+            "response_diagnostics": attempt.get("response_diagnostics"),
+            "safety_violation_codes": attempt.get("safety_violation_codes", []),
+            "request_diagnostics": attempt.get("request_diagnostics"),
         }
+        attempt_history.append(
+            _attempt_history_entry(
+                attempt_count,
+                output_validation_status=last_failure["output_validation_status"],
+                safety_check_status=last_failure["safety_check_status"],
+                reason=last_failure["reason"],
+                response_diagnostics=last_failure["response_diagnostics"],
+                safety_violation_codes=last_failure["safety_violation_codes"],
+                request_diagnostics=last_failure["request_diagnostics"],
+            )
+        )
+        request_diagnostics = last_failure["request_diagnostics"]
+        if (
+            isinstance(request_diagnostics, dict)
+            and request_diagnostics.get("retryable") is False
+        ):
+            break
+        if attempt_count < MAX_WORLDLINE_CHUNK_ATTEMPTS:
+            attempt_messages = build_worldline_retry_messages(
+                messages,
+                language=request.language,
+                output_validation_status=last_failure["output_validation_status"],
+                safety_check_status=last_failure["safety_check_status"],
+                next_attempt=attempt_count + 1,
+            )
+            retry_delay_seconds = request.llm_call_delay_seconds or 0
+            if retry_delay_seconds > 0:
+                sleep(retry_delay_seconds)
 
-    return _fallback_chunk(
+    failed_simulation = _fallback_chunk(
         report,
         fallback,
         request,
@@ -279,9 +338,16 @@ def generate_worldline_chunk(
         output_validation_status=last_failure["output_validation_status"],
         safety_check_status=last_failure["safety_check_status"],
         reason=last_failure["reason"],
-        attempt_count=MAX_WORLDLINE_CHUNK_ATTEMPTS,
+        attempt_count=attempt_count,
         generation_config=generation_config,
+        response_diagnostics=last_failure["response_diagnostics"],
+        attempt_history=attempt_history,
+        safety_violation_codes=last_failure["safety_violation_codes"],
+        request_diagnostics=last_failure["request_diagnostics"],
     )
+    if failed_simulation.provenance.get("generation_halted"):
+        return _mark_remaining_chunks_after_halt(failed_simulation, report, request)
+    return failed_simulation
 
 
 def _attempt_worldline_chunk(
@@ -301,28 +367,20 @@ def _attempt_worldline_chunk(
             "ok": False,
             "output_validation_status": "request_failed",
             "safety_check_status": "not_run",
-            "reason": f"{type(exc).__name__}: {exc}",
+            "reason": safe_llm_request_error_message(exc),
+            "request_diagnostics": diagnose_llm_request_error(exc),
         }
 
     parsed = parse_llm_json(raw_text)
+    response_diagnostics = diagnose_llm_json(raw_text)
     if parsed is None:
         return {
             "ok": False,
             "output_validation_status": "invalid_json",
             "safety_check_status": "not_run",
             "reason": "The LLM returned output that could not be parsed as strict JSON.",
+            "response_diagnostics": response_diagnostics,
         }
-    if not safety_check_text(json.dumps(parsed, ensure_ascii=False)):
-        return {
-            "ok": False,
-            "output_validation_status": "valid_json",
-            "safety_check_status": "failed",
-            "reason": (
-                "The LLM worldline chunk failed safety review and was replaced by "
-                "deterministic fallback."
-            ),
-        }
-
     try:
         chunk_days = _days_from_payload(
             parsed,
@@ -338,9 +396,15 @@ def _attempt_worldline_chunk(
             "output_validation_status": "invalid_payload",
             "safety_check_status": "not_run",
             "reason": str(exc),
+            "response_diagnostics": response_diagnostics,
         }
 
-    return {"ok": True, "parsed": parsed, "chunk_days": chunk_days}
+    return {
+        "ok": True,
+        "parsed": parsed,
+        "chunk_days": chunk_days,
+        "response_diagnostics": response_diagnostics,
+    }
 
 
 def _days_from_payload(
@@ -417,7 +481,7 @@ def _days_from_payload(
             chunk_status="completed",
             quality_notes=[
                 "Generated by an LLM worldline chunk from provided scenario context.",
-                "Output parsed as strict JSON and passed safety review.",
+                "Output parsed as strict JSON; wording-based filtering is disabled.",
                 f"Chunk completed on attempt {attempt_count} of {MAX_WORLDLINE_CHUNK_ATTEMPTS}.",
             ],
             input_context_summary=fallback_day.input_context_summary,
@@ -521,10 +585,14 @@ def _fallback_chunk(
     reason: str,
     attempt_count: int,
     generation_config: WorldlineGenerationConfig,
+    response_diagnostics: dict[str, object] | None = None,
+    attempt_history: list[dict[str, object]] | None = None,
+    safety_violation_codes: list[str] | None = None,
+    request_diagnostics: dict[str, object] | None = None,
 ) -> WorldlineSimulation:
     chunk_days = [
         _mark_day(
-            day,
+            _remove_mock_no_network_note(day) if network_call_performed else day,
             generation_source="fallback",
             chunk_index=request.chunk_index,
             chunk_status=output_validation_status,
@@ -562,9 +630,25 @@ def _fallback_chunk(
             failed=True,
             attempt_count=attempt_count,
             last_error=reason,
+            response_diagnostics=response_diagnostics,
+            attempt_history=attempt_history,
+            safety_violation_codes=safety_violation_codes,
+            request_diagnostics=request_diagnostics,
         ),
         generation_config=generation_config,
         continuity_status="consistent",
+    )
+
+
+def _remove_mock_no_network_note(day: WorldlineDay) -> WorldlineDay:
+    return day.model_copy(
+        update={
+            "quality_notes": [
+                note
+                for note in day.quality_notes
+                if note != "No LLM network call was performed for this day."
+            ]
+        }
     )
 
 
@@ -577,7 +661,7 @@ def _merge_days(
     if existing:
         by_date.update({day.date: day for day in existing.days})
     by_date.update({day.date: day for day in chunk_days})
-    return [by_date[key] for key in sorted(by_date)]
+    return ensure_worldline_state_continuity([by_date[key] for key in sorted(by_date)])
 
 
 def _previous_state_for_chunk(
@@ -705,13 +789,17 @@ def _provenance(
     failed: bool,
     attempt_count: int,
     last_error: str | None,
+    response_diagnostics: dict[str, object] | None = None,
+    attempt_history: list[dict[str, object]] | None = None,
+    safety_violation_codes: list[str] | None = None,
+    request_diagnostics: dict[str, object] | None = None,
 ) -> dict[str, Any]:
     previous = report.worldline_simulation.provenance if report.worldline_simulation else {}
     previous_consecutive_failures = _previous_consecutive_failed_chunk_count(report)
     consecutive_failures = previous_consecutive_failures + 1 if failed else 0
     generation_halted = consecutive_failures >= MAX_CONSECUTIVE_FAILED_CHUNKS
     halt_reason = (
-        "LLM worldline generation stopped after two consecutive chunks failed after three attempts each."
+        "LLM worldline generation stopped after one chunk exhausted its applicable retry policy. User retry is required before downstream generation continues."
         if generation_halted
         else None
     )
@@ -727,6 +815,10 @@ def _provenance(
         "attempt_count": attempt_count,
         "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
         "last_error": last_error,
+        "response_diagnostics": response_diagnostics,
+        "attempt_history": attempt_history or [],
+        "safety_violation_codes": safety_violation_codes or [],
+        "request_diagnostics": request_diagnostics,
         "consecutive_failed_chunk_count": consecutive_failures,
         "generation_halted": generation_halted,
     }
@@ -747,6 +839,10 @@ def _provenance(
         "attempt_count": attempt_count,
         "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
         "last_error": last_error,
+        "response_diagnostics": response_diagnostics,
+        "attempt_history": attempt_history or [],
+        "safety_violation_codes": safety_violation_codes or [],
+        "request_diagnostics": request_diagnostics,
         "chunk_count": _previous_chunk_count(report) + 1,
         "failed_chunk_count": _previous_failed_chunk_count(report) + (1 if failed else 0),
         "consecutive_failed_chunk_count": consecutive_failures,
@@ -761,11 +857,32 @@ def _provenance(
                 caveat=(
                     "Chunk used deterministic fallback."
                     if failed
-                    else f"Chunk output parsed as valid JSON and passed safety review on attempt {attempt_count}."
+                    else f"Chunk output parsed as valid JSON on attempt {attempt_count}; wording filtering was not applied."
                 ),
             ),
         ),
         "chunk_history": _merge_chunk_history(previous.get("chunk_history"), chunk_entry),
+    }
+
+
+def _attempt_history_entry(
+    attempt: int,
+    *,
+    output_validation_status: str,
+    safety_check_status: str,
+    reason: object,
+    response_diagnostics: object,
+    safety_violation_codes: object,
+    request_diagnostics: object,
+) -> dict[str, object]:
+    return {
+        "attempt": attempt,
+        "output_validation_status": output_validation_status,
+        "safety_check_status": safety_check_status,
+        "reason": str(reason),
+        "response_diagnostics": response_diagnostics,
+        "safety_violation_codes": safety_violation_codes,
+        "request_diagnostics": request_diagnostics,
     }
 
 
@@ -812,13 +929,114 @@ def _generation_circuit_is_open(
     history = simulation.provenance.get("chunk_history")
     if not isinstance(history, list) or not history:
         return True
-    last_entry = history[-1]
-    if not isinstance(last_entry, dict):
-        return True
-    try:
-        return request.chunk_index > int(last_entry.get("chunk_index", 0))
-    except (TypeError, ValueError):
-        return True
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            matches_request = int(entry.get("chunk_index", 0)) == request.chunk_index
+        except (TypeError, ValueError):
+            continue
+        if matches_request and entry.get("status") == "skipped_after_halt":
+            return True
+    attempted_indices = []
+    for entry in history:
+        if not isinstance(entry, dict) or entry.get("status") == "skipped_after_halt":
+            continue
+        try:
+            attempted_indices.append(int(entry.get("chunk_index", 0)))
+        except (TypeError, ValueError):
+            continue
+    return not attempted_indices or request.chunk_index > max(attempted_indices)
+
+
+def _mark_remaining_chunks_after_halt(
+    simulation: WorldlineSimulation,
+    report: ScenarioReport,
+    request: ScenarioWorldlineChunkRequest,
+) -> WorldlineSimulation:
+    reason = str(
+        simulation.provenance.get("halt_reason")
+        or "LLM worldline generation halted after a chunk exhausted its retry policy."
+    )
+    future_dates = sorted(
+        snapshot.date
+        for snapshot in report.daily_timeline
+        if snapshot.date > request.chunk_end_date
+    )
+    if not future_dates:
+        return simulation
+
+    history = _merge_chunk_history(simulation.provenance.get("chunk_history"), None)
+    existing_indices = {
+        int(entry.get("chunk_index", 0))
+        for entry in history
+        if isinstance(entry, dict) and str(entry.get("chunk_index", "")).isdigit()
+    }
+    by_date = {day.date: day for day in simulation.days}
+    skipped_note = (
+        "LLM call was skipped after the generation circuit breaker opened; "
+        "deterministic fallback was retained."
+    )
+    chunk_size = max(1, request.worldline_chunk_days)
+    for offset in range(0, len(future_dates), chunk_size):
+        dates = future_dates[offset : offset + chunk_size]
+        chunk_index = request.chunk_index + offset // chunk_size + 1
+        if chunk_index > request.total_chunks or chunk_index in existing_indices:
+            continue
+        for current_date in dates:
+            day = by_date.get(current_date)
+            if day is not None:
+                by_date[current_date] = _mark_day(
+                    day,
+                    generation_source="fallback",
+                    chunk_index=chunk_index,
+                    chunk_status="skipped_after_halt",
+                    quality_notes=[skipped_note, reason],
+                )
+        history.append(
+            {
+                "chunk_index": chunk_index,
+                "total_chunks": request.total_chunks,
+                "chunk_start_date": dates[0].isoformat(),
+                "chunk_end_date": dates[-1].isoformat(),
+                "status": "skipped_after_halt",
+                "output_validation_status": "skipped_after_consecutive_failures",
+                "safety_check_status": "not_run",
+                "network_call_performed": False,
+                "attempt_count": 0,
+                "max_attempts": MAX_WORLDLINE_CHUNK_ATTEMPTS,
+                "last_error": reason,
+                "response_diagnostics": None,
+                "consecutive_failed_chunk_count": MAX_CONSECUTIVE_FAILED_CHUNKS,
+                "generation_halted": True,
+            }
+        )
+        existing_indices.add(chunk_index)
+
+    history.sort(key=lambda entry: int(entry.get("chunk_index", 0)))
+    skipped_count = sum(
+        1 for entry in history if entry.get("status") == "skipped_after_halt"
+    )
+    return simulation.model_copy(
+        update={
+            "days": ensure_worldline_state_continuity(
+                [by_date[key] for key in sorted(by_date)]
+            ),
+            "caveats": _merge_strings(simulation.caveats, [skipped_note]),
+            "provenance": {
+                **simulation.provenance,
+                "chunk_count": len(history),
+                "skipped_chunk_count": skipped_count,
+                "chunk_history": history,
+                "llm_output_quality_notes": _merge_strings(
+                    _string_list(
+                        simulation.provenance.get("llm_output_quality_notes")
+                    ),
+                    [skipped_note],
+                ),
+            },
+        }
+    )
 
 
 def _halted_generation(
@@ -830,7 +1048,7 @@ def _halted_generation(
         raise ValueError("worldline simulation is unavailable")
     reason = str(
         simulation.provenance.get("halt_reason")
-        or "LLM worldline generation is halted after consecutive chunk failures."
+        or "LLM worldline generation is halted until the failed chunk is retried by the user."
     )
     return simulation.model_copy(
         update={

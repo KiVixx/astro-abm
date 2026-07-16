@@ -1,8 +1,9 @@
 # Astro ABM
 
-Astro ABM is an hourly data-engineering foundation for a future agent-based market simulator.
+Astro ABM is a local-first AI market Worldline scenario platform backed by an
+hourly data pipeline and a 100-year daily research layer.
 
-The core hypothesis is intentionally unconventional:
+Its research hypothesis is intentionally unconventional:
 
 - objective astronomy and space-weather signals can be transformed into exogenous sentiment-perturbation variables
 - those variables may help explain changes in market risk appetite
@@ -10,17 +11,22 @@ The core hypothesis is intentionally unconventional:
   - a retail swarm in high-volatility crypto markets
   - more deliberate corporate/CEO-style decision agents in traditional finance
 
-This repository does not yet contain the full simulation engine.
+The repository now includes a usable deterministic and optional
+OpenAI-compatible LLM Worldline engine. It produces day-by-day agent events,
+simulated causal links, pressure updates, fallback diagnostics, and path-aware
+regeneration. This is a scenario-rehearsal engine, not a validated market
+prediction model, real-world causal proof, or trading system.
 
-What it does contain is the MVP data-layer scaffold required before any meaningful ABM work can start:
+The project has three connected layers:
 
-- QuestDB storage schema and local runtime config
-- hourly market-data provider modules
-- hourly space-weather parsing helpers
-- local ephemeris feature computation helpers
-- ETL alignment and scheduling helpers
+- `src/astro_abm/`: hourly market, derivatives, space-weather, ephemeris, ETL,
+  QuestDB, and scheduled maintenance
+- `astro_research/`: 1926-2025 daily astronomy, market/macro, financial stress,
+  event-study, and local DuckDB/Parquet research outputs
+- `apps/api/` + `apps/web/`: local scenario storage, bilingual Worldline creation,
+  chunked LLM generation, review, Workbench playback, and regeneration
 
-The entire MVP is standardized around a single rule:
+The hourly feature layer remains standardized around a single rule:
 
 All features must align to UTC 1-hour buckets.
 
@@ -35,6 +41,10 @@ Implemented and unit-tested:
 - Phase 4 — price-action and derivatives feature ingestion
 - Phase 5 — ETL alignment helpers, hourly/daily maintenance, Docker runtime
 - Active-only data completeness reporting
+- Daily research snapshots, normalized events, coverage/readiness checks, and
+  exploratory event-study workflows
+- Local-first bilingual Worldline API/Web product with deterministic and
+  opt-in OpenAI-compatible LLM chunk generation
 
 Chinese maintainer briefing:
 
@@ -72,6 +82,10 @@ If a port is already occupied, override it explicitly:
 make api API_PORT=18000
 make web WEB_PORT=13000 API_PORT=18000
 ```
+
+Both commands check their local listening port before startup and print the
+matching override command instead of leaving newcomers with only a low-level
+`Address already in use` error.
 
 The product MVP adds a local-first scenario API under `apps/api/`. It creates
 AI scenario rehearsals from daily context and saves JSON plus Markdown reports
@@ -163,6 +177,32 @@ daily astro data exists without running the hourly/daily market maintenance.
 Because QuestDB WAL/partitioned designated timestamp tables reject pre-1970
 timestamps, this command keeps the full 1926-2025 CSV snapshot locally and
 ingests the QuestDB-queryable 1970-2025 slice.
+
+`make status` reports these as separate layers. `astro_daily_100y_snapshot` is
+the canonical local 1926-2025 research input. `astro_daily_100y_questdb` is an
+optional 1970-2025 query replica; a warning for that replica does not mean the
+full-history snapshot is missing. If the canonical snapshot is incomplete, the
+status output names the missing component; the snapshot files already present
+remain usable for research paths that do not depend on that component.
+
+When the only missing component is `astro_moon_phase_events.csv`, `make
+astro-daily` uses the focused lunar-phase repair path. It preserves existing
+station/aspect windows and avoids rebuilding 100 years of positions and facts.
+The lower-level command is:
+
+```bash
+uv run python scripts/build_astro_daily.py \
+  --config astro_research/configs/astro_daily.yaml \
+  --start 1926-01-01 --end 2025-12-31 \
+  --write-parquet astro_research/output/parquet/astro_daily_1926_2025 \
+  --no-parquet --dry-run --moon-phase-only
+```
+
+The same status command also checks product snapshot freshness rather than only
+file existence. Market data is reported per asset, macro data per series, and
+financial stress per universe. Freshness thresholds respect source frequency:
+5 calendar days for daily series, 14 for weekly series, and 45 for monthly
+series. A stale check points to the `product-snapshots` refresh command.
 
 `make research-store` builds the ignored DuckDB full-history research store at
 `astro_research/output/duckdb/astro_research_full_history.duckdb`. This is the

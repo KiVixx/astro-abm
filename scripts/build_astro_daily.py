@@ -10,7 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "astro_research" / "src"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from astro_daily.build import build_astro_daily_dataset, export_dataset, validate_dataset
+from astro_daily.build import (
+    build_astro_daily_dataset,
+    build_moon_phase_component,
+    export_dataset,
+    export_moon_phase_component,
+    validate_dataset,
+)
 from astro_daily.calendar import parse_date
 from astro_daily.config import load_astro_daily_config
 from astro_daily.aspect_chunks import aspect_tasks, build_aspect_chunks, validate_aspect_chunks
@@ -30,6 +36,11 @@ def main() -> int:
         action="store_true",
         help="Build the core daily dataset without expensive exact aspect events/windows.",
     )
+    parser.add_argument(
+        "--moon-phase-only",
+        action="store_true",
+        help="Repair exact lunar phase events/windows without rebuilding positions, retrograde cycles, or facts.",
+    )
     parser.add_argument("--aspect-profile", choices=tuple(ASPECT_PROFILES), default=None)
     parser.add_argument("--aspect-bodies", default=None, help="Comma-separated bodies for optimized aspect-only builds.")
     parser.add_argument("--aspect-pairs", default=None, help="Comma-separated pairs, e.g. Mars-Saturn,Jupiter/Saturn.")
@@ -45,6 +56,22 @@ def main() -> int:
     config = load_astro_daily_config(ROOT / args.config)
     start = parse_date(args.start) if args.start else config.dataset.target_start
     end = parse_date(args.end) if args.end else config.dataset.target_end
+    if args.moon_phase_only:
+        if _aspect_only_mode(args):
+            parser.error("--moon-phase-only cannot be combined with aspect-only options")
+        moon_events, moon_windows = build_moon_phase_component(config, start=start, end=end)
+        paths = export_moon_phase_component(
+            moon_events,
+            moon_windows,
+            ROOT / args.write_parquet,
+            write_parquet=not args.no_parquet,
+        )
+        print("Astro moon phase component build complete")
+        print(f"dataset_id={config.dataset.dataset_id} range={start}->{end} dry_run={args.dry_run}")
+        print(f"moon_phase_events={len(moon_events)} event_window_rows={len(moon_windows)}")
+        print(f"output_dir={ROOT / args.write_parquet}")
+        print(f"files={len(paths)}")
+        return 0
     if _aspect_only_mode(args):
         if args.aspect_year is not None:
             aspect_start = parse_date(f"{args.aspect_year}-01-01")

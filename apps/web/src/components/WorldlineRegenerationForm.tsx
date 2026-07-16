@@ -79,6 +79,14 @@ export function WorldlineRegenerationForm({
     totalChunks: affectedChunks,
   });
   const selectedPreset = presets.find((preset) => preset.preset_id === selectedPresetId);
+  const lastRegeneration = report.worldline_simulation?.last_regeneration;
+  const resumableRegenerationId =
+    report.worldline_simulation?.continuity_status === "rebuilding" &&
+    lastRegeneration &&
+    typeof lastRegeneration.regeneration_id === "string" &&
+    Number(lastRegeneration.next_chunk_index) === startChunkIndex
+      ? lastRegeneration.regeneration_id
+      : null;
   const progressPct = progress.totalChunks > 0
     ? Math.round((progress.currentChunk / progress.totalChunks) * 100)
     : 0;
@@ -108,7 +116,7 @@ export function WorldlineRegenerationForm({
   async function savePreset(updateExisting: boolean) {
     setError("");
     try {
-      const payload = presetPayload(settings, report.language || "en");
+      const payload = presetPayload(settings, report.language || "en", chunkSize);
       const saved = updateExisting && selectedPresetId
         ? await updateLlmPreset(selectedPresetId, payload)
         : await createLlmPreset(payload);
@@ -150,12 +158,17 @@ export function WorldlineRegenerationForm({
       setError(t("worldline.chunkInfoUnavailable"));
       return;
     }
-    if (!window.confirm(t("worldline.regenerateSettingsConfirm"))) return;
+    if (!window.confirm(t(
+      resumableRegenerationId
+        ? "worldline.resumeInterruptedConfirm"
+        : "worldline.regenerateSettingsConfirm",
+    ))) return;
     setActive(true);
     setError("");
     setMessage(t("worldline.regenerationInProgress"));
     try {
-      const regenerationId = `regen_${crypto.randomUUID().replaceAll("-", "_")}`;
+      const regenerationId =
+        resumableRegenerationId || `regen_${crypto.randomUUID().replaceAll("-", "_")}`;
       const callDelaySeconds = Number(settings.callDelaySeconds) || 0;
       let finalStatus = "completed";
       for (let chunkIndex = startChunkIndex; chunkIndex < chunks.length; chunkIndex += 1) {
@@ -226,7 +239,9 @@ export function WorldlineRegenerationForm({
         currentChunk: affectedChunks,
         message: finalStatus === "partial_fallback"
           ? t("worldline.regenerationPartialFallback")
-          : t("worldline.regenerateProgressDone"),
+          : finalStatus === "configuration_fallback"
+            ? t("worldline.regenerateProgressConfigurationFallback")
+            : t("worldline.regenerateProgressDone"),
         phase: "done",
         totalChunks: affectedChunks,
       });
@@ -295,12 +310,21 @@ export function WorldlineRegenerationForm({
       </section>
 
       <section className="notice warning"><strong>{t("worldline.regenerateDownstreamWarning")}</strong><p>{t("worldline.regenerateLocalSecretNote")}</p></section>
+      {resumableRegenerationId ? (
+        <p className="notice">{t("worldline.resumeUsesSavedRun")}</p>
+      ) : null}
       {settings.realEnabled && !selectedPreset?.has_api_key && !settings.apiKey ? (
         <p className="notice warning">{t("worldline.regenerateCredentialWarning")}</p>
       ) : null}
       {message ? <p className="notice">{message}</p> : null}
       {error ? <p className="notice warning">{error}</p> : null}
-      <button disabled={active || !selectedChunk} type="submit">{active ? t("worldline.regenerationInProgress") : t("worldline.regenerateFromHere")}</button>
+      <button disabled={active || !selectedChunk} type="submit">
+        {active
+          ? t("worldline.regenerationInProgress")
+          : resumableRegenerationId
+            ? t("worldline.resumeInterruptedRegeneration")
+            : t("worldline.regenerateFromHere")}
+      </button>
       {progress.phase !== "idle" ? (
         <section className={`notice scenario-progress ${progress.phase}`}>
           <div className="scenario-progress-header">
@@ -317,7 +341,11 @@ export function WorldlineRegenerationForm({
   );
 }
 
-function presetPayload(settings: Settings, language: string): LlmPresetSaveRequest {
+function presetPayload(
+  settings: Settings,
+  language: string,
+  chunkSize: 1 | 2 | 3 | 5,
+): LlmPresetSaveRequest {
   return {
     name: settings.name.trim() || "Worldline LLM",
     provider: "openai_compatible",
@@ -327,7 +355,7 @@ function presetPayload(settings: Settings, language: string): LlmPresetSaveReque
     api_key: settings.apiKey || null,
     keep_existing_api_key: true,
     worldline_provider: "llm",
-    chunk_size_days: 3,
+    chunk_size_days: chunkSize,
     call_delay_seconds: Number(settings.callDelaySeconds),
     timeout_seconds: Number(settings.timeoutSeconds),
     max_output_tokens: Number(settings.maxOutputTokens),

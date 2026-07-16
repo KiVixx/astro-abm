@@ -23,7 +23,20 @@ ASTRO_DAILY_START = "1926-01-01"
 ASTRO_DAILY_QUESTDB_START = "1970-01-01"
 ASTRO_DAILY_END = "2025-12-31"
 ASTRO_DAILY_SNAPSHOT = OUTPUT_ROOT / "parquet/astro_daily_1926_2025"
+ASTRO_DAILY_REQUIRED_FILES = (
+    "astro_daily_positions.csv",
+    "astro_retrograde_cycles.csv",
+    "astro_moon_phase_events.csv",
+    "astro_event_windows.csv",
+    "astro_daily_features.csv",
+    "astro_daily_facts.csv",
+)
 RESEARCH_DUCKDB = OUTPUT_ROOT / "duckdb/astro_research_full_history.duckdb"
+PRODUCT_SNAPSHOT_FILES = {
+    "market_daily": OUTPUT_ROOT / "parquet/market_daily/market_daily_features.parquet",
+    "financial_stress": OUTPUT_ROOT / "parquet/financial_stress/financial_stress_daily.parquet",
+    "macro_daily": OUTPUT_ROOT / "parquet/macro_daily/macro_daily_observations.parquet",
+}
 
 LOCAL_DATA_FILES = {
     "SPX": ROOT / "astro_research/data/local/equity/spx_daily.csv",
@@ -258,17 +271,19 @@ def command_status() -> int:
     checks.append(CheckResult("FRED_API_KEY", bool(env_value("FRED_API_KEY")), "present" if env_value("FRED_API_KEY") else "missing; FRED macro data will be skipped"))
     checks.extend(local_data_checks())
     checks.extend(research_input_checks())
+    checks.extend(product_snapshot_freshness_checks())
     checks.append(CheckResult("questdb_tcp", tcp_open("localhost", int(env_value("QUESTDB_PG_PORT") or "8812")), "localhost:8812"))
     db_tables = questdb_table_summary()
     checks.append(CheckResult("questdb_tables", db_tables != "unavailable", db_tables))
-    astro_daily_ready = astro_daily_snapshot_ready() and (astro_daily_questdb_ready() if db_tables != "unavailable" else False)
-    checks.append(
-        CheckResult(
-            "astro_daily_100y_questdb",
-            astro_daily_ready,
-            "snapshot 1926-2025; QuestDB slice 1970-2025 complete"
-            if astro_daily_ready
-            else "missing or incomplete; run `make astro-daily`",
+    snapshot_missing = astro_daily_snapshot_missing()
+    snapshot_ready = not snapshot_missing
+    questdb_available = db_tables != "unavailable"
+    checks.extend(
+        astro_daily_status_checks(
+            snapshot_ready=snapshot_ready,
+            snapshot_missing=snapshot_missing,
+            questdb_available=questdb_available,
+            questdb_ready=(astro_daily_questdb_ready() if questdb_available else False),
         )
     )
 
@@ -307,7 +322,8 @@ def command_maintain_now(
 
 
 def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, include_exact_aspects: bool = False) -> int:
-    snapshot_ready = astro_daily_snapshot_ready()
+    snapshot_missing = astro_daily_snapshot_missing()
+    snapshot_ready = not snapshot_missing
     if ingest and not force and snapshot_ready and astro_daily_questdb_ready():
         print(f"astro daily QuestDB slice already complete: {ASTRO_DAILY_QUESTDB_START}..{ASTRO_DAILY_END}")
         return 0
@@ -329,7 +345,9 @@ def command_ensure_astro_daily(*, force: bool = False, ingest: bool = True, incl
             "--no-parquet",
             "--dry-run",
         ]
-        if not include_exact_aspects:
+        if not force and snapshot_missing == ("astro_moon_phase_events.csv",):
+            cmd.append("--moon-phase-only")
+        elif not include_exact_aspects:
             cmd.append("--skip-exact-aspects")
         code = run(cmd, check=False).returncode
         if code:
@@ -604,17 +622,174 @@ def research_input_checks(root: Path = ROOT) -> list[CheckResult]:
     return checks
 
 
-def astro_daily_snapshot_ready(root: Path = ROOT) -> bool:
-    snapshot = root / ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)
-    required = (
-        "astro_daily_positions.csv",
-        "astro_retrograde_cycles.csv",
-        "astro_moon_phase_events.csv",
-        "astro_event_windows.csv",
-        "astro_daily_features.csv",
-        "astro_daily_facts.csv",
+def product_snapshot_freshness_checks(
+    root: Path = ROOT,
+    *,
+    today: date | None = None,
+) -> list[CheckResult]:
+    today = today or datetime.now().astimezone().date()
+    definitions = (
+        ("market_daily", "asset", None),
+        ("financial_stress", "stress_universe", None),
+        ("macro_daily", "series_id", "original_frequency"),
     )
-    return all((snapshot / name).exists() and (snapshot / name).stat().st_size > 0 for name in required)
+    checks: list[CheckResult] = []
+    for label, group_column, frequency_column in definitions:
+        configured_path = PRODUCT_SNAPSHOT_FILES[label]
+        path = root / configured_path.relative_to(ROOT)
+        if not path.exists() or path.stat().st_size <= 0:
+            checks.append(
+                CheckResult(
+                    f"product_snapshot_{label}",
+                    False,
+                    "missing snapshot; run `uv run python scripts/astro_abm_ops.py product-snapshots`",
+                )
+            )
+            continue
+        try:
+            import pandas as pd
+
+            columns = ["ts", group_column]
+            if frequency_column:
+                columns.append(frequency_column)
+            frame = pd.read_parquet(path, columns=columns)
+            checks.extend(
+                snapshot_freshness_checks_from_frame(
+                    frame,
+                    name_prefix=label,
+                    today=today,
+                    group_column=group_column,
+                    frequency_column=frequency_column,
+                )
+            )
+        except Exception as exc:  # Status must report a corrupt/unreadable snapshot instead of crashing.
+            checks.append(
+                CheckResult(
+                    f"product_snapshot_{label}",
+                    False,
+                    f"snapshot unreadable: {type(exc).__name__}; run product-snapshots validation",
+                )
+            )
+    return checks
+
+
+def snapshot_freshness_checks_from_frame(
+    frame,
+    *,
+    name_prefix: str,
+    today: date,
+    group_column: str,
+    frequency_column: str | None = None,
+) -> list[CheckResult]:
+    import pandas as pd
+
+    required = {"ts", group_column}
+    if not required.issubset(frame.columns) or frame.empty:
+        return [CheckResult(f"product_snapshot_{name_prefix}", False, "snapshot is empty or missing freshness columns")]
+
+    normalized = frame.copy()
+    normalized["ts"] = pd.to_datetime(normalized["ts"], utc=True, errors="coerce")
+    normalized = normalized.dropna(subset=["ts", group_column])
+    if normalized.empty:
+        return [CheckResult(f"product_snapshot_{name_prefix}", False, "snapshot has no valid dated observations")]
+
+    checks: list[CheckResult] = []
+    for group, rows in normalized.groupby(group_column, sort=True):
+        frequency = _snapshot_frequency(rows, frequency_column)
+        stale_after_days = _freshness_threshold_days(frequency)
+        latest = rows["ts"].max().date()
+        lag_days = (today - latest).days
+        ok = 0 <= lag_days <= stale_after_days
+        detail = (
+            f"latest={latest.isoformat()} lag_days={lag_days} frequency={frequency} "
+            f"threshold_days={stale_after_days}"
+        )
+        if lag_days < 0:
+            detail += "; observed snapshot date is in the future; verify timestamp normalization"
+        elif not ok:
+            detail += "; stale; run `uv run python scripts/astro_abm_ops.py product-snapshots`"
+        checks.append(CheckResult(f"product_snapshot_{name_prefix}_{group}", ok, detail))
+    return checks
+
+
+def _snapshot_frequency(rows, frequency_column: str | None) -> str:
+    if not frequency_column or frequency_column not in rows.columns:
+        return "daily"
+    values = rows[frequency_column].dropna().astype(str).str.lower()
+    if values.empty:
+        return "daily"
+    value = values.mode().iloc[0]
+    if "month" in value:
+        return "monthly"
+    if "week" in value:
+        return "weekly"
+    return "daily"
+
+
+def _freshness_threshold_days(frequency: str) -> int:
+    return {"daily": 5, "weekly": 14, "monthly": 45}.get(frequency, 5)
+
+
+def astro_daily_snapshot_ready(root: Path = ROOT) -> bool:
+    return not astro_daily_snapshot_missing(root=root)
+
+
+def astro_daily_snapshot_missing(root: Path = ROOT) -> tuple[str, ...]:
+    snapshot = root / ASTRO_DAILY_SNAPSHOT.relative_to(ROOT)
+    return tuple(
+        name
+        for name in ASTRO_DAILY_REQUIRED_FILES
+        if not (snapshot / name).exists() or (snapshot / name).stat().st_size <= 0
+    )
+
+
+def astro_daily_status_checks(
+    *,
+    snapshot_ready: bool,
+    snapshot_missing: tuple[str, ...] = (),
+    questdb_available: bool,
+    questdb_ready: bool,
+) -> list[CheckResult]:
+    if snapshot_ready:
+        snapshot_detail = "canonical local research snapshot 1926-2025 complete"
+    else:
+        missing_detail = f"; missing: {', '.join(snapshot_missing)}" if snapshot_missing else ""
+        snapshot_detail = (
+            f"canonical local snapshot incomplete{missing_detail}; available snapshot files remain usable, "
+            "but affected research components are incomplete; run "
+            "`uv run python scripts/astro_abm_ops.py astro-daily --skip-ingest`"
+        )
+
+    snapshot = CheckResult(
+        "astro_daily_100y_snapshot",
+        snapshot_ready,
+        snapshot_detail,
+    )
+    if not questdb_available:
+        questdb_detail = (
+            "QuestDB unavailable; canonical local snapshot remains available"
+            if snapshot_ready
+            else "QuestDB unavailable; canonical local snapshot is also incomplete"
+        )
+        questdb = CheckResult("astro_daily_100y_questdb", False, questdb_detail)
+    elif questdb_ready:
+        questdb = CheckResult(
+            "astro_daily_100y_questdb",
+            True,
+            "optional query replica 1970-2025 complete",
+        )
+    else:
+        questdb = CheckResult(
+            "astro_daily_100y_questdb",
+            False,
+            (
+                "optional query replica incomplete; canonical local snapshot remains available; "
+                "run `make astro-daily` only if QuestDB daily queries are needed"
+                if snapshot_ready
+                else "optional query replica incomplete and canonical snapshot incomplete; run `make astro-daily`"
+            ),
+        )
+    return [snapshot, questdb]
 
 
 def astro_daily_questdb_ready(connection_factory=None, *, start: str = ASTRO_DAILY_QUESTDB_START, end: str = ASTRO_DAILY_END) -> bool:

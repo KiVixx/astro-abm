@@ -26,6 +26,24 @@ Scenario reports are saved as JSON and Markdown under:
 astro_research/output/scenarios/
 ```
 
+`GET /scenarios` returns lightweight `ScenarioSummary` records, including
+compact worldline status, generation mode, failed-chunk count, and coverage
+counts. It never returns the full Markdown or daily timeline. Use
+`GET /scenarios/{scenario_id}` only when opening one report or Workbench.
+Fallback summaries distinguish configuration-only fallback chunks from chunks
+where an enabled LLM call or output actually failed.
+
+Scenario JSON and Markdown updates use same-directory temporary files followed
+by atomic replacement. If the API process stops during a chunk update, readers
+continue to see the previous complete file rather than a truncated report.
+JSON is the canonical API record; an interruption between the two replacements
+can leave Markdown one revision behind until the next successful save.
+Atomic updates preserve the permissions of existing report files.
+The list endpoint skips an unreadable legacy report and logs only its filename
+and a safe error category; report contents and validation values are not logged.
+Opening an unreadable report returns HTTP `422` with the same safe category
+instead of exposing raw JSON or schema-validation values.
+
 Override the output directory for tests or local experiments:
 
 ```bash

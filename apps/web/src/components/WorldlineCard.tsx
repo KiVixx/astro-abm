@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ScenarioReport } from "@/lib/types";
+import type { ScenarioSummary } from "@/lib/types";
 import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
@@ -11,11 +11,16 @@ export function WorldlineCard({
   report,
 }: {
   isDeleting?: boolean;
-  onDelete?: (report: ScenarioReport) => void;
-  report: ScenarioReport;
+  onDelete?: (report: ScenarioSummary) => void;
+  report: ScenarioSummary;
 }) {
   const { t } = useI18n();
-  const worldline = report.worldline_simulation;
+  const generationMode = report.worldline_generation_mode || "";
+  const generationModeLabel = generationMode.includes("llm_chunk")
+    ? t("worldline.llmChunk")
+    : generationMode.includes("deterministic")
+      ? t("worldline.deterministicMock")
+      : generationMode || t("worldline.noWorldlineShort");
 
   return (
     <article className="card worldline-card">
@@ -42,21 +47,31 @@ export function WorldlineCard({
       <div className="tag-row">
         <span className="tag">
           {t("worldline.status")}:{" "}
-          {worldline ? worldline.status : t("worldline.noWorldlineShort")}
+          {report.worldline_status || t("worldline.noWorldlineShort")}
         </span>
         <span className="tag">
           {t("worldline.mode")}:{" "}
-          {worldline?.mode || t("worldline.noWorldlineShort")}
+          {generationModeLabel}
         </span>
         <span className="tag">
-          {t("worldline.dayCount")}: {worldline?.horizon_days || 0}
+          {t("worldline.dayCount")}: {report.worldline_day_count || 0}
         </span>
-        <span className="tag">
-          {t("llm.status")}:{" "}
-          {report.llm_report
-            ? formatEnumLabel(t, "llm_status", report.llm_report.status)
-            : t("llm.missing")}
-        </span>
+        {report.llm_report_status ? (
+          <span className="tag">
+            {t("llm.title")}: {formatEnumLabel(t, "llm_status", report.llm_report_status)}
+          </span>
+        ) : null}
+        {Number(report.worldline_configuration_fallback_chunk_count || 0) > 0 ? (
+          <span className="tag">
+            {t("worldline.configurationFallbackChunks")}:{" "}
+            {report.worldline_configuration_fallback_chunk_count}
+          </span>
+        ) : null}
+        {Number(report.worldline_llm_failed_chunk_count || 0) > 0 ? (
+          <span className="tag">
+            {t("worldline.failedChunks")}: {report.worldline_llm_failed_chunk_count}
+          </span>
+        ) : null}
       </div>
 
       <div className="tag-row">
@@ -65,20 +80,20 @@ export function WorldlineCard({
             {asset}
           </span>
         ))}
-        {report.agents.map((agent) => (
-          <span className="tag" key={agent.agent_id}>
-            {formatAgentName(t, agent.agent_id, agent.name)}
+        {report.agent_names.map((agentName, index) => (
+          <span className="tag" key={report.agent_ids[index] || agentName}>
+            {formatAgentName(t, report.agent_ids[index] || "", agentName)}
           </span>
         ))}
       </div>
 
-      {report.coverage_summary ? (
+      {report.coverage_total_days !== null && report.coverage_total_days !== undefined ? (
         <p className="muted">
-          {t("coverage.totalDays")}: {report.coverage_summary.total_days};{" "}
+          {t("coverage.totalDays")}: {report.coverage_total_days};{" "}
           {t("coverage.localResearchDays")}:{" "}
-          {report.coverage_summary.local_research_days};{" "}
+          {report.coverage_local_research_days || 0};{" "}
           {t("coverage.futurePlaceholderDays")}:{" "}
-          {report.coverage_summary.future_placeholder_days}
+          {report.coverage_future_placeholder_days || 0}
         </p>
       ) : null}
 

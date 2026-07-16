@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react";
 import { WorldlineCard } from "./WorldlineCard";
 import { deleteScenario } from "@/lib/api";
-import type { ScenarioReport } from "@/lib/types";
+import type { ScenarioSummary } from "@/lib/types";
 import { useI18n } from "@/i18n/useI18n";
 
 type WorldlineFilter = "all" | "ready" | "llm" | "deterministic" | "failed" | "legacy";
 
-export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
+export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] }) {
   const { t } = useI18n();
-  const [items, setItems] = useState(reports);
+  const [items, setItems] = useState(summaries);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<WorldlineFilter>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -41,11 +41,11 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
       const haystack = [
         report.title,
         report.description || "",
-        report.worldline_simulation?.status || "",
-        report.worldline_simulation?.mode || "",
-        report.llm_report?.status || "",
+        report.worldline_status || "",
+        report.worldline_generation_mode || "",
+        report.llm_report_status || "",
         ...report.assets,
-        ...report.agents.map((agent) => agent.name),
+        ...report.agent_names,
       ]
         .join(" ")
         .toLowerCase();
@@ -53,7 +53,7 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
     });
   }, [activeFilter, items, normalizedQuery]);
 
-  const confirmAndDelete = async (report: ScenarioReport) => {
+  const confirmAndDelete = async (report: ScenarioSummary) => {
     const confirmed = window.confirm(
       `${t("scenarios.deleteConfirm")}\n\n${report.title}`,
     );
@@ -119,35 +119,38 @@ export function WorldlineSearch({ reports }: { reports: ScenarioReport[] }) {
   );
 }
 
-function matchesWorldlineFilter(report: ScenarioReport, filter: WorldlineFilter): boolean {
-  const worldline = report.worldline_simulation;
+function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter): boolean {
   if (filter === "all") {
     return true;
   }
   if (filter === "legacy") {
-    return !worldline;
+    return !report.worldline_status;
   }
-  if (!worldline) {
+  if (!report.worldline_status) {
     return false;
   }
-  const generationMode = String(worldline.provenance?.generation_mode || worldline.mode || "");
-  const failedChunks = Number(worldline.provenance?.failed_chunk_count || 0);
+  const generationMode = report.worldline_generation_mode || "";
+  const failedChunks = Number(
+    report.worldline_llm_failed_chunk_count
+      ?? report.worldline_failed_chunk_count
+      ?? 0,
+  );
   if (filter === "failed") {
     return (
-      worldline.status === "failed" ||
-      report.llm_report?.status === "failed" ||
-      report.llm_report?.status === "invalid_output" ||
+      report.worldline_status === "failed" ||
+      report.llm_report_status === "failed" ||
+      report.llm_report_status === "invalid_output" ||
       failedChunks > 0
     );
   }
   if (filter === "llm") {
-    return generationMode.includes("llm_chunk") || worldline.mode.includes("llm_chunk");
+    return generationMode.includes("llm_chunk");
   }
   if (filter === "deterministic") {
-    return generationMode.includes("deterministic") || worldline.mode.includes("deterministic");
+    return generationMode.includes("deterministic");
   }
   if (filter === "ready") {
-    return ["completed", "mock_completed"].includes(worldline.status);
+    return ["completed", "mock_completed"].includes(report.worldline_status);
   }
   return true;
 }
