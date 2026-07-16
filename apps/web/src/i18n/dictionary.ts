@@ -97,8 +97,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.marketSeries": "MARKET SERIES",
     "worldline.agentGroupsLabel": "AGENT GROUPS",
     "worldline.create": "Create Worldline",
+    "worldline.createKicker": "WORLDLINE COMPOSER // MISSION 01",
     "worldline.createLead":
       "Set up market series, agent groups, report language, and deterministic mock worldline playback.",
+    "worldline.launchNote": "The generated worldline remains local and can be reviewed before any regeneration.",
     "worldline.generate": "Generate Worldline",
     "worldline.searchLabel": "Search by title, market series, agent, status, or mode",
     "worldline.searchPlaceholder": "BTC, deterministic, completed, Macro Allocator...",
@@ -722,8 +724,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.marketSeries": "市場序列",
     "worldline.agentGroupsLabel": "代理群體",
     "worldline.create": "創建世界線",
+    "worldline.createKicker": "世界線編排器 // 任務 01",
     "worldline.createLead":
       "設定市場序列、代理群體、報告語言與確定性 mock 世界線播放。",
+    "worldline.launchNote": "生成的世界線會保留在本機，並可在任何重建操作前先行檢視。",
     "worldline.generate": "生成世界線",
     "worldline.searchLabel": "按標題、市場序列、代理群體、狀態或模式搜尋",
     "worldline.searchPlaceholder": "BTC、deterministic、completed、宏觀配置者...",

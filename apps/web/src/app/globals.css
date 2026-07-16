@@ -824,6 +824,256 @@ pre {
   font-size: 14px;
 }
 
+.worldline-create-page {
+  gap: 28px;
+  max-width: 1120px;
+  padding-bottom: 72px;
+  position: relative;
+}
+
+.worldline-create-page::before {
+  background-image:
+    linear-gradient(var(--pixel-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pixel-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  content: "";
+  height: 210px;
+  left: 50%;
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  pointer-events: none;
+  position: absolute;
+  top: -30px;
+  transform: translateX(-50%);
+  width: 100vw;
+  z-index: -1;
+}
+
+.worldline-create-header {
+  border-bottom: 1px solid var(--border-strong);
+  display: grid;
+  gap: 9px;
+  padding: 20px 0 26px;
+  position: relative;
+}
+
+.worldline-create-header::after {
+  background: var(--signal-magenta);
+  bottom: -2px;
+  box-shadow: 18px 0 0 var(--signal-cyan), 36px 0 0 var(--signal-green);
+  content: "";
+  height: 3px;
+  position: absolute;
+  right: 36px;
+  width: 10px;
+}
+
+.worldline-create-header .pixel-kicker {
+  color: var(--accent-dark);
+  margin: 0;
+}
+
+.worldline-create-header h1 {
+  font-family: var(--font-signal);
+  font-size: 34px;
+  margin: 0;
+}
+
+.worldline-create-header .lead {
+  margin: 0;
+  max-width: 720px;
+}
+
+.worldline-create-page .scenario-form {
+  gap: 24px;
+}
+
+.worldline-mode-notice {
+  align-items: start;
+  border-color: var(--border-strong);
+  border-radius: var(--radius-panel);
+  color: var(--text);
+  display: grid;
+  gap: 13px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 14px 16px;
+}
+
+.worldline-mode-notice p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 5px 0 0;
+}
+
+.worldline-mode-signal {
+  background: var(--signal-green);
+  box-shadow: 4px 4px 0 rgba(82, 184, 0, 0.2);
+  height: 10px;
+  margin-top: 4px;
+  width: 10px;
+}
+
+.worldline-create-page .form-section,
+.worldline-create-page .scenario-agent-settings {
+  border-top: 1px solid var(--border);
+  gap: 20px;
+  padding-top: 20px;
+}
+
+.form-section-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+}
+
+.form-section-heading > div {
+  display: grid;
+  gap: 5px;
+}
+
+.form-section-index {
+  align-items: center;
+  background: var(--text);
+  color: var(--surface);
+  display: inline-flex;
+  flex: 0 0 34px;
+  font-family: var(--font-signal);
+  font-size: 12px;
+  font-weight: 800;
+  height: 24px;
+  justify-content: center;
+}
+
+.worldline-create-page .form-section h2,
+.worldline-create-page .scenario-agent-settings h2 {
+  font-family: var(--font-signal);
+  font-size: 19px;
+  margin: 0;
+}
+
+.worldline-create-page .form-field > span:first-child,
+.worldline-create-page .asset-picker-selected > .muted {
+  color: var(--text);
+  font-family: var(--font-signal);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.worldline-create-page input,
+.worldline-create-page select,
+.worldline-create-page textarea {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: #aeb9b8;
+}
+
+.worldline-create-page input:hover,
+.worldline-create-page select:hover,
+.worldline-create-page textarea:hover {
+  border-color: var(--accent);
+}
+
+.worldline-create-page .asset-picker-selected,
+.worldline-create-page .asset-picker-menu summary {
+  border-radius: var(--radius-control);
+}
+
+.worldline-create-page .asset-chip {
+  border-radius: var(--radius-control);
+  font-family: var(--font-signal);
+}
+
+.worldline-create-page .generation-plan {
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-panel);
+  padding: 16px;
+}
+
+.worldline-create-page .generation-plan-grid > div {
+  border-radius: var(--radius-control);
+  border-top: 3px solid var(--signal-cyan);
+  min-height: 76px;
+  padding: 12px;
+}
+
+.worldline-create-page .generation-plan-grid > div:nth-child(2) {
+  border-top-color: var(--signal-magenta);
+}
+
+.worldline-create-page .generation-plan-grid > div:nth-child(3) {
+  border-top-color: var(--signal-green);
+}
+
+.worldline-create-page .scenario-advanced-settings {
+  border-color: var(--border-strong);
+  border-radius: var(--radius-panel);
+}
+
+.scenario-advanced-settings summary {
+  gap: 14px;
+  justify-content: flex-start;
+}
+
+.scenario-advanced-settings summary::after {
+  margin-left: auto;
+}
+
+.worldline-create-page .llm-preset-panel {
+  border-radius: var(--radius-control);
+}
+
+.worldline-create-page .checkbox-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.worldline-create-page .checkbox-card {
+  background: var(--surface);
+  border-radius: var(--radius-control);
+  min-height: 78px;
+  padding: 13px;
+  position: relative;
+}
+
+.worldline-create-page .checkbox-card:has(input:checked) {
+  background: #f4fbfc;
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--signal-cyan);
+}
+
+.worldline-create-page .checkbox-card input {
+  accent-color: var(--accent);
+}
+
+.scenario-launch-zone {
+  align-items: center;
+  background: var(--text);
+  border: 1px solid var(--text);
+  display: grid;
+  gap: 10px 20px;
+  grid-template-columns: minmax(220px, 0.4fr) minmax(0, 1fr);
+  padding: 10px;
+}
+
+.scenario-launch-button {
+  background: var(--signal-cyan);
+  border-color: var(--signal-cyan);
+  border-radius: var(--radius-control);
+  color: #061012;
+  font-family: var(--font-signal);
+  min-height: 52px;
+  text-transform: uppercase;
+}
+
+.scenario-launch-button:hover {
+  background: #7cebf2;
+  border-color: #7cebf2;
+}
+
+.scenario-launch-note {
+  color: #d6dfde;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .filter-row {
   display: flex;
   flex-wrap: wrap;
@@ -2334,6 +2584,40 @@ pre {
   .hero,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .worldline-create-page {
+    gap: 22px;
+    padding-bottom: 44px;
+  }
+
+  .worldline-create-header {
+    padding: 10px 0 22px;
+  }
+
+  .worldline-create-header h1 {
+    font-size: 27px;
+  }
+
+  .worldline-create-page .checkbox-grid,
+  .scenario-launch-zone {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-launch-zone {
+    padding: 9px;
+  }
+
+  .scenario-launch-note {
+    padding: 0 4px 4px;
+  }
+
+  .worldline-create-page .generation-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .worldline-create-page .generation-plan-grid > div {
+    min-height: auto;
   }
 
   .llm-preset-grid {

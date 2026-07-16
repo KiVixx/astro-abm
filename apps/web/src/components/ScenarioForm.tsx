@@ -381,18 +381,24 @@ export function ScenarioForm({
   }
 
   return (
-    <form className="stack" onSubmit={handleSubmit} ref={formRef}>
+    <form className="stack scenario-form" onSubmit={handleSubmit} ref={formRef}>
       {product === "worldline" ? (
-        <section className="notice">
+        <section className="notice worldline-mode-notice">
+          <span className="worldline-mode-signal" aria-hidden="true" />
+          <div>
           <strong>{t("worldline.simulationMode")}: </strong>
           {worldlinePlaybackLabel}
           <p>{t("worldline.modeHelp")}</p>
+          </div>
         </section>
       ) : null}
-      <section className="form-section">
-        <div>
+      <section className="form-section scenario-core-settings">
+        <div className="form-section-heading">
+          <span className="form-section-index" aria-hidden="true">01</span>
+          <div>
           <h2>{t("scenarioCreate.basicSettings")}</h2>
           <p className="muted">{t("scenarioCreate.basicSettingsHelp")}</p>
+          </div>
         </div>
       <div className="form-grid">
         <label className="form-field full">
@@ -512,8 +518,9 @@ export function ScenarioForm({
       </div>
       </section>
 
-      <details className="advanced-settings-panel">
+      <details className="advanced-settings-panel scenario-advanced-settings">
         <summary>
+          <span className="form-section-index" aria-hidden="true">02</span>
           <span>
             <strong>{t("scenarioCreate.advancedSettings")}</strong>
             <small>{t("scenarioCreate.advancedSettingsHelp")}</small>
@@ -666,17 +673,23 @@ export function ScenarioForm({
         </div>
       </div>
       </details>
-      <section className="stack">
-        <h2>{t("scenarioCreate.agentGroups")}</h2>
+      <section className="stack scenario-agent-settings">
+        <div className="form-section-heading">
+          <span className="form-section-index" aria-hidden="true">03</span>
+          <h2>{t("scenarioCreate.agentGroups")}</h2>
+        </div>
         <AgentSelector agents={agents} />
       </section>
-      <button disabled={progress.active && progress.phase !== "error"} type="submit">
+      <div className="scenario-launch-zone">
+      <button className="scenario-launch-button" disabled={progress.active && progress.phase !== "error"} type="submit">
         {progress.active && progress.phase !== "error"
           ? t("scenarioCreate.generating")
           : product === "worldline"
             ? t("worldline.generate")
             : t("scenarioCreate.generate")}
       </button>
+      <p className="muted scenario-launch-note">{t("worldline.launchNote")}</p>
+      </div>
       {progress.active ? (
         <section className={`notice scenario-progress ${progress.phase}`}>
           <div className="scenario-progress-header">
