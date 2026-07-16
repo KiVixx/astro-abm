@@ -92,6 +92,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.listTitle": "Worldlines",
     "worldline.listLead":
       "Explore saved simulated worldlines with day-by-day playback, agent events, and simulated causal links.",
+    "worldline.archiveKicker": "WORLDLINE ARCHIVE",
+    "worldline.recordsVisible": "VISIBLE RECORDS",
+    "worldline.marketSeries": "MARKET SERIES",
+    "worldline.agentGroupsLabel": "AGENT GROUPS",
     "worldline.create": "Create Worldline",
     "worldline.createLead":
       "Set up market series, agent groups, report language, and deterministic mock worldline playback.",
@@ -713,6 +717,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.listTitle": "世界線",
     "worldline.listLead":
       "探索已保存的模擬世界線，檢視逐日播放、群體事件與模擬因果鏈。",
+    "worldline.archiveKicker": "世界線檔案庫",
+    "worldline.recordsVisible": "目前記錄",
+    "worldline.marketSeries": "市場序列",
+    "worldline.agentGroupsLabel": "代理群體",
     "worldline.create": "創建世界線",
     "worldline.createLead":
       "設定市場序列、代理群體、報告語言與確定性 mock 世界線播放。",

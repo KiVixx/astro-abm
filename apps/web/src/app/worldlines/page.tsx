@@ -10,15 +10,20 @@ export default async function WorldlinesPage() {
     const summaries = await getScenarios();
 
     return (
-      <div className="page stack">
-        <header>
-          <h1>
-            <I18nText tKey="worldline.listTitle" />
-          </h1>
-          <p className="lead">
-            <I18nText tKey="worldline.listLead" />
-          </p>
-          <div className="actions">
+      <div className="page stack worldline-index-page">
+        <header className="worldline-index-header">
+          <div className="worldline-index-copy">
+            <p className="pixel-kicker">
+              <I18nText tKey="worldline.archiveKicker" /> // {String(summaries.length).padStart(2, "0")}
+            </p>
+            <h1>
+              <I18nText tKey="worldline.listTitle" />
+            </h1>
+            <p className="lead">
+              <I18nText tKey="worldline.listLead" />
+            </p>
+          </div>
+          <div className="worldline-index-actions">
             <Link className="button" href="/worldlines/new">
               <I18nText tKey="worldline.create" />
             </Link>
@@ -32,7 +37,7 @@ export default async function WorldlinesPage() {
     );
   } catch (error) {
     return (
-      <div className="page stack">
+      <div className="page stack worldline-index-page">
         <h1>
           <I18nText tKey="worldline.listTitle" />
         </h1>

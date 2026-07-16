@@ -78,30 +78,39 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
   };
 
   return (
-    <section className="stack">
-      <label className="form-field">
-        <span>{t("worldline.searchLabel")}</span>
-        <input
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("worldline.searchPlaceholder")}
-          suppressHydrationWarning
-          value={query}
-        />
-      </label>
-      <div className="filter-row" role="list" aria-label={t("worldline.filterLabel")}>
-        {filterOptions.map(({ count, filter }) => (
-          <button
-            aria-pressed={activeFilter === filter}
-            className={`filter-chip ${activeFilter === filter ? "is-active" : ""}`}
-            key={filter}
-            onClick={() => setActiveFilter(filter)}
-            type="button"
-          >
-            {t(`worldline.filter.${filter}`)} <span>{count}</span>
-          </button>
-        ))}
+    <section className="worldline-archive">
+      <div className="worldline-search-console">
+        <div className="worldline-search-row">
+          <label className="form-field worldline-search-field">
+            <span>{t("worldline.searchLabel")}</span>
+            <input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("worldline.searchPlaceholder")}
+              suppressHydrationWarning
+              value={query}
+            />
+          </label>
+          <div className="worldline-result-count" aria-live="polite">
+            <span>{t("worldline.recordsVisible")}</span>
+            <strong>{String(filtered.length).padStart(2, "0")}</strong>
+            <span>/ {String(items.length).padStart(2, "0")}</span>
+          </div>
+        </div>
+        <div className="filter-row" role="list" aria-label={t("worldline.filterLabel")}>
+          {filterOptions.map(({ count, filter }) => (
+            <button
+              aria-pressed={activeFilter === filter}
+              className={`filter-chip ${activeFilter === filter ? "is-active" : ""}`}
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
+              type="button"
+            >
+              {t(`worldline.filter.${filter}`)} <span>{count}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="stack">
+      <div className="worldline-records">
         {filtered.length ? (
           filtered.map((report) => (
             <WorldlineCard
@@ -112,7 +121,10 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
             />
           ))
         ) : (
-          <div className="notice">{t("worldline.noMatches")}</div>
+          <div className="worldline-empty-state">
+            <span aria-hidden="true">00</span>
+            <p>{t("worldline.noMatches")}</p>
+          </div>
         )}
       </div>
     </section>
