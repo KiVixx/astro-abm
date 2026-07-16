@@ -58,8 +58,8 @@ export function WorldlineRegenerationForm({
     model: config?.llm_model || "",
     apiKey: "",
     timeoutSeconds: String(config?.llm_timeout_seconds || 120),
-    maxOutputTokens: String(config?.llm_max_output_tokens || 5000),
-    callDelaySeconds: String(config?.llm_call_delay_seconds || 2),
+    maxOutputTokens: String(config?.llm_max_output_tokens || 32000),
+    callDelaySeconds: String(config?.llm_call_delay_seconds || 6),
     customUserPrompt: config?.custom_user_prompt || "",
   }));
   const [active, setActive] = useState(false);

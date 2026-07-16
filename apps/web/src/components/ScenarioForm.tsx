@@ -36,8 +36,10 @@ interface GenerationProgress {
 
 const DEFAULT_LLM_PROVIDER: LlmProvider = "openai_compatible";
 const DEFAULT_LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
-const DEFAULT_LLM_MODEL = "gemini-3.5-flash";
-const DEFAULT_LLM_CALL_DELAY_SECONDS = 2;
+const DEFAULT_LLM_MODEL = "gemini-3.5-flash-thinking";
+const DEFAULT_LLM_CHUNK_SIZE_DAYS = 1;
+const DEFAULT_LLM_CALL_DELAY_SECONDS = 6;
+const DEFAULT_LLM_MAX_OUTPUT_TOKENS = 32000;
 
 export function ScenarioForm({
   agents,
@@ -123,7 +125,8 @@ export function ScenarioForm({
     const formData = new FormData(event.currentTarget);
     const payload = payloadFromFormData(formData);
     const chunkSizeDays = clampNumber(
-      optionalNumber(getString(formData, "llm_chunk_size_days")) ?? 3,
+      optionalNumber(getString(formData, "llm_chunk_size_days")) ??
+        DEFAULT_LLM_CHUNK_SIZE_DAYS,
       1,
       5,
     ) as 1 | 2 | 3 | 5;
@@ -545,7 +548,7 @@ export function ScenarioForm({
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.llmChunkSizeDays")}</span>
-          <select name="llm_chunk_size_days" defaultValue="3">
+          <select name="llm_chunk_size_days" defaultValue={String(DEFAULT_LLM_CHUNK_SIZE_DAYS)}>
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -577,7 +580,7 @@ export function ScenarioForm({
         <label className="form-field">
           <span>{t("scenarioCreate.llmMaxOutputTokens")}</span>
           <input
-            defaultValue="5000"
+            defaultValue={String(DEFAULT_LLM_MAX_OUTPUT_TOKENS)}
             max="32000"
             min="512"
             name="llm_max_output_tokens"
@@ -751,7 +754,8 @@ function payloadFromFormData(formData: FormData): ScenarioCreateRequest {
       getString(formData, "worldline_provider") || "deterministic_mock"
     ) as WorldlineProvider,
     worldline_chunk_days: clampNumber(
-      optionalNumber(getString(formData, "llm_chunk_size_days")) ?? 3,
+      optionalNumber(getString(formData, "llm_chunk_size_days")) ??
+        DEFAULT_LLM_CHUNK_SIZE_DAYS,
       1,
       5,
     ) as 1 | 2 | 3 | 5,
@@ -870,11 +874,15 @@ function readLlmPresetFromForm(
     base_url: optionalString(getString(formData, "llm_base_url")),
     model: getString(formData, "llm_model"),
     chunk_size_days: normalizePresetChunkSize(
-      Number(getString(formData, "llm_chunk_size_days") || "3"),
+      Number(
+        getString(formData, "llm_chunk_size_days") || DEFAULT_LLM_CHUNK_SIZE_DAYS,
+      ),
     ),
     call_delay_seconds: Number(getString(formData, "llm_call_delay_seconds") || DEFAULT_LLM_CALL_DELAY_SECONDS),
     timeout_seconds: Number(getString(formData, "llm_timeout_seconds") || "120"),
-    max_output_tokens: Number(getString(formData, "llm_max_output_tokens") || "5000"),
+    max_output_tokens: Number(
+      getString(formData, "llm_max_output_tokens") || DEFAULT_LLM_MAX_OUTPUT_TOKENS,
+    ),
     custom_user_prompt: optionalString(getString(formData, "llm_user_prompt")),
     worldline_provider: getString(formData, "worldline_provider") || "deterministic_mock",
     api_key: includeApiKey ? optionalString(getString(formData, "llm_api_key")) : null,
@@ -906,7 +914,9 @@ function applyLlmPresetToForm(form: HTMLFormElement, preset: LlmPresetSummary) {
 }
 
 function normalizePresetChunkSize(value: number): 1 | 2 | 3 | 5 {
-  return value === 1 || value === 2 || value === 3 || value === 5 ? value : 3;
+  return value === 1 || value === 2 || value === 3 || value === 5
+    ? value
+    : DEFAULT_LLM_CHUNK_SIZE_DAYS;
 }
 
 function setFormValue(form: HTMLFormElement, name: string, value: string) {
