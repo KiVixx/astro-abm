@@ -1508,6 +1508,247 @@ pre {
   gap: 16px;
 }
 
+.report-page {
+  gap: 0;
+  max-width: 1180px;
+  padding-bottom: 72px;
+  position: relative;
+}
+
+.report-page::before {
+  background-image:
+    linear-gradient(var(--pixel-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pixel-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  content: "";
+  height: 230px;
+  left: 50%;
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  width: 100vw;
+  z-index: -1;
+}
+
+.report-action-bar {
+  border-bottom: 1px solid var(--border-strong);
+  gap: 6px;
+  padding: 16px 0;
+}
+
+.report-action-bar .button {
+  font-family: var(--font-signal);
+  font-size: 12px;
+  min-height: 36px;
+}
+
+.report-viewer {
+  gap: 0;
+  min-width: 0;
+}
+
+.report-viewer > * {
+  min-width: 0;
+}
+
+.report-viewer > .card,
+.report-viewer > details.card {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  min-width: 0;
+  padding: 26px 18px;
+}
+
+.report-viewer > .grid {
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+}
+
+.report-viewer > .grid > .card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  min-width: 0;
+  padding: 26px 18px;
+}
+
+.report-viewer > .grid > .card + .card {
+  border-left: 1px solid var(--border);
+}
+
+.report-viewer > .notice {
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  margin: 24px 0;
+}
+
+.report-viewer h2,
+.report-viewer h3 {
+  overflow-wrap: anywhere;
+}
+
+.report-hero {
+  border-bottom-color: var(--border-strong) !important;
+  padding: 34px 18px 28px !important;
+  position: relative;
+}
+
+.report-hero::after {
+  background: var(--signal-magenta);
+  bottom: -2px;
+  box-shadow: 16px 0 0 var(--signal-cyan), 32px 0 0 var(--signal-green);
+  content: "";
+  height: 3px;
+  position: absolute;
+  right: 32px;
+  width: 9px;
+}
+
+.report-hero .pixel-kicker {
+  color: var(--accent-dark);
+  margin-bottom: 14px;
+}
+
+.report-hero h1 {
+  font-family: var(--font-signal);
+  font-size: 34px;
+  line-height: 1.15;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-hero .lead {
+  line-height: 1.65;
+  max-width: 820px;
+}
+
+.report-hero .tag {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  font-family: var(--font-signal);
+  font-size: 11px;
+}
+
+.report-summary-section {
+  border-left: 4px solid var(--signal-cyan) !important;
+  margin: 20px 0;
+  padding: 20px !important;
+}
+
+.report-summary-section h2 {
+  font-family: var(--font-signal);
+  margin-top: 0;
+}
+
+.report-summary-section p {
+  font-size: 17px;
+  line-height: 1.7;
+  margin-bottom: 0;
+}
+
+.report-viewer > .coverage-summary-card {
+  border-left: 4px solid var(--signal-green);
+}
+
+.report-viewer > .llm-report-card {
+  border-left: 4px solid var(--signal-magenta);
+}
+
+.report-viewer .llm-report-summary h2,
+.report-viewer .coverage-summary-header h2,
+.report-viewer .report-timeline-section > h2 {
+  font-family: var(--font-signal);
+}
+
+.report-timeline-section {
+  border: 1px solid var(--border-strong) !important;
+  border-left: 4px solid var(--signal-cyan) !important;
+  margin: 24px 0;
+  padding: 20px !important;
+}
+
+.report-timeline-section .timeline-toolbar {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  gap: 10px;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(120px, 1fr));
+  padding: 12px;
+}
+
+.report-timeline-section .form-field {
+  min-width: 0;
+}
+
+.report-timeline-section .form-field,
+.report-timeline-section .timeline-actions {
+  font-size: 13px;
+}
+
+.report-timeline-section input,
+.report-timeline-section select {
+  background: var(--surface);
+  min-width: 0;
+}
+
+.report-viewer .timeline-month h3 {
+  border-bottom-color: var(--border-strong);
+  font-family: var(--font-signal);
+}
+
+.report-viewer .timeline-detail {
+  border-radius: var(--radius-control);
+}
+
+.report-viewer .timeline-summary {
+  font-size: 13px;
+}
+
+.report-viewer .timeline-summary > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-viewer .timeline-detail:has(.timeline-detail-body) {
+  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--signal-cyan);
+}
+
+.report-viewer pre {
+  border: 1px solid #354244;
+  border-radius: var(--radius-control);
+  font-family: var(--font-signal);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-viewer .llm-readable-text,
+.report-viewer .llm-report-body {
+  max-width: 900px;
+}
+
+.report-viewer .llm-readable-text p,
+.report-viewer .llm-report-body > div > p {
+  line-height: 1.75;
+}
+
+.report-viewer .llm-report-body,
+.report-viewer .timeline-detail-body {
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.report-viewer button {
+  justify-self: start;
+}
+
 .timeline-list {
   display: grid;
   gap: 18px;
@@ -2744,6 +2985,67 @@ pre {
 
   .worldline-create-page .generation-plan-grid > div {
     min-height: auto;
+  }
+
+  .report-page {
+    padding-bottom: 44px;
+  }
+
+  .report-action-bar {
+    flex-wrap: nowrap;
+    margin-inline: -2px;
+    overflow-x: auto;
+    padding-inline: 2px;
+    scrollbar-width: none;
+  }
+
+  .report-action-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .report-action-bar .button {
+    flex: 0 0 auto;
+  }
+
+  .report-viewer > .card,
+  .report-viewer > details.card,
+  .report-viewer > .grid > .card {
+    padding: 22px 8px;
+  }
+
+  .report-viewer > .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-viewer > .grid > .card + .card {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .report-hero {
+    padding: 26px 8px 24px !important;
+  }
+
+  .report-hero h1 {
+    font-size: 27px;
+  }
+
+  .report-summary-section,
+  .report-timeline-section {
+    padding: 16px !important;
+  }
+
+  .report-summary-section p {
+    font-size: 16px;
+  }
+
+  .report-timeline-section {
+    margin: 18px 0;
+  }
+
+  .report-timeline-section .timeline-toolbar {
+    grid-template-columns: 1fr;
+    padding: 10px;
   }
 
   .llm-preset-grid {

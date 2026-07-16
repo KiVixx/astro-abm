@@ -29,7 +29,7 @@ function MarkdownReportBlock({ markdown }: { markdown: string }) {
       <p className="muted">
         {t("report.rawMarkdownHelp")}
       </p>
-      <button onClick={() => setShowMarkdown((current) => !current)} type="button">
+      <button className="button secondary" onClick={() => setShowMarkdown((current) => !current)} type="button">
         {showMarkdown ? t("report.hideMarkdown") : t("report.showMarkdown")}
       </button>
       {showMarkdown ? <pre>{markdown}</pre> : null}
@@ -380,8 +380,9 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
   };
 
   return (
-    <article className="stack">
-      <section className="card">
+    <article className="stack report-viewer">
+      <section className="card report-hero">
+        <p className="pixel-kicker">{t("report.readoutKicker")}</p>
         <h1>{report.title}</h1>
         {report.description ? <p className="lead">{report.description}</p> : null}
         <div className="tag-row">
@@ -403,7 +404,7 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
         </div>
       </section>
 
-      <section className="card">
+      <section className="card report-summary-section">
         <h2>{t("report.summary")}</h2>
         <p>{scenarioSummary}</p>
       </section>
@@ -412,7 +413,7 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
 
       <LlmScenarioReportCard llmReport={report.llm_report} />
 
-      <section className="card">
+      <section className="card report-timeline-section">
         <h2>{t("report.dailyTimeline")}</h2>
         {dailyTimeline.length ? (
           <div className="stack">

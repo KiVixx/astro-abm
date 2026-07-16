@@ -377,6 +377,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.openSavedScenario": "Open saved scenario",
 
     "report.summary": "Summary",
+    "report.readoutKicker": "SCENARIO REPORT // LOCAL ARCHIVE READOUT",
     "report.dailyTimeline": "Daily Timeline",
     "report.searchTimeline": "Search timeline",
     "report.searchPlaceholder": "Search date, agent, regime, risk theme...",
@@ -1003,6 +1004,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.openSavedScenario": "打開已保存情境",
 
     "report.summary": "摘要",
+    "report.readoutKicker": "情境報告 // 本地檔案讀取",
     "report.dailyTimeline": "每日時間線",
     "report.searchTimeline": "搜尋時間線",
     "report.searchPlaceholder": "搜尋日期、代理群體、市場狀態、風險主題...",

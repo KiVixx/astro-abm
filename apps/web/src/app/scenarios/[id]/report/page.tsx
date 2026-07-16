@@ -15,8 +15,8 @@ export default async function ScenarioReportPage({
     const { id } = await params;
     const report = await getScenario(id);
     return (
-      <div className="page stack">
-        <div className="button-row">
+      <div className="page stack report-page">
+        <nav className="button-row report-action-bar" aria-label="Report navigation">
           <Link className="button" href={`/worldlines/${report.scenario_id}`}>
             <I18nText tKey="worldline.openWorldline" />
           </Link>
@@ -29,7 +29,7 @@ export default async function ScenarioReportPage({
           <Link className="button secondary" href="/scenarios">
             <I18nText tKey="common.backToScenarios" />
           </Link>
-        </div>
+        </nav>
         <ReportViewer report={report} />
       </div>
     );
@@ -38,7 +38,7 @@ export default async function ScenarioReportPage({
       notFound();
     }
     return (
-      <div className="page stack">
+      <div className="page stack report-page">
         <h1>
           <I18nText tKey="report.markdownReport" />
         </h1>
