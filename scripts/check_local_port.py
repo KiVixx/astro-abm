@@ -8,6 +8,8 @@ from collections.abc import Sequence
 def port_is_available(host: str, port: int) -> bool:
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     with socket.socket(family, socket.SOCK_STREAM) as candidate:
+        # Match development servers that can safely reclaim a recently closed port.
+        candidate.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             candidate.bind((host, port))
         except OSError:
