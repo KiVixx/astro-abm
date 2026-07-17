@@ -371,6 +371,11 @@ export function DailyGraphCanvas({
     select(svg).call(zoomBehavior.transform, zoomIdentity);
   }, []);
 
+  useEffect(() => {
+    setTooltip(null);
+    resetView();
+  }, [resetView, selectedDate]);
+
   const zoomViewBy = useCallback((factor: number) => {
     const svg = svgRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
