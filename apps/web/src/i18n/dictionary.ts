@@ -329,7 +329,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.llmUserPromptPlaceholder":
       "Example: Focus on liquidity and agent disagreement. Keep the tone concise.",
     "scenarioCreate.llmUserPromptHelp":
-      "Optional guidance sent before each LLM call. It cannot override safety rules, provided data, or the no-trading-advice boundary.",
+      "Optional guidance sent before each LLM call. It cannot replace the supplied research context or turn the LLM into a market data source.",
     "scenarioCreate.llmApiKeyNote":
       "API keys can be supplied here for this request or configured in the backend environment. They are never saved in scenario reports.",
     "scenarioCreate.realLlmEnablementNote":
@@ -1043,7 +1043,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.llmUserPromptPlaceholder":
       "例如：重點分析流動性與不同代理群體之間的分歧，語氣保持精簡。",
     "scenarioCreate.llmUserPromptHelp":
-      "可選；每次 LLM 呼叫前都會送出。它不能覆蓋安全規則、已提供資料或禁止交易建議的邊界。",
+      "可選；每次 LLM 呼叫前都會送出。它不能取代已提供的研究脈絡，也不能把 LLM 當成市場資料來源。",
     "scenarioCreate.llmApiKeyNote":
       "API key 可以在這次請求中填入，或放在後端環境變數；它永遠不會保存到情境報告。",
     "scenarioCreate.realLlmEnablementNote":
