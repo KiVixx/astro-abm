@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createLlmPreset, deleteLlmPreset, updateLlmPreset } from "@/lib/api";
+import {
+  createLlmPreset,
+  deleteLlmPreset,
+  testLlmConnection,
+  testLlmPreset,
+  updateLlmPreset,
+} from "@/lib/api";
 import { AgentSelector } from "./AgentSelector";
 import { AssetSelector } from "./AssetSelector";
 import { formatEnumLabel } from "@/i18n/labels";
@@ -418,6 +424,39 @@ export function ScenarioForm({
     }
   }
 
+  async function testCurrentLlmConnection() {
+    const form = formRef.current;
+    if (!form) return;
+    const formData = new FormData(form);
+    const selectedPreset = llmPresets.find((preset) => preset.preset_id === selectedPresetId);
+    const baseUrl = getString(formData, "llm_base_url");
+    const model = getString(formData, "llm_model");
+    const apiKey = getString(formData, "llm_api_key");
+    const matchesSelectedPreset = Boolean(
+      selectedPreset
+      && !apiKey
+      && (selectedPreset.base_url || "") === baseUrl
+      && (selectedPreset.model || "") === model,
+    );
+    setPresetMessage(t("worldline.regenerateConnectionTesting"));
+    try {
+      const result = matchesSelectedPreset && selectedPreset
+        ? await testLlmPreset(selectedPreset.preset_id)
+        : await testLlmConnection({
+            provider: (getString(formData, "llm_provider") || DEFAULT_LLM_PROVIDER) as LlmProvider,
+            real_enabled: formData.get("llm_real_enabled") === "on",
+            base_url: optionalString(baseUrl),
+            model: optionalString(model),
+            api_key: optionalString(apiKey),
+            timeout_seconds: optionalNumber(getString(formData, "llm_timeout_seconds")),
+            max_output_tokens: optionalNumber(getString(formData, "llm_max_output_tokens")),
+          });
+      setPresetMessage(`${result.status}: ${result.message}`);
+    } catch (error) {
+      setPresetMessage(error instanceof Error ? error.message : t("common.unknownError"));
+    }
+  }
+
   return (
     <form className="stack scenario-form" onSubmit={handleSubmit} ref={formRef}>
       {product === "worldline" ? (
@@ -739,6 +778,14 @@ export function ScenarioForm({
               type="button"
             >
               {t("scenarioCreate.llmPresetRecallButton")}
+            </button>
+            <button
+              className="button secondary"
+              disabled={generationInProgress}
+              onClick={testCurrentLlmConnection}
+              type="button"
+            >
+              {t("worldline.regenerateTestConnection")}
             </button>
             <button
               className="button secondary"
