@@ -184,8 +184,13 @@ pre {
 }
 
 .site-header nav a:hover,
-.site-header nav a:focus-visible {
+.site-header nav a:focus-visible,
+.site-header nav a.is-active {
   color: var(--text);
+}
+
+.site-header nav a.is-active {
+  box-shadow: inset 0 -2px 0 var(--signal-cyan);
 }
 
 .language-toggle {
