@@ -95,7 +95,10 @@ export function ScenarioForm({
 
   const progressPct =
     progress.totalChunks > 0
-      ? Math.round((progress.currentChunk / progress.totalChunks) * 100)
+      ? Math.min(
+          100,
+          10 + Math.round((progress.currentChunk / progress.totalChunks) * 90),
+        )
       : progress.phase === "base"
         ? 10
         : progress.phase === "done"
@@ -295,14 +298,15 @@ export function ScenarioForm({
         });
         const hasNextChunk = index < chunks.length - 1;
         if (hasNextChunk && callDelaySeconds > 0 && networkCallPerformed) {
-          setProgress({
-            active: true,
-            phase: "delay",
-            currentChunk: index + 1,
+          await waitForNextChunk({
+            completedChunks: index + 1,
+            delaySeconds: callDelaySeconds,
+            nextChunk: chunks[index + 1],
+            setProgress,
             totalChunks: chunks.length,
-            message: `${t("scenarioCreate.progressLlmDelay")} ${callDelaySeconds}s`,
+            waitingLabel: t("scenarioCreate.progressLlmDelay"),
+            nextChunkLabel: t("scenarioCreate.progressNextChunk"),
           });
-          await sleep(callDelaySeconds * 1000);
         }
       }
 
@@ -699,10 +703,19 @@ export function ScenarioForm({
             <strong>{t("scenarioCreate.progressTitle")}</strong>
             <span>{progressPct}%</span>
           </div>
-          <div className="scenario-progress-bar" aria-hidden="true">
+          <div
+            aria-label={t("scenarioCreate.progressTitle")}
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={progressPct}
+            className="scenario-progress-bar"
+            role="progressbar"
+          >
             <div style={{ width: `${progressPct}%` }} />
           </div>
-          <p>{progress.message}</p>
+          <p aria-atomic="true" aria-live="polite" role="status">
+            {progress.message}
+          </p>
           {progress.phase === "error" && progress.savedReportPath ? (
             <div className="stack">
               <p className="muted">{t("scenarioCreate.progressPartialSaved")}</p>
@@ -777,6 +790,41 @@ function optionalNumber(value: string): number | null {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function waitForNextChunk({
+  completedChunks,
+  delaySeconds,
+  nextChunk,
+  setProgress,
+  totalChunks,
+  waitingLabel,
+  nextChunkLabel,
+}: {
+  completedChunks: number;
+  delaySeconds: number;
+  nextChunk: { start: string; end: string };
+  setProgress: (progress: GenerationProgress) => void;
+  totalChunks: number;
+  waitingLabel: string;
+  nextChunkLabel: string;
+}) {
+  let remainingMilliseconds = Math.max(0, Math.round(delaySeconds * 1000));
+  while (remainingMilliseconds > 0) {
+    const displayedSeconds = Math.max(1, Math.ceil(remainingMilliseconds / 1000));
+    setProgress({
+      active: true,
+      phase: "delay",
+      currentChunk: completedChunks,
+      totalChunks,
+      message: `${waitingLabel}: ${displayedSeconds}s · ${nextChunkLabel} ${
+        completedChunks + 1
+      }/${totalChunks}: ${nextChunk.start} → ${nextChunk.end}`,
+    });
+    const interval = Math.min(1000, remainingMilliseconds);
+    await sleep(interval);
+    remainingMilliseconds -= interval;
+  }
 }
 
 function buildDateChunks(startDate: string, endDate: string, chunkSizeDays: number) {
