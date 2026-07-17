@@ -56,6 +56,7 @@ type RelationshipViewMode = "focused" | "all";
 
 const MIN_CANVAS_WIDTH = 760;
 const CANVAS_HEIGHT = 620;
+const SIMULATION_MAX_MS = 3000;
 const ALL_NODE_TYPES: WorkbenchNodeType[] = [
   "agent",
   "astro",
@@ -559,6 +560,7 @@ export function DailyGraphCanvas({
     };
 
     const simulation = forceSimulation<ForceGraphNode>(forceGraph.nodes)
+      .alphaDecay(0.04)
       .force(
         "link",
         forceLink<ForceGraphNode, ForceGraphEdge>(forceGraph.edges)
@@ -578,6 +580,12 @@ export function DailyGraphCanvas({
     } else {
       simulation.on("tick", ticked);
     }
+    const simulationStopTimer = prefersReducedMotion
+      ? null
+      : window.setTimeout(() => {
+          simulation.alphaTarget(0).stop();
+          ticked();
+        }, SIMULATION_MAX_MS);
 
     const dragBehavior = drag<SVGGElement, ForceGraphNode>()
       .on("start", (event: D3DragEvent<SVGGElement, ForceGraphNode, ForceGraphNode>, node) => {
@@ -605,6 +613,9 @@ export function DailyGraphCanvas({
     ticked();
 
     return () => {
+      if (simulationStopTimer !== null) {
+        window.clearTimeout(simulationStopTimer);
+      }
       simulation.stop();
       nodeSelection.on(".drag", null);
     };
