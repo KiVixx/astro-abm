@@ -38,6 +38,9 @@ export default async function ScenariosPage() {
         <p className="muted">
           {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
         </p>
+        <Link className="button secondary" href="/scenarios">
+          <I18nText tKey="common.retry" />
+        </Link>
       </div>
     );
   }

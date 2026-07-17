@@ -47,6 +47,9 @@ export default async function WorldlinesPage() {
         <p className="muted">
           {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
         </p>
+        <Link className="button secondary" href="/worldlines">
+          <I18nText tKey="common.retry" />
+        </Link>
       </div>
     );
   }

@@ -21,6 +21,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "language.chinese": "Traditional Chinese",
 
     "common.backHome": "Back home",
+    "common.retry": "Retry",
     "common.backToScenarios": "Back to scenarios",
     "common.backToWorkbench": "Back to Workbench",
     "common.openReport": "Open report",
@@ -746,6 +747,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "language.chinese": "繁體中文",
 
     "common.backHome": "返回首頁",
+    "common.retry": "重試",
     "common.backToScenarios": "返回情境列表",
     "common.backToWorkbench": "返回工作台",
     "common.openReport": "打開報告",

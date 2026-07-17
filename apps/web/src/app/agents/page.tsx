@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AgentGrid } from "@/components/AgentGrid";
 import { I18nText } from "@/i18n/useI18n";
 import { getAgents } from "@/lib/api";
@@ -38,6 +39,9 @@ export default async function AgentsPage() {
         <p className="muted">
           {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
         </p>
+        <Link className="button secondary" href="/agents">
+          <I18nText tKey="common.retry" />
+        </Link>
       </div>
     );
   }
