@@ -423,12 +423,43 @@ export function DailyGraphCanvas({
   const fitView = useCallback(() => {
     const svg = svgRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
-    if (!svg || !zoomBehavior) {
+    if (!svg || !zoomBehavior || !visibleNodes.length) {
       return;
     }
-    const fitted = zoomIdentity.translate(canvasSize.width * 0.04, canvasSize.height * 0.03).scale(0.92);
+    const horizontalLabelRoom = 112;
+    const verticalLabelRoom = 58;
+    const minX = Math.min(
+      ...visibleNodes.map((node) => (node.x ?? node.initialX) - node.radius - horizontalLabelRoom),
+    );
+    const maxX = Math.max(
+      ...visibleNodes.map((node) => (node.x ?? node.initialX) + node.radius + horizontalLabelRoom),
+    );
+    const minY = Math.min(
+      ...visibleNodes.map((node) => (node.y ?? node.initialY) - node.radius - verticalLabelRoom),
+    );
+    const maxY = Math.max(
+      ...visibleNodes.map((node) => (node.y ?? node.initialY) + node.radius + verticalLabelRoom),
+    );
+    const boundsWidth = Math.max(1, maxX - minX);
+    const boundsHeight = Math.max(1, maxY - minY);
+    const scale = Math.max(
+      0.45,
+      Math.min(1.2, canvasSize.width / boundsWidth, canvasSize.height / boundsHeight),
+    );
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const fitted = zoomIdentity
+      .translate(
+        canvasSize.width / 2 - centerX * scale,
+        canvasSize.height / 2 - centerY * scale,
+      )
+      .scale(scale);
     select(svg).call(zoomBehavior.transform, fitted);
-  }, [canvasSize.height, canvasSize.width]);
+  }, [canvasSize.height, canvasSize.width, visibleNodes]);
+
+  const showAllNodeTypes = () => {
+    setActiveNodeTypes(new Set(ALL_NODE_TYPES));
+  };
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -642,6 +673,11 @@ export function DailyGraphCanvas({
           <span className="muted">{t("workbench.zoomPanHint")}</span>
         </div>
         <div className="button-row">
+          {activeNodeTypes.size < ALL_NODE_TYPES.length ? (
+            <button className="button secondary" onClick={showAllNodeTypes} type="button">
+              {t("workbench.showAllNodeTypes")}
+            </button>
+          ) : null}
           <button className="button secondary" onClick={fitView} type="button">
             {t("workbench.fitView")}
           </button>
