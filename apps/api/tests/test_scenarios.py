@@ -1015,6 +1015,7 @@ def test_mixed_computed_context_counts_as_local_research_day(
     report = response.json()
     assert report["daily_timeline"][0]["data_coverage"]["source"] == "mixed_computed_research"
     assert report["coverage_summary"]["local_research_days"] == 1
+    assert report["coverage_summary"]["mixed_context_days"] == 1
     assert report["coverage_summary"]["source_counts"]["mixed_computed_research"] == 1
 
 

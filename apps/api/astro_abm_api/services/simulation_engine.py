@@ -468,7 +468,10 @@ def build_coverage_summary(
 
     def is_mixed(snapshot: DailyScenarioSnapshot) -> bool:
         values = status_values(snapshot)
-        return "available" in values and any(value != "available" for value in values)
+        return (
+            snapshot.data_coverage.source == "mixed_computed_research"
+            or ("available" in values and any(value != "available" for value in values))
+        )
 
     def has_local_research(snapshot: DailyScenarioSnapshot) -> bool:
         return (
