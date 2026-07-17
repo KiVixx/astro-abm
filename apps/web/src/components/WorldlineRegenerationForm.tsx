@@ -328,8 +328,16 @@ export function WorldlineRegenerationForm({
       {settings.realEnabled && !selectedPreset?.has_api_key && !settings.apiKey ? (
         <p className="notice warning">{t("worldline.regenerateCredentialWarning")}</p>
       ) : null}
-      {message ? <p className="notice">{message}</p> : null}
-      {error ? <p className="notice warning">{error}</p> : null}
+      {message ? (
+        <p aria-live="polite" className="notice" role="status">
+          {message}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="notice warning" role="alert">
+          {error}
+        </p>
+      ) : null}
       <button disabled={active || !selectedChunk} type="submit">
         {active
           ? t("worldline.regenerationInProgress")

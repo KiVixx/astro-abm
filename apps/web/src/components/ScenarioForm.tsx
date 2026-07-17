@@ -697,7 +697,11 @@ export function ScenarioForm({
               {t("scenarioCreate.llmPresetDelete")}
             </button>
           </div>
-          {presetMessage ? <p className="muted">{presetMessage}</p> : null}
+          {presetMessage ? (
+            <p aria-live="polite" className="muted" role="status">
+              {presetMessage}
+            </p>
+          ) : null}
         </section>
         <div className="notice full">
           <p>{t("scenarioCreate.llmApiKeyNote")}</p>
