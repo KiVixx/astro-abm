@@ -2534,10 +2534,17 @@ pre {
 }
 
 .workbench-legend-filter {
+  align-items: center;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
+  min-height: 32px;
   padding: 4px 6px;
+}
+
+.workbench-legend-filter.is-active {
+  background: rgba(237, 243, 244, 0.82);
+  border-color: var(--border);
 }
 
 .workbench-legend-filter:hover,
@@ -4030,6 +4037,10 @@ pre {
     align-items: start;
     justify-items: start;
     text-align: left;
+  }
+
+  .workbench-legend-filter {
+    min-height: 40px;
   }
 
   .force-graph-controls {
