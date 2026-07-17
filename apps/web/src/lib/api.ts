@@ -3,6 +3,8 @@ import type {
   LlmPresetSaveRequest,
   LlmPresetSummary,
   LlmPresetTestResponse,
+  LlmTestRequest,
+  LlmTestResponse,
   MarketSeriesProfile,
   ScenarioCreateRequest,
   ScenarioLlmChunkRequest,
@@ -99,6 +101,13 @@ export async function testLlmPreset(presetId: string): Promise<LlmPresetTestResp
     `/llm/presets/${encodeURIComponent(presetId)}/test`,
     { method: "POST", body: "{}" },
   );
+}
+
+export async function testLlmConnection(payload: LlmTestRequest): Promise<LlmTestResponse> {
+  return apiFetch<LlmTestResponse>("/llm/test", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getScenarios(): Promise<ScenarioSummary[]> {

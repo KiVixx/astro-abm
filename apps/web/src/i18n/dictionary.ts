@@ -286,9 +286,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.regeneratePresetDeleted": "Local LLM preset deleted.",
     "worldline.regeneratePresetDeleteConfirm": "Delete this local LLM preset?",
     "worldline.regeneratePresetTesting": "Testing the local LLM preset...",
+    "worldline.regenerateConnectionTesting": "Testing the current LLM connection...",
     "worldline.regenerateSaveNewPreset": "Save as new preset",
     "worldline.regenerateUpdatePreset": "Update selected preset",
     "worldline.regenerateTestPreset": "Test preset",
+    "worldline.regenerateTestConnection": "Test current connection",
     "worldline.regenerateLocalSecretNote": "Presets are stored only under the ignored local configuration directory. API keys are never returned by the API or saved in scenario reports.",
     "worldline.regenerateSettingsConfirm": "Start rebuilding from this chunk to the end using the displayed LLM settings?",
 
@@ -1034,9 +1036,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.regeneratePresetDeleted": "本機 LLM preset 已刪除。",
     "worldline.regeneratePresetDeleteConfirm": "要刪除這個本機 LLM preset 嗎？",
     "worldline.regeneratePresetTesting": "正在測試本機 LLM preset...",
+    "worldline.regenerateConnectionTesting": "正在測試目前的 LLM 連線...",
     "worldline.regenerateSaveNewPreset": "另存新 preset",
     "worldline.regenerateUpdatePreset": "更新所選 preset",
     "worldline.regenerateTestPreset": "測試 preset",
+    "worldline.regenerateTestConnection": "測試目前連線",
     "worldline.regenerateLocalSecretNote": "Preset 只保存在已被 ignore 的本機設定目錄。API Key 不會由 API 返回，也不會寫入世界線報告。",
     "worldline.regenerateSettingsConfirm": "要使用目前顯示的 LLM 設定，從此 chunk 重建到結尾嗎？",
 

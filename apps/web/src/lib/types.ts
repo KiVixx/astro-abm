@@ -51,6 +51,26 @@ export interface LlmPresetTestResponse {
   credential_status: string;
 }
 
+export interface LlmTestRequest {
+  provider: LlmProvider;
+  real_enabled?: boolean | null;
+  base_url?: string | null;
+  model?: string | null;
+  api_key?: string | null;
+  timeout_seconds?: number | null;
+  max_output_tokens?: number | null;
+}
+
+export interface LlmTestResponse {
+  provider: LlmProvider;
+  reachable: boolean;
+  dry_run: boolean;
+  status: string;
+  message: string;
+  base_url?: string | null;
+  model?: string | null;
+}
+
 export interface AgentProfile {
   agent_id: string;
   name: string;

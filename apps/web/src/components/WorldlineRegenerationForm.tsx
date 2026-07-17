@@ -6,6 +6,7 @@ import {
   createLlmPreset,
   deleteLlmPreset,
   regenerateScenarioWorldlineFromChunk,
+  testLlmConnection,
   testLlmPreset,
   updateLlmPreset,
 } from "@/lib/api";
@@ -148,11 +149,21 @@ export function WorldlineRegenerationForm({
     }
   }
 
-  async function testPreset() {
-    if (!selectedPresetId) return;
-    setMessage(t("worldline.regeneratePresetTesting"));
+  async function testConnection() {
+    setError("");
+    setMessage(t("worldline.regenerateConnectionTesting"));
     try {
-      const result = await testLlmPreset(selectedPresetId);
+      const result = selectedPresetId && !settings.apiKey
+        ? await testLlmPreset(selectedPresetId)
+        : await testLlmConnection({
+            provider: "openai_compatible",
+            real_enabled: settings.realEnabled,
+            base_url: settings.baseUrl || null,
+            model: settings.model || null,
+            api_key: settings.apiKey || null,
+            timeout_seconds: Number(settings.timeoutSeconds),
+            max_output_tokens: Number(settings.maxOutputTokens),
+          });
       setMessage(`${result.status}: ${result.message}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("common.unknownError"));
@@ -368,7 +379,14 @@ export function WorldlineRegenerationForm({
         <div className="button-row">
           <button className="button secondary" type="button" onClick={() => savePreset(false)}>{t("worldline.regenerateSaveNewPreset")}</button>
           <button className="button secondary" disabled={!selectedPresetId} type="button" onClick={() => savePreset(true)}>{t("worldline.regenerateUpdatePreset")}</button>
-          <button className="button secondary" disabled={!selectedPresetId} type="button" onClick={testPreset}>{t("worldline.regenerateTestPreset")}</button>
+          <button
+            className="button secondary"
+            disabled={active || !settings.baseUrl || !settings.model}
+            type="button"
+            onClick={testConnection}
+          >
+            {t("worldline.regenerateTestConnection")}
+          </button>
           <button className="button secondary" disabled={!selectedPresetId} type="button" onClick={removePreset}>{t("scenarioCreate.llmPresetDelete")}</button>
         </div>
       </section>
