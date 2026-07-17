@@ -14,6 +14,7 @@ import type {
   LlmPresetSummary,
   ScenarioReport,
 } from "@/lib/types";
+import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import { useLeaveWarning } from "@/lib/useLeaveWarning";
 
@@ -73,6 +74,10 @@ export function WorldlineRegenerationForm({
   );
   const selectedChunk = chunks[startChunkIndex];
   const affectedChunks = Math.max(0, chunks.length - startChunkIndex);
+  const previousChunkFailure = useMemo(
+    () => findChunkFailure(report, startChunkIndex),
+    [report, startChunkIndex],
+  );
   const [progress, setProgress] = useState<RegenerationProgress>({
     currentChunk: 0,
     message: "",
@@ -290,6 +295,53 @@ export function WorldlineRegenerationForm({
         </div>
       </section>
 
+      {previousChunkFailure ? (
+        <section className="notice warning regeneration-diagnosis">
+          <div>
+            <h2>{t("worldline.regeneratePreviousFailure")}</h2>
+            <p>{t("worldline.regeneratePreviousFailureHelp")}</p>
+          </div>
+          <div className="tag-row">
+            <span className="tag">
+              {t("worldline.chunkStatus")}: {formatEnumLabel(
+                t,
+                "chunk_status",
+                previousChunkFailure.status,
+              )}
+            </span>
+            <span className="tag">
+              {t("worldline.parseResult")}: {formatEnumLabel(
+                t,
+                "output_validation_status",
+                previousChunkFailure.outputStatus,
+              )}
+            </span>
+            {previousChunkFailure.attemptCount > 0 ? (
+              <span className="tag">
+                {t("worldline.attemptCount")}: {previousChunkFailure.attemptCount}/
+                {previousChunkFailure.maxAttempts || 3}
+              </span>
+            ) : null}
+          </div>
+          {previousChunkFailure.probableTruncation ? (
+            <p>
+              <strong>{t("worldline.probableTruncation")}</strong>
+              <br />
+              {t("worldline.probableTruncationHelp")}
+            </p>
+          ) : null}
+          {previousChunkFailure.recommendedAction ? (
+            <p>
+              <strong>{t("worldline.recommendedAction")}:</strong>{" "}
+              {t(
+                `worldline.requestAction.${previousChunkFailure.recommendedAction}`,
+                previousChunkFailure.recommendedAction,
+              )}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="form-section">
         <div>
           <h2>{t("worldline.regenerateLlmSettings")}</h2>
@@ -400,4 +452,50 @@ function buildChunks(dates: string[], chunkSize: number) {
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function findChunkFailure(report: ScenarioReport, startChunkIndex: number) {
+  const history = report.worldline_simulation?.provenance?.chunk_history;
+  if (!Array.isArray(history)) return null;
+  const chunk = history.find((value) => {
+    const record = recordFromUnknown(value);
+    return record && Number(record.chunk_index) === startChunkIndex + 1;
+  });
+  const record = recordFromUnknown(chunk);
+  if (!record || !["fallback", "failed"].includes(String(record.status || ""))) {
+    return null;
+  }
+  const attempts = Array.isArray(record.attempt_history)
+    ? record.attempt_history.map(recordFromUnknown).filter((value) => value !== null)
+    : [];
+  const lastAttempt = attempts.at(-1) || null;
+  const responseDiagnostics = recordFromUnknown(
+    record.response_diagnostics ?? lastAttempt?.response_diagnostics,
+  );
+  const requestDiagnostics = recordFromUnknown(
+    record.request_diagnostics ?? lastAttempt?.request_diagnostics,
+  );
+  return {
+    attemptCount: numberFromUnknown(record.attempt_count) || attempts.length,
+    maxAttempts: numberFromUnknown(record.max_attempts),
+    outputStatus: String(
+      record.output_validation_status ?? lastAttempt?.output_validation_status ?? "unknown",
+    ),
+    probableTruncation: responseDiagnostics?.probable_truncation === true,
+    recommendedAction: requestDiagnostics?.recommended_action
+      ? String(requestDiagnostics.recommended_action)
+      : "",
+    status: String(record.status),
+  };
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function numberFromUnknown(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
