@@ -398,7 +398,7 @@ function WorldlineReviewHeader({
       <div className="tag-row">
         {Object.entries(sourceCounts).map(([source, count]) => (
           <span className="tag" key={source}>
-            {t("worldline.daysFrom")} {source}: {count}
+            {t("worldline.daysFrom")} {formatEnumLabel(t, "generation_source", source)}: {count}
           </span>
         ))}
       </div>
@@ -448,10 +448,18 @@ function WorldlineReviewHeader({
                     {formatEnumLabel(t, "chunk_status", String(chunk.status || "unknown"))}
                   </span>
                   <span className="tag">
-                    {String(chunk.output_validation_status || "unknown")}
+                    {formatEnumLabel(
+                      t,
+                      "output_validation_status",
+                      String(chunk.output_validation_status || "unknown"),
+                    )}
                   </span>
                   <span className="tag">
-                    {String(chunk.safety_check_status || "unknown")}
+                    {formatEnumLabel(
+                      t,
+                      "safety_check_status",
+                      String(chunk.safety_check_status || "unknown"),
+                    )}
                   </span>
                   <span className="tag">
                     {t("worldline.attemptCount")}: {String(chunk.attempt_count || "n/a")}/
@@ -502,9 +510,19 @@ function ChunkAttemptHistory({ value }: { value: unknown }) {
                 {t("worldline.attemptLabel")} {String(attempt.attempt || index + 1)}
               </span>
               <span className="tag">
-                {String(attempt.output_validation_status || "unknown")}
+                {formatEnumLabel(
+                  t,
+                  "output_validation_status",
+                  String(attempt.output_validation_status || "unknown"),
+                )}
               </span>
-              <span className="tag">{String(attempt.safety_check_status || "unknown")}</span>
+              <span className="tag">
+                {formatEnumLabel(
+                  t,
+                  "safety_check_status",
+                  String(attempt.safety_check_status || "unknown"),
+                )}
+              </span>
             </div>
             {Array.isArray(attempt.safety_violation_codes) && attempt.safety_violation_codes.length ? (
               <p className="notice warning">
@@ -545,7 +563,9 @@ function ChunkRequestDiagnostics({ value }: { value: unknown }) {
           {t("worldline.failureKind")}: {t(`worldline.failureKind.${failureKind}`, failureKind)}
         </span>
         <span className="tag">
-          {t("worldline.retryable")}: {diagnostics.retryable === true ? "true" : "false"}
+          {t("worldline.retryable")}: {diagnostics.retryable === true
+            ? t("value.common.yes")
+            : t("value.common.no")}
         </span>
         {diagnostics.http_status ? (
           <span className="tag">
