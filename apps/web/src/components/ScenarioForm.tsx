@@ -69,6 +69,9 @@ export function ScenarioForm({
   const { language: uiLanguage, t } = useI18n();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [defaultDateRange] = useState(() => getDefaultScenarioDateRange());
+  const [startDate, setStartDate] = useState(defaultDateRange.startDate);
+  const [endDate, setEndDate] = useState(defaultDateRange.endDate);
+  const [chunkSizeDays, setChunkSizeDays] = useState(DEFAULT_LLM_CHUNK_SIZE_DAYS);
   const [title, setTitle] = useState(() => getDefaultScenarioTitle(uiLanguage));
   const [description, setDescription] = useState(() => getDefaultScenarioDescription(uiLanguage));
   const [hasEditedTitle, setHasEditedTitle] = useState(false);
@@ -119,6 +122,13 @@ export function ScenarioForm({
           ? 100
           : 0;
   const realLlmCanCall = llmProvider === "openai_compatible" && realLlmEnabled;
+  const willCallLlm = realLlmCanCall;
+  const plannedDayCount = inclusiveDateCount(startDate, endDate);
+  const estimatedChunkCount = !willCallLlm || plannedDayCount === 0
+    ? 0
+    : product === "worldline" && worldlineProvider !== "llm"
+      ? 1
+      : Math.ceil(plannedDayCount / chunkSizeDays);
   const generationInProgress = progress.active
     && !["done", "halted", "error"].includes(progress.phase);
   useLeaveWarning(generationInProgress);
@@ -136,7 +146,7 @@ export function ScenarioForm({
           : t("scenarioCreate.callPlanWorldlineDryRun")
         : t("scenarioCreate.callPlanWorldlineMock")
       : t("scenarioCreate.callPlanWorldlineNotUsed");
-  const realCallLabel = realLlmCanCall
+  const realCallLabel = willCallLlm
     ? t("scenarioCreate.callPlanWillCall")
     : t("scenarioCreate.callPlanNoCall");
 
@@ -386,6 +396,7 @@ export function ScenarioForm({
     setIncludeApiKeyInPreset(preset.has_api_key);
     setLlmProvider(preset.provider);
     setWorldlineProvider((preset.worldline_provider as WorldlineProvider) || "deterministic_mock");
+    setChunkSizeDays(normalizePresetChunkSize(preset.chunk_size_days));
     setRealLlmEnabled(preset.real_enabled);
     setPresetMessage(t("scenarioCreate.llmPresetRecalled"));
   }
@@ -450,11 +461,23 @@ export function ScenarioForm({
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.startDate")}</span>
-          <input name="start_date" required type="date" defaultValue={defaultDateRange.startDate} />
+          <input
+            name="start_date"
+            onChange={(event) => setStartDate(event.target.value)}
+            required
+            type="date"
+            value={startDate}
+          />
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.endDate")}</span>
-          <input name="end_date" required type="date" defaultValue={defaultDateRange.endDate} />
+          <input
+            name="end_date"
+            onChange={(event) => setEndDate(event.target.value)}
+            required
+            type="date"
+            value={endDate}
+          />
         </label>
         <div className="form-field full">
           <span>{t("scenarioCreate.marketSeries")}</span>
@@ -545,7 +568,16 @@ export function ScenarioForm({
               <span>{t("scenarioCreate.callPlanNetwork")}</span>
               <strong>{realCallLabel}</strong>
             </div>
+            <div>
+              <span>{t("scenarioCreate.callPlanDays")}</span>
+              <strong>{plannedDayCount}</strong>
+            </div>
+            <div>
+              <span>{t("scenarioCreate.callPlanChunks")}</span>
+              <strong>{estimatedChunkCount}</strong>
+            </div>
           </div>
+          <p className="muted">{t("scenarioCreate.callPlanEstimateHelp")}</p>
         </section>
       </div>
       </section>
@@ -577,7 +609,13 @@ export function ScenarioForm({
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.llmChunkSizeDays")}</span>
-          <select name="llm_chunk_size_days" defaultValue={String(DEFAULT_LLM_CHUNK_SIZE_DAYS)}>
+          <select
+            name="llm_chunk_size_days"
+            onChange={(event) =>
+              setChunkSizeDays(normalizePresetChunkSize(Number(event.target.value)))
+            }
+            value={String(chunkSizeDays)}
+          >
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -875,6 +913,15 @@ function buildDateChunks(startDate: string, endDate: string, chunkSizeDays: numb
     current.setUTCDate(current.getUTCDate() + 1);
   }
   return chunks;
+}
+
+function inclusiveDateCount(startDate: string, endDate: string): number {
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return 0;
+  }
+  return Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
 }
 
 function parseDate(value: string): Date {

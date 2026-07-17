@@ -372,6 +372,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.callPlanReport": "Report narrative",
     "scenarioCreate.callPlanWorldline": "Worldline playback",
     "scenarioCreate.callPlanNetwork": "Network call",
+    "scenarioCreate.callPlanDays": "Planned days",
+    "scenarioCreate.callPlanChunks": "Estimated base LLM calls",
+    "scenarioCreate.callPlanEstimateHelp":
+      "Estimate excludes retries. A failed chunk may make up to three attempts before generation stops.",
     "scenarioCreate.callPlanReportLlm": "Real LLM report",
     "scenarioCreate.callPlanReportMock": "Mock report",
     "scenarioCreate.callPlanReportMockDuringWorldline":
@@ -1104,6 +1108,10 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "scenarioCreate.callPlanReport": "報告敘事",
     "scenarioCreate.callPlanWorldline": "世界線播放",
     "scenarioCreate.callPlanNetwork": "網路呼叫",
+    "scenarioCreate.callPlanDays": "原定天數",
+    "scenarioCreate.callPlanChunks": "預估基礎 LLM 呼叫數",
+    "scenarioCreate.callPlanEstimateHelp":
+      "此估算不含重試；失敗 chunk 最多可能嘗試三次，之後會停止生成。",
     "scenarioCreate.callPlanReportLlm": "真實 LLM 報告",
     "scenarioCreate.callPlanReportMock": "Mock 報告",
     "scenarioCreate.callPlanReportMockDuringWorldline":
