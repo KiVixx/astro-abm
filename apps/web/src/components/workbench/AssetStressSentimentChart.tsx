@@ -220,6 +220,12 @@ export function AssetStressSentimentChart({
               tabIndex={point.date === selectedDate ? 0 : -1}
             >
               <circle
+                className="asset-stress-hit-target"
+                cx={point.x}
+                cy={point.y}
+                r="22"
+              />
+              <circle
                 cx={point.x}
                 cy={point.y}
                 fill={point.color}
