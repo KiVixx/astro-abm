@@ -316,6 +316,7 @@ def build_daily_timeline(
                 market_context=context["market_context"],
                 data_coverage=context["data_coverage"],
                 research_signals=context["research_signals"],
+                retrograde_context=context["retrograde_context"],
                 asset_contexts=build_daily_asset_contexts(
                     request.assets,
                     context,

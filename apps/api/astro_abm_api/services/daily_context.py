@@ -287,6 +287,7 @@ def build_placeholder_daily_contexts(
                 "caveats": caveats,
                 "data_coverage": coverage,
                 "research_signals": research_context.signals,
+                "retrograde_context": research_context.retrograde_context,
             }
         )
     return contexts
