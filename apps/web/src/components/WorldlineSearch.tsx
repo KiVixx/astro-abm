@@ -124,6 +124,16 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
           <div className="worldline-empty-state">
             <span aria-hidden="true">00</span>
             <p>{t("worldline.noMatches")}</p>
+            <button
+              className="button secondary"
+              onClick={() => {
+                setQuery("");
+                setActiveFilter("all");
+              }}
+              type="button"
+            >
+              {t("worldline.clearFilters")}
+            </button>
           </div>
         )}
       </div>
