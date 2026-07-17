@@ -304,7 +304,11 @@ export function WorldlineRegenerationForm({
   }
 
   return (
-    <form className="stack" onSubmit={submit}>
+    <form
+      className="stack"
+      onChange={() => setConnectionFeedback(null)}
+      onSubmit={submit}
+    >
       <section className="form-section">
         <div>
           <h2>{t("worldline.regenerateLockedContext")}</h2>

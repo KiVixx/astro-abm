@@ -472,7 +472,23 @@ export function ScenarioForm({
   }
 
   return (
-    <form className="stack scenario-form" onSubmit={handleSubmit} ref={formRef}>
+    <form
+      className="stack scenario-form"
+      onChange={(event) => {
+        const target = event.target;
+        if (
+          !(target instanceof HTMLInputElement)
+          && !(target instanceof HTMLSelectElement)
+          && !(target instanceof HTMLTextAreaElement)
+        ) return;
+        const name = target.name;
+        if (name.startsWith("llm_") || name === "worldline_provider") {
+          setConnectionFeedback(null);
+        }
+      }}
+      onSubmit={handleSubmit}
+      ref={formRef}
+    >
       {product === "worldline" ? (
         <section className="notice worldline-mode-notice">
           <span className="worldline-mode-signal" aria-hidden="true" />
