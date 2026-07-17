@@ -15,6 +15,7 @@ import type {
   ScenarioReport,
 } from "@/lib/types";
 import { useI18n } from "@/i18n/useI18n";
+import { useLeaveWarning } from "@/lib/useLeaveWarning";
 
 interface Settings {
   name: string;
@@ -90,6 +91,7 @@ export function WorldlineRegenerationForm({
   const progressPct = progress.totalChunks > 0
     ? Math.round((progress.currentChunk / progress.totalChunks) * 100)
     : 0;
+  useLeaveWarning(active);
 
   function recallPreset(presetId: string) {
     setSelectedPresetId(presetId);
@@ -335,6 +337,7 @@ export function WorldlineRegenerationForm({
             <div style={{ width: `${progressPct}%` }} />
           </div>
           <p>{progress.message}</p>
+          {active ? <p className="muted">{t("common.keepTabOpen")}</p> : null}
         </section>
       ) : null}
     </form>

@@ -43,6 +43,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "common.generatedContent": "Generated content",
     "common.created": "created",
     "common.dateRange": "Date range",
+    "common.keepTabOpen": "Keep this tab open while generation is in progress.",
 
     "home.title": "Astro ABM Worldline Simulator",
     "home.lead":
@@ -770,6 +771,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "common.generatedContent": "生成內容",
     "common.created": "建立時間",
     "common.dateRange": "日期範圍",
+    "common.keepTabOpen": "生成進行期間請保持此分頁開啟。",
 
     "home.title": "Astro ABM 世界線推演器",
     "home.lead":

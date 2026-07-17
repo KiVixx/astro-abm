@@ -8,6 +8,7 @@ import { AgentSelector } from "./AgentSelector";
 import { AssetSelector } from "./AssetSelector";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
+import { useLeaveWarning } from "@/lib/useLeaveWarning";
 import type {
   AgentProfile,
   LlmProvider,
@@ -118,6 +119,9 @@ export function ScenarioForm({
           ? 100
           : 0;
   const realLlmCanCall = llmProvider === "openai_compatible" && realLlmEnabled;
+  const generationInProgress = progress.active
+    && !["done", "halted", "error"].includes(progress.phase);
+  useLeaveWarning(generationInProgress);
   const reportNarrativeLabel =
     product === "worldline" && worldlineProvider === "llm"
       ? t("scenarioCreate.callPlanReportMockDuringWorldline")
@@ -737,6 +741,9 @@ export function ScenarioForm({
           <p aria-atomic="true" aria-live="polite" role="status">
             {progress.message}
           </p>
+          {generationInProgress ? (
+            <p className="muted">{t("common.keepTabOpen")}</p>
+          ) : null}
           {progress.phase === "error" && progress.savedReportPath ? (
             <div className="stack">
               <p className="muted">{t("scenarioCreate.progressPartialSaved")}</p>
