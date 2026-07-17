@@ -8,6 +8,7 @@ import { useI18n } from "@/i18n/useI18n";
 
 type WorldlineFilter = "all" | "ready" | "llm" | "deterministic" | "failed" | "legacy";
 type WorldlineSort = "newest" | "oldest" | "start_date";
+const WORLDLINES_PAGE_SIZE = 12;
 
 export function WorldlineSearch({
   initialFilter,
@@ -29,6 +30,7 @@ export function WorldlineSearch({
   const [sortOrder, setSortOrder] = useState<WorldlineSort>(() =>
     normalizeWorldlineSort(initialSort),
   );
+  const [visibleLimit, setVisibleLimit] = useState(WORLDLINES_PAGE_SIZE);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filterOptions = useMemo(
@@ -70,6 +72,12 @@ export function WorldlineSearch({
     });
     return matchingItems.sort((left, right) => compareWorldlines(left, right, sortOrder));
   }, [activeFilter, items, normalizedQuery, sortOrder]);
+  const visibleItems = filtered.slice(0, visibleLimit);
+  const remainingCount = Math.max(0, filtered.length - visibleItems.length);
+
+  useEffect(() => {
+    setVisibleLimit(WORLDLINES_PAGE_SIZE);
+  }, [activeFilter, normalizedQuery, sortOrder]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -166,14 +174,30 @@ export function WorldlineSearch({
       </div>
       <div className="worldline-records">
         {filtered.length ? (
-          filtered.map((report) => (
-            <WorldlineCard
-              isDeleting={deletingId === report.scenario_id}
-              key={report.scenario_id}
-              onDelete={confirmAndDelete}
-              report={report}
-            />
-          ))
+          <>
+            {visibleItems.map((report) => (
+              <WorldlineCard
+                isDeleting={deletingId === report.scenario_id}
+                key={report.scenario_id}
+                onDelete={confirmAndDelete}
+                report={report}
+              />
+            ))}
+            {remainingCount > 0 ? (
+              <div className="worldline-load-more">
+                <button
+                  className="button secondary"
+                  onClick={() => setVisibleLimit((current) => current + WORLDLINES_PAGE_SIZE)}
+                  type="button"
+                >
+                  {t("worldline.loadMore")} ({Math.min(WORLDLINES_PAGE_SIZE, remainingCount)})
+                </button>
+                <span aria-live="polite">
+                  {t("worldline.recordsRemaining")}: {remainingCount}
+                </span>
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="worldline-empty-state">
             <span aria-hidden="true">00</span>

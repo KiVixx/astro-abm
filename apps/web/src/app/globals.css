@@ -1305,6 +1305,21 @@ pre {
   border-top: 1px solid var(--border-strong);
 }
 
+.worldline-load-more {
+  align-items: center;
+  border-bottom: 1px solid var(--border-strong);
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  padding: 22px 14px;
+}
+
+.worldline-load-more span {
+  color: var(--muted);
+  font-family: var(--font-signal);
+  font-size: 11px;
+}
+
 .worldline-record {
   background: var(--surface);
   border-bottom: 1px solid var(--border-strong);
@@ -3298,6 +3313,15 @@ pre {
 
   .worldline-record {
     padding: 20px 14px 18px 18px;
+  }
+
+  .worldline-load-more {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .worldline-load-more .button {
+    width: 100%;
   }
 
   .worldline-record-main,
