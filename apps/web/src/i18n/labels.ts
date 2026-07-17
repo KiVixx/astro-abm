@@ -164,6 +164,29 @@ const enumLabels: Record<string, LabelMap> = {
     low: "value.intensity.low",
     calm: "value.stress.calm",
   },
+  agent_mood: {
+    watchful: "value.mood.watchful",
+    "narrative-sensitive": "value.mood.narrativeSensitive",
+    "exposure-aware": "value.mood.exposureAware",
+    "portfolio-aware": "value.mood.portfolioAware",
+    "planning-focused": "value.mood.planningFocused",
+  },
+  edge_type: {
+    agent_attention: "value.edgeType.agentAttention",
+    context_to_asset: "value.edgeType.contextToAsset",
+    context_to_risk: "value.edgeType.contextToRisk",
+  },
+  sentiment_state: {
+    stressed: "value.sentimentState.stressed",
+    watchful: "value.mood.watchful",
+    calm: "value.stress.calm",
+  },
+  worldline_regime: {
+    stress_liquidity_watch: "value.worldlineRegime.stressLiquidityWatch",
+    volatility_expansion_watch: "value.worldlineRegime.volatilityExpansionWatch",
+    narrative_pressure_watch: "value.worldlineRegime.narrativePressureWatch",
+    balanced_rehearsal_path: "value.worldlineRegime.balancedRehearsalPath",
+  },
 };
 
 export const agentNameLabels: Record<string, TranslationKey> = {

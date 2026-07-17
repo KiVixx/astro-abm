@@ -624,8 +624,14 @@ function WorldlineStateCard({
     <div className="nested-panel">
       <h3>{label}</h3>
       <div className="tag-row">
-        <span className="tag">{state.sentiment_state}</span>
-        {state.regime_label ? <span className="tag">{state.regime_label}</span> : null}
+        <span className="tag">
+          {formatEnumLabel(t, "sentiment_state", state.sentiment_state)}
+        </span>
+        {state.regime_label ? (
+          <span className="tag">
+            {formatEnumLabel(t, "worldline_regime", state.regime_label)}
+          </span>
+        ) : null}
       </div>
       <dl className="worldline-score-grid">
         <ScoreTerm label={t("worldline.narrativePressure")} value={state.narrative_pressure} />

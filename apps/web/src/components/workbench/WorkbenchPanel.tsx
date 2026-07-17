@@ -111,7 +111,9 @@ function ResearchSignalTags({ snapshot }: { snapshot: DailyScenarioSnapshot }) {
         {t("common.liquidity")}:{" "}
         {formatEnumLabel(t, "liquidity_regime", signals.liquidity_regime)}
       </span>
-      <span className="tag">{t("common.astro")}: {signals.astro_activity}</span>
+      <span className="tag">
+        {t("common.astro")}: {formatEnumLabel(t, "astro_intensity", signals.astro_activity)}
+      </span>
     </div>
   );
 }
@@ -143,9 +145,15 @@ function OverviewPanel({ snapshot }: { snapshot: DailyScenarioSnapshot }) {
               <strong>{formatAgentName(t, state.agent_id, state.agent_name)}</strong>
               <p>{state.likely_reaction}</p>
               <div className="tag-row">
-                <span className="tag">{t("common.mood")}: {state.mood}</span>
                 <span className="tag">
-                  {t("common.riskAppetite")}: {state.risk_appetite}
+                  {t("common.mood")}: {formatEnumLabel(t, "agent_mood", state.mood)}
+                </span>
+                <span className="tag">
+                  {t("common.riskAppetite")}: {formatEnumLabel(
+                    t,
+                    "agent_level",
+                    state.risk_appetite,
+                  )}
                 </span>
               </div>
             </div>
@@ -174,8 +182,12 @@ function AgentNodePanel({ payload }: { payload: AgentNodePayload }) {
         <p className="muted">{t("workbench.agentGroupState")}</p>
       </div>
       <div className="tag-row">
-        <span className="tag">{t("common.mood")}: {state.mood}</span>
-        <span className="tag">{t("common.riskAppetite")}: {state.risk_appetite}</span>
+        <span className="tag">
+          {t("common.mood")}: {formatEnumLabel(t, "agent_mood", state.mood)}
+        </span>
+        <span className="tag">
+          {t("common.riskAppetite")}: {formatEnumLabel(t, "agent_level", state.risk_appetite)}
+        </span>
       </div>
       <div>
         <h3>{t("workbench.likelyReaction")}</h3>
@@ -202,11 +214,20 @@ function ContextNodePanel({ payload }: { payload: ContextNodePayload }) {
     "Liquidity Regime": "workbench.contextLiquidity",
     "Data Quality": "legend.data",
   };
+  const valueGroupMap: Record<string, string> = {
+    "Astro Activity": "astro_intensity",
+    "Stress Regime": "stress_regime",
+    "Volatility Regime": "volatility_regime",
+    "Liquidity Regime": "liquidity_regime",
+    "Data Quality": "data_quality",
+  };
   return (
     <div className="stack">
       <div>
         <h2>{titleMap[payload.title] ? t(titleMap[payload.title]) : payload.title}</h2>
-        <p className="muted">{payload.value}</p>
+        <p className="muted">
+          {formatEnumLabel(t, valueGroupMap[payload.title] || "", payload.value)}
+        </p>
       </div>
       <p>{payload.detail}</p>
       <div>
@@ -320,7 +341,7 @@ function EdgePanel({
       </div>
       <div className="tag-row">
         <span className="tag">
-          {t("workbench.edgeType")}: {edge.type.replaceAll("_", " ")}
+          {t("workbench.edgeType")}: {formatEnumLabel(t, "edge_type", edge.type)}
         </span>
       </div>
     </div>
