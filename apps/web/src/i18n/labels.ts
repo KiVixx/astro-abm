@@ -120,6 +120,7 @@ const enumLabels: Record<string, LabelMap> = {
     watchful: "value.stress.watchful",
     calm: "value.stress.calm",
     normal: "value.common.normal",
+    insufficient_coverage: "value.dataQuality.insufficientCoverage",
     unknown_future: "value.common.unknownFuture",
     unknown_placeholder: "value.common.unknownPlaceholder",
   },
@@ -138,6 +139,7 @@ const enumLabels: Record<string, LabelMap> = {
   },
   data_quality: {
     local_research_available: "value.dataQuality.localResearchAvailable",
+    partial_local_research_available: "value.dataQuality.partialLocalResearchAvailable",
     low_research_context_confidence: "value.dataQuality.lowResearchContextConfidence",
     low_association_confidence: "value.dataQuality.lowAssociationConfidence",
     low_placeholder_confidence: "value.dataQuality.lowPlaceholderConfidence",

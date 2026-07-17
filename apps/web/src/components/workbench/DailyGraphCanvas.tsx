@@ -196,6 +196,9 @@ export function DailyGraphCanvas({
     if (node.type === "astro") {
       return formatEnumLabel(t, "astro_intensity", node.subtitle);
     }
+    if (node.type === "agent") {
+      return formatEnumLabel(t, "agent_level", node.subtitle);
+    }
     if (node.type === "risk") {
       return t("legend.risk");
     }
