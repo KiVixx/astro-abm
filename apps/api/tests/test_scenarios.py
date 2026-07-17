@@ -579,6 +579,36 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert get_response.json()["scenario_id"] == scenario_id
 
 
+def test_traditional_chinese_deterministic_worldline_uses_report_language(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update(
+        {
+            "language": "zh-Hant",
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-02",
+        }
+    )
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    worldline = response.json()["worldline_simulation"]
+    first_day = worldline["days"][0]
+    first_event = first_day["agent_events"][0]
+    assert "確定性 mock 世界線" in worldline["summary"]
+    assert "脈絡" in first_day["input_context_summary"]
+    assert "模擬路徑" in first_event["what_happened"]
+    assert "明日情境" in first_event["impact_on_tomorrow"]
+    assert "模擬因果鏈" in first_day["causal_links"][0]["caveats"][0]
+    assert "僅為模擬世界線" in first_day["disclaimer"]
+    assert "reacted to" not in json.dumps(worldline, ensure_ascii=False)
+
+
 def test_delete_scenario_removes_saved_json_and_markdown(
     monkeypatch, tmp_path: Path
 ) -> None:
