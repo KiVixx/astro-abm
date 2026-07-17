@@ -234,6 +234,24 @@ function WorldlineReviewHeader({
   const selectedMaxAttempts = selectedChunk
     ? numberFromUnknown(selectedChunk.max_attempts)
     : 0;
+  const selectedAttemptHistory = selectedChunk
+    ? arrayOfRecords(selectedChunk.attempt_history)
+    : [];
+  const selectedLastAttempt = selectedAttemptHistory.at(-1) || null;
+  const selectedResponseDiagnostics = recordFromUnknown(
+    selectedChunk?.response_diagnostics ?? selectedLastAttempt?.response_diagnostics,
+  );
+  const selectedRequestDiagnostics = recordFromUnknown(
+    selectedChunk?.request_diagnostics ?? selectedLastAttempt?.request_diagnostics,
+  );
+  const selectedOutputStatus = String(
+    selectedChunk?.output_validation_status
+      ?? selectedLastAttempt?.output_validation_status
+      ?? selectedDay.chunk_status
+      ?? "unknown",
+  );
+  const selectedChunkFailed = selectedChunk?.status === "fallback"
+    || selectedChunk?.status === "failed";
   const regeneration = regenerationOutcome(simulation.last_regeneration, chunkHistory);
   const qualityNotes = stringArray(provenance.llm_output_quality_notes);
   const sourceCounts = countDaySources(simulation.days);
@@ -337,6 +355,44 @@ function WorldlineReviewHeader({
           <br />
           {t("worldline.generationHaltedReason")}
         </p>
+      ) : null}
+      {selectedChunkFailed ? (
+        <div className="notice warning">
+          <strong>{t("worldline.selectedChunkDiagnosis")}</strong>
+          <p>{t("worldline.selectedChunkDiagnosisHelp")}</p>
+          <div className="tag-row">
+            <span className="tag">
+              {t("worldline.parseResult")}: {formatEnumLabel(
+                t,
+                "chunk_status",
+                selectedOutputStatus,
+              )}
+            </span>
+            {selectedAttemptCount > 0 ? (
+              <span className="tag">
+                {t("worldline.attemptCount")}: {selectedAttemptCount}/
+                {selectedMaxAttempts || 3}
+              </span>
+            ) : null}
+          </div>
+          {selectedResponseDiagnostics?.probable_truncation === true ? (
+            <p>
+              <strong>{t("worldline.probableTruncation")}</strong>
+              <br />
+              {t("worldline.probableTruncationHelp")}
+            </p>
+          ) : null}
+          {selectedRequestDiagnostics?.recommended_action ? (
+            <p>
+              <strong>{t("worldline.recommendedAction")}:</strong>{" "}
+              {t(
+                `worldline.requestAction.${String(selectedRequestDiagnostics.recommended_action)}`,
+                String(selectedRequestDiagnostics.recommended_action),
+              )}
+            </p>
+          ) : null}
+          <p className="muted">{t("worldline.selectedChunkDiagnosisPrivacy")}</p>
+        </div>
       ) : null}
       <WorldlineProvenanceTags simulation={simulation} />
       <div className="tag-row">

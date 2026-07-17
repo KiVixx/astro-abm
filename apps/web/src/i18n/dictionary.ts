@@ -224,6 +224,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.chunkProvenance": "Chunk provenance",
     "worldline.qualityNotes": "LLM output quality notes",
     "worldline.noQualityNotes": "No quality notes are available.",
+    "worldline.selectedChunkDiagnosis": "Selected chunk diagnosis",
+    "worldline.selectedChunkDiagnosisHelp":
+      "The selected day belongs to a chunk that did not produce usable LLM output.",
+    "worldline.selectedChunkDiagnosisPrivacy":
+      "Open Chunk provenance for per-attempt structure diagnostics. Raw output and credentials are not stored here.",
     "worldline.responseDiagnostics": "Safe response diagnostics",
     "worldline.responseLength": "Response length",
     "worldline.characters": "characters",
@@ -910,6 +915,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "worldline.chunkProvenance": "Chunk 來源記錄",
     "worldline.qualityNotes": "LLM 輸出品質註記",
     "worldline.noQualityNotes": "目前沒有品質註記。",
+    "worldline.selectedChunkDiagnosis": "所選 chunk 診斷",
+    "worldline.selectedChunkDiagnosisHelp":
+      "所選日期位於未能產生可用 LLM 輸出的 chunk。",
+    "worldline.selectedChunkDiagnosisPrivacy":
+      "可展開 Chunk 來源記錄查看逐次結構診斷；此處不保存原始輸出或憑證。",
     "worldline.responseDiagnostics": "安全回應診斷",
     "worldline.responseLength": "回應長度",
     "worldline.characters": "字元",
