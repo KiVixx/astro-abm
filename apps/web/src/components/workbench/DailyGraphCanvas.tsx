@@ -142,6 +142,7 @@ export function DailyGraphCanvas({
 }: DailyGraphCanvasProps) {
   const { t } = useI18n();
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const viewportRef = useRef<SVGGElement | null>(null);
   const expandButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -385,6 +386,27 @@ export function DailyGraphCanvas({
     const exitExpandedView = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsExpanded(false);
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const focusable = Array.from(
+        sectionRef.current?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])",
+        ) || [],
+      ).filter((element) => !element.hasAttribute("aria-hidden"));
+      if (!focusable.length) {
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     document.addEventListener("keydown", exitExpandedView);
@@ -660,6 +682,7 @@ export function DailyGraphCanvas({
       aria-labelledby="context-graph-title"
       aria-modal={isExpanded || undefined}
       className={`workbench-card workbench-graph-card ${isExpanded ? "is-expanded" : ""}`}
+      ref={sectionRef}
       role={isExpanded ? "dialog" : undefined}
     >
       <div className="workbench-card-header">
