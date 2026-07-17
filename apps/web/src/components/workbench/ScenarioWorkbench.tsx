@@ -260,6 +260,12 @@ export function ScenarioWorkbench({
                   {t("worldline.dayCount")}: {selectedIndex + 1}/
                   {timeline.length}
                 </span>
+                {haltedGeneration ? (
+                  <span className="tag workbench-halted-status">
+                    {t("worldline.playableDays")}: {timeline.length} · {" "}
+                    {t("worldline.plannedDays")}: {fullTimeline.length}
+                  </span>
+                ) : null}
               </>
             ) : null}
             <span className="tag">

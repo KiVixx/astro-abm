@@ -2394,6 +2394,12 @@ pre {
   padding: 5px 7px;
 }
 
+.workbench-status-strip .workbench-halted-status {
+  border-color: var(--signal-amber);
+  color: var(--warning);
+  font-weight: 800;
+}
+
 .workbench-header-actions {
   flex: 0 0 auto;
   padding-top: 20px;

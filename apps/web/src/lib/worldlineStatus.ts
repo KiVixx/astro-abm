@@ -58,6 +58,7 @@ export function worldlineFallbackBreakdown(
 }
 
 export function worldlineDisplayStatus(simulation: WorldlineSimulation): string {
+  if (simulation.provenance?.generation_halted === true) return "halted";
   const lastRegeneration = simulation.last_regeneration;
   if (!lastRegeneration) return simulation.status;
   const stored = String(lastRegeneration.status || "");
