@@ -45,8 +45,11 @@ def list_scenarios() -> list[ScenarioSummary]:
 
 
 @router.get("/scenarios/{scenario_id}", response_model=ScenarioReport)
-def get_scenario(scenario_id: str) -> ScenarioReport:
-    return _load_scenario(ScenarioStore(), scenario_id)
+def get_scenario(scenario_id: str, include_markdown: bool = True) -> ScenarioReport:
+    report = _load_scenario(ScenarioStore(), scenario_id)
+    if include_markdown:
+        return report
+    return report.model_copy(update={"markdown_report": ""})
 
 
 @router.delete("/scenarios/{scenario_id}")

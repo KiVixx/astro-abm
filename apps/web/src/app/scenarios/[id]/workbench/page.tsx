@@ -16,7 +16,7 @@ export default async function ScenarioWorkbenchPage({
   const { date } = await searchParams;
 
   try {
-    const report = await getScenario(id);
+    const report = await getScenario(id, { includeMarkdown: false });
     return <ScenarioWorkbench initialDate={date} report={report} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {

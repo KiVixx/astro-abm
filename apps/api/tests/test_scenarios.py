@@ -603,6 +603,14 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     get_response = client.get(f"/scenarios/{scenario_id}")
     assert get_response.status_code == 200
     assert get_response.json()["scenario_id"] == scenario_id
+    assert get_response.json()["markdown_report"]
+
+    lightweight_response = client.get(
+        f"/scenarios/{scenario_id}?include_markdown=false"
+    )
+    assert lightweight_response.status_code == 200
+    assert lightweight_response.json()["markdown_report"] == ""
+    assert json.loads((tmp_path / f"{scenario_id}.json").read_text())["markdown_report"]
 
 
 def test_traditional_chinese_deterministic_worldline_uses_report_language(

@@ -105,8 +105,14 @@ export async function getScenarios(): Promise<ScenarioSummary[]> {
   return apiFetch<ScenarioSummary[]>("/scenarios");
 }
 
-export async function getScenario(scenarioId: string): Promise<ScenarioReport> {
-  return apiFetch<ScenarioReport>(`/scenarios/${encodeURIComponent(scenarioId)}`);
+export async function getScenario(
+  scenarioId: string,
+  options: { includeMarkdown?: boolean } = {},
+): Promise<ScenarioReport> {
+  const query = options.includeMarkdown === false ? "?include_markdown=false" : "";
+  return apiFetch<ScenarioReport>(
+    `/scenarios/${encodeURIComponent(scenarioId)}${query}`,
+  );
 }
 
 export async function deleteScenario(
