@@ -165,7 +165,11 @@ function WorldlineProvenanceTags({
     <div className="tag-row">
       <span className="tag">
         {t("worldline.generationMode")}:{" "}
-        {worldlineGenerationMode(simulation)}
+        {formatEnumLabel(
+          t,
+          "worldline_generation_mode",
+          worldlineGenerationMode(simulation),
+        )}
       </span>
       <span className="tag">
         {t("worldline.chunkSize")}:{" "}

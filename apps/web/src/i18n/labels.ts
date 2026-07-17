@@ -77,6 +77,13 @@ const enumLabels: Record<string, LabelMap> = {
     fallback: "value.generationSource.fallback",
     unknown: "value.common.unknown",
   },
+  worldline_generation_mode: {
+    llm_chunk_v1: "value.worldlineGenerationMode.llmChunk",
+    deterministic_mock_v1: "value.worldlineGenerationMode.deterministicMock",
+    deterministic_mock: "value.worldlineGenerationMode.deterministicMock",
+    dry_run: "value.worldlineGenerationMode.dryRun",
+    fallback: "value.worldlineGenerationMode.fallback",
+  },
   scenario_mode: {
     daily_association_only: "value.mode.dailyAssociationOnly",
   },
