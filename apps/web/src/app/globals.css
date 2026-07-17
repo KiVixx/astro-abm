@@ -2933,6 +2933,16 @@ pre {
   font-size: 12px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .force-graph-edge,
+  .force-graph-node,
+  .force-graph-node circle:not(.force-node-hit-target),
+  .force-graph-node polygon,
+  .force-graph-node rect {
+    transition: none;
+  }
+}
+
 .workbench-node rect {
   fill: #ffffff;
   stroke: #9cafbd;

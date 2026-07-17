@@ -502,6 +502,8 @@ export function DailyGraphCanvas({
     }
 
     simulationRef.current?.stop();
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+      ?? false;
 
     const edgeSelection = select(edgeLayer)
       .selectAll<SVGLineElement, ForceGraphEdge>(".force-graph-edge")
@@ -553,12 +555,19 @@ export function DailyGraphCanvas({
       .force("charge", forceManyBody<ForceGraphNode>().strength(-520))
       .force("collide", forceCollide<ForceGraphNode>().radius((node) => node.radius + 34).iterations(2))
       .force("x", forceX<ForceGraphNode>((node) => nodeAnchor(node, canvasSize.width, canvasSize.height)[0]).strength(0.11))
-      .force("y", forceY<ForceGraphNode>((node) => nodeAnchor(node, canvasSize.width, canvasSize.height)[1]).strength(0.13))
-      .on("tick", ticked);
+      .force("y", forceY<ForceGraphNode>((node) => nodeAnchor(node, canvasSize.width, canvasSize.height)[1]).strength(0.13));
+
+    if (prefersReducedMotion) {
+      simulation.stop();
+      simulation.tick(160);
+      ticked();
+    } else {
+      simulation.on("tick", ticked);
+    }
 
     const dragBehavior = drag<SVGGElement, ForceGraphNode>()
       .on("start", (event: D3DragEvent<SVGGElement, ForceGraphNode, ForceGraphNode>, node) => {
-        if (!event.active) {
+        if (!prefersReducedMotion && !event.active) {
           simulation.alphaTarget(0.24).restart();
         }
         node.fx = node.x;
@@ -570,7 +579,7 @@ export function DailyGraphCanvas({
         ticked();
       })
       .on("end", (event: D3DragEvent<SVGGElement, ForceGraphNode, ForceGraphNode>, node) => {
-        if (!event.active) {
+        if (!prefersReducedMotion && !event.active) {
           simulation.alphaTarget(0);
         }
         node.fx = null;
