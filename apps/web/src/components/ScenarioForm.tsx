@@ -124,6 +124,9 @@ export function ScenarioForm({
   const realLlmCanCall = llmProvider === "openai_compatible" && realLlmEnabled;
   const willCallLlm = realLlmCanCall;
   const plannedDayCount = inclusiveDateCount(startDate, endDate);
+  const hasCompleteDateRange = Boolean(startDate && endDate);
+  const dateRangeValid = hasCompleteDateRange && plannedDayCount > 0;
+  const dateRangeOrderInvalid = hasCompleteDateRange && plannedDayCount === 0;
   const estimatedChunkCount = !willCallLlm || plannedDayCount === 0
     ? 0
     : product === "worldline" && worldlineProvider !== "llm"
@@ -462,6 +465,9 @@ export function ScenarioForm({
         <label className="form-field">
           <span>{t("scenarioCreate.startDate")}</span>
           <input
+            aria-describedby={dateRangeOrderInvalid ? "scenario-date-range-error" : undefined}
+            aria-invalid={dateRangeOrderInvalid || undefined}
+            max={endDate || undefined}
             name="start_date"
             onChange={(event) => setStartDate(event.target.value)}
             required
@@ -472,6 +478,9 @@ export function ScenarioForm({
         <label className="form-field">
           <span>{t("scenarioCreate.endDate")}</span>
           <input
+            aria-describedby={dateRangeOrderInvalid ? "scenario-date-range-error" : undefined}
+            aria-invalid={dateRangeOrderInvalid || undefined}
+            min={startDate || undefined}
             name="end_date"
             onChange={(event) => setEndDate(event.target.value)}
             required
@@ -479,6 +488,11 @@ export function ScenarioForm({
             value={endDate}
           />
         </label>
+        {dateRangeOrderInvalid ? (
+          <p className="notice warning full" id="scenario-date-range-error" role="alert">
+            {t("scenarioCreate.dateRangeInvalid")}
+          </p>
+        ) : null}
         <div className="form-field full">
           <span>{t("scenarioCreate.marketSeries")}</span>
           <AssetSelector marketSeries={marketSeries} />
@@ -755,7 +769,11 @@ export function ScenarioForm({
         <AgentSelector agents={agents} />
       </section>
       <div className="scenario-launch-zone">
-      <button className="scenario-launch-button" disabled={progress.active && progress.phase !== "error"} type="submit">
+      <button
+        className="scenario-launch-button"
+        disabled={!dateRangeValid || (progress.active && progress.phase !== "error")}
+        type="submit"
+      >
         {progress.active && progress.phase !== "error"
           ? t("scenarioCreate.generating")
           : product === "worldline"
