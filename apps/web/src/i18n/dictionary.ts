@@ -46,6 +46,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "common.dateRange": "Date range",
     "common.keepTabOpen": "Keep this tab open while generation is in progress.",
 
+    "notFound.kicker": "404 // LOCAL ARCHIVE MISS",
+    "notFound.title": "Worldline not found",
+    "notFound.lead": "This local Worldline is unavailable or its identifier is no longer valid.",
+    "notFound.localNote": "It may have been deleted from this computer. Return to the archive or create a new Worldline.",
+
     "home.title": "Astro ABM Worldline Simulator",
     "home.lead":
       "Build daily market worldlines from research context, agent groups, and simulated causal chains.",
@@ -777,6 +782,11 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "common.created": "建立時間",
     "common.dateRange": "日期範圍",
     "common.keepTabOpen": "生成進行期間請保持此分頁開啟。",
+
+    "notFound.kicker": "404 // 本地檔案未命中",
+    "notFound.title": "找不到世界線",
+    "notFound.lead": "這條本地世界線目前不可用，或其識別碼已失效。",
+    "notFound.localNote": "它可能已從這台電腦刪除。你可以返回檔案庫，或建立一條新世界線。",
 
     "home.title": "Astro ABM 世界線推演器",
     "home.lead":
