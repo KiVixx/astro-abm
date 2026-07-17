@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { AssetStressSentimentChart } from "./AssetStressSentimentChart";
+import { RetrogradeBodySelector } from "./RetrogradeBodySelector";
 import type { AssetStressSeries } from "@/lib/assetStressSentiment";
+import type { RetrogradeBody } from "@/lib/retrograde";
 import type { DailyScenarioSnapshot } from "@/lib/types";
 import {
   getDailyDataCoverage,
@@ -15,6 +17,8 @@ interface DailyTimelineRailProps {
   timeline: DailyScenarioSnapshot[];
   selectedDate: string;
   assetStressSeries: AssetStressSeries[];
+  selectedRetrogradeBodies: RetrogradeBody[];
+  onChangeRetrogradeBodies: (bodies: RetrogradeBody[]) => void;
   onSelectDate: (date: string) => void;
 }
 
@@ -93,6 +97,8 @@ function AssetStressAssetSelector({
 export function DailyTimelineRail({
   timeline,
   assetStressSeries,
+  selectedRetrogradeBodies,
+  onChangeRetrogradeBodies,
   selectedDate,
   onSelectDate,
 }: DailyTimelineRailProps) {
@@ -207,6 +213,10 @@ export function DailyTimelineRail({
           selectedAssets={selectedAssets}
           series={assetStressSeries}
         />
+        <RetrogradeBodySelector
+          onChange={onChangeRetrogradeBodies}
+          selectedBodies={selectedRetrogradeBodies}
+        />
         <div className="button-row">
           <button
             className="button secondary"
@@ -253,8 +263,10 @@ export function DailyTimelineRail({
           <AssetStressSentimentChart
             onSelectDate={onSelectDate}
             selectedAssets={selectedAssets}
+            selectedRetrogradeBodies={selectedRetrogradeBodies}
             selectedDate={selectedDate}
             series={assetStressSeries}
+            timeline={timeline}
           />
           <div className="workbench-day-strip">
             {timeline.map((snapshot, snapshotIndex) => {

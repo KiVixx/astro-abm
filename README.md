@@ -156,6 +156,11 @@ Worldline product experience:
 - The Worldline Workbench visualizes agent group nodes, daily research/context
   nodes, asset nodes, risk-theme nodes, simulated agent events, simulated causal
   links, pressure updates, and next-day setup.
+- The daily timeline can also show independently scaled retrograde timing lanes
+  for Mercury through Pluto. Historical station/cycle metadata is read from the
+  local daily research snapshot; missing or farther-future station windows are
+  computed locally with Swiss Ephemeris and are never mocked. These lanes share
+  only the date axis with asset stress curves and do not imply market causality.
 - Simulated causal links are internal to the scenario rehearsal. They are not
   real-world causal proof, not forecasts, and not trading signals.
 

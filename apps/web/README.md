@@ -47,5 +47,11 @@ experience layered on top of the saved scenario report. Simulated causal links
 are scenario-internal rehearsal links only; they are not real-world causal proof,
 not forecasts, and not trading signals.
 
+The Workbench daily timeline includes an optional bilingual selector for the
+eight retrograde-capable planets from Mercury through Pluto. Selected bodies are
+stored in the `retrograde` URL query parameter. Their timing lanes use read-only
+daily research cycles or locally computed Swiss Ephemeris station timing; Sun
+and Moon are intentionally not offered, and missing data is not mocked.
+
 This UI is association only, scenario rehearsal only, not financial advice, and
 not a trading signal.

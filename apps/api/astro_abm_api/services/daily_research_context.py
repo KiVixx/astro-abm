@@ -598,11 +598,13 @@ def _cycles_with_computed_fallback(
     computed: list[dict[str, Any]] | None = None
     for body in RETROGRADE_BODIES:
         events = _station_events_for_body(body, cycles)
+        has_previous = any(event[0].date() <= current_date for event in events)
+        has_upcoming = any(event[0].date() >= current_date for event in events)
         nearest_distance = min(
             (abs((event[0].date() - current_date).days) for event in events),
             default=10_000,
         )
-        if nearest_distance <= 400:
+        if has_previous and has_upcoming and nearest_distance <= 400:
             continue
         if computed is None:
             computed = list(_computed_retrograde_cycles(current_date.year))

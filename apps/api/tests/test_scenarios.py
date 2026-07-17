@@ -814,6 +814,40 @@ def test_far_future_retrograde_context_computes_fresh_station_cycles(tmp_path: P
     assert mercury.data_quality == "computed_station_and_position"
 
 
+def test_retrograde_context_fills_missing_upcoming_buffer_station(tmp_path: Path) -> None:
+    astro_dir = tmp_path / "parquet/astro_daily_1926_2025"
+    astro_dir.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "body": ["Uranus"],
+            "cycle_id": ["Uranus_20250906_20260204"],
+            "station_in_ts": [pd.Timestamp("2025-09-06T04:50:44Z")],
+            "station_out_ts": [pd.Timestamp("2026-02-04T02:33:37Z")],
+            "pre_window_start_ts": [pd.Timestamp("2025-08-23T00:00:00Z")],
+            "post_window_end_ts": [pd.Timestamp("2026-02-18T00:00:00Z")],
+            "station_phase_days": [7],
+        }
+    ).to_parquet(astro_dir / "astro_retrograde_cycles.parquet", index=False)
+    provider = DailyResearchContextProvider(output_root=tmp_path)
+
+    context = provider.context_for_date(
+        date(2026, 7, 18),
+        assets=["BTC"],
+        fallback_stress_regime="unknown",
+        fallback_volatility_regime="unknown",
+        fallback_liquidity_regime="unknown",
+        fallback_astro_activity="unknown",
+    )
+
+    uranus = next(
+        body for body in context.retrograde_context.bodies if body.body == "Uranus"
+    )
+    assert uranus.nearest_station_type == "direct_to_retrograde"
+    assert uranus.days_to_station_nearest is not None
+    assert uranus.days_to_station_nearest < 100
+    assert "computed_station_cycles" in uranus.source
+
+
 def test_llm_user_prompt_is_sent_to_llm_context_but_not_saved(
     monkeypatch, tmp_path: Path
 ) -> None:
