@@ -6,11 +6,16 @@ import type {
   AssetStressSeries,
 } from "@/lib/assetStressSentiment";
 import { useI18n } from "@/i18n/useI18n";
+import type { DailyScenarioSnapshot } from "@/lib/types";
+import type { RetrogradeBody } from "@/lib/retrograde";
+import { RetrogradeTimelineLanes } from "./RetrogradeTimelineLanes";
 
 interface AssetStressSentimentChartProps {
   series: AssetStressSeries[];
   selectedDate: string;
   selectedAssets: string[];
+  timeline: DailyScenarioSnapshot[];
+  selectedRetrogradeBodies: RetrogradeBody[];
   onSelectDate: (date: string) => void;
 }
 
@@ -57,6 +62,8 @@ function pointElementId(asset: string, date: string): string {
 export function AssetStressSentimentChart({
   series,
   selectedAssets,
+  timeline,
+  selectedRetrogradeBodies,
   selectedDate,
   onSelectDate,
 }: AssetStressSentimentChartProps) {
@@ -252,6 +259,13 @@ export function AssetStressSentimentChart({
           ) : null,
         )}
       </svg>
+      <RetrogradeTimelineLanes
+        onSelectDate={onSelectDate}
+        selectedBodies={selectedRetrogradeBodies}
+        selectedDate={selectedDate}
+        timeline={timeline}
+        width={effectiveWidth}
+      />
     </div>
   );
 }

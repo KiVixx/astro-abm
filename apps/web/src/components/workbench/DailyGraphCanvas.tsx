@@ -30,11 +30,8 @@ import { useI18n } from "@/i18n/useI18n";
 interface DailyGraphCanvasProps {
   graph: WorkbenchGraph;
   selectedDate: string;
-  previousDate?: string;
-  nextDate?: string;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
-  onSelectDate: (date: string) => void;
   onSelectNode: (nodeId: string | null) => void;
   onSelectEdge: (edgeId: string | null) => void;
 }
@@ -121,11 +118,8 @@ function shapeForNode(node: ForceGraphNode) {
 export function DailyGraphCanvas({
   graph,
   selectedDate,
-  previousDate,
-  nextDate,
   selectedNodeId,
   selectedEdgeId,
-  onSelectDate,
   onSelectNode,
   onSelectEdge,
 }: DailyGraphCanvasProps) {
@@ -461,33 +455,15 @@ export function DailyGraphCanvas({
         </div>
         <div className="graph-date-controls">
           <span className="tag">{selectedDate}</span>
-          <div className="button-row">
+          {selectedNodeId || selectedEdgeId ? (
             <button
               className="button secondary"
-              disabled={!previousDate}
-              onClick={() => previousDate && onSelectDate(previousDate)}
+              onClick={clearSelection}
               type="button"
             >
-              {t("workbench.previous")}
+              {t("workbench.clearNode")}
             </button>
-            <button
-              className="button secondary"
-              disabled={!nextDate}
-              onClick={() => nextDate && onSelectDate(nextDate)}
-              type="button"
-            >
-              {t("workbench.next")}
-            </button>
-            {selectedNodeId || selectedEdgeId ? (
-              <button
-                className="button secondary"
-                onClick={clearSelection}
-                type="button"
-              >
-                {t("workbench.clearNode")}
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
       <GraphLegend />

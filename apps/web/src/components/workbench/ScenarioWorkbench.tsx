@@ -16,6 +16,12 @@ import type {
 import { worldlineDisplayStatus } from "@/lib/worldlineStatus";
 import { buildAssetStressSeries } from "@/lib/assetStressSentiment";
 import { buildWorkbenchGraph } from "@/lib/workbenchGraph";
+import {
+  RETROGRADE_BODIES,
+  parseRetrogradeSelection,
+  serializeRetrogradeSelection,
+  type RetrogradeBody,
+} from "@/lib/retrograde";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
@@ -103,6 +109,10 @@ export function ScenarioWorkbench({
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [selectedRetrogradeBodies, setSelectedRetrogradeBodies] = useState<RetrogradeBody[]>(
+    [...RETROGRADE_BODIES],
+  );
+  const [retrogradeSelectionReady, setRetrogradeSelectionReady] = useState(false);
   const selectedSnapshot =
     timeline.find((snapshot) => snapshot.date === selectedDate) || initialSnapshot;
   const selectedIndex = selectedSnapshot
@@ -157,6 +167,28 @@ export function ScenarioWorkbench({
     }
     return { chunkIndex, nextDate };
   }, [currentReport.worldline_simulation, fullTimeline.length]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    setSelectedRetrogradeBodies(parseRetrogradeSelection(url.searchParams.get("retrograde")));
+    setRetrogradeSelectionReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!retrogradeSelectionReady || typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    const serialized = serializeRetrogradeSelection(selectedRetrogradeBodies);
+    if (url.searchParams.get("retrograde") === serialized) {
+      return;
+    }
+    url.searchParams.set("retrograde", serialized);
+    window.history.replaceState(window.history.state, "", url);
+  }, [retrogradeSelectionReady, selectedRetrogradeBodies]);
 
   useEffect(() => {
     if (!selectedSnapshot || typeof window === "undefined") {
@@ -293,38 +325,38 @@ export function ScenarioWorkbench({
         </div>
       </header>
 
+      <nav className="worldline-playback-bar" aria-label={t("worldline.playback")}>
+        <strong>{t("worldline.playback")}</strong>
+        <button
+          className="button secondary"
+          disabled={!previousSnapshot}
+          onClick={() => previousSnapshot && selectDate(previousSnapshot.date)}
+          type="button"
+        >
+          {t("workbench.previous")}
+        </button>
+        <span className="worldline-playback-date">{selectedSnapshot.date}</span>
+        <span className="worldline-playback-index">
+          {selectedIndex + 1}/{timeline.length}
+        </span>
+        <button
+          className="button secondary"
+          disabled={!nextSnapshot}
+          onClick={() => nextSnapshot && selectDate(nextSnapshot.date)}
+          type="button"
+        >
+          {t("workbench.next")}
+        </button>
+      </nav>
+
       <div className="workbench-layout">
         <div className="workbench-primary-column">
-          {isWorldline ? (
-            <section className="worldline-playback-bar">
-              <strong>{t("worldline.playback")}</strong>
-              <button
-                className="button secondary"
-                disabled={!previousSnapshot}
-                onClick={() => previousSnapshot && selectDate(previousSnapshot.date)}
-                type="button"
-              >
-                {t("workbench.previous")}
-              </button>
-              <span className="worldline-playback-date">{selectedSnapshot.date}</span>
-              <span className="worldline-playback-index">
-                {selectedIndex + 1}/{timeline.length}
-              </span>
-              <button
-                className="button secondary"
-                disabled={!nextSnapshot}
-                onClick={() => nextSnapshot && selectDate(nextSnapshot.date)}
-                type="button"
-              >
-                {t("workbench.next")}
-              </button>
-            </section>
-          ) : null}
-
           <DailyTimelineRail
             assetStressSeries={assetStressSeries}
+            onChangeRetrogradeBodies={setSelectedRetrogradeBodies}
             onSelectDate={selectDate}
             selectedDate={selectedSnapshot.date}
+            selectedRetrogradeBodies={selectedRetrogradeBodies}
             timeline={timeline}
           />
 
@@ -340,11 +372,8 @@ export function ScenarioWorkbench({
 
           <DailyGraphCanvas
             graph={graph}
-            nextDate={nextSnapshot?.date}
-            onSelectDate={selectDate}
             onSelectEdge={setSelectedEdgeId}
             onSelectNode={setSelectedNodeId}
-            previousDate={previousSnapshot?.date}
             selectedDate={selectedSnapshot.date}
             selectedEdgeId={selectedEdgeId}
             selectedNodeId={selectedNodeId}
@@ -364,6 +393,7 @@ export function ScenarioWorkbench({
           regenerationError={null}
           regenerationMessage=""
           regenerationActive={false}
+          selectedRetrogradeBodies={selectedRetrogradeBodies}
           worldlinePrimary={isWorldline}
         />
       </div>

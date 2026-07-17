@@ -48,6 +48,33 @@ class DailyResearchSignals(BaseModel):
     data_quality: str = "unknown"
 
 
+class DailyRetrogradeBodyContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: str
+    phase: str = "unknown"
+    is_retrograde: bool | None = None
+    lon_speed_deg_day: float | None = None
+    nearest_station_type: str | None = None
+    nearest_station_ts: datetime | None = None
+    days_to_station_nearest: int | None = None
+    days_since_station: int | None = None
+    days_until_station: int | None = None
+    cycle_id: str | None = None
+    source: str = "unknown"
+    data_quality: str = "unknown"
+    notes: list[str] = Field(default_factory=list)
+
+
+class DailyRetrogradeContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bodies: list[DailyRetrogradeBodyContext] = Field(default_factory=list)
+    source: str = "legacy_report"
+    data_quality: str = "unknown"
+    notes: list[str] = Field(default_factory=list)
+
+
 class DailyAgentState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -87,6 +114,7 @@ class DailyScenarioSnapshot(BaseModel):
     market_context: DailyMarketContext
     data_coverage: DailyDataCoverage = Field(default_factory=DailyDataCoverage)
     research_signals: DailyResearchSignals = Field(default_factory=DailyResearchSignals)
+    retrograde_context: DailyRetrogradeContext = Field(default_factory=DailyRetrogradeContext)
     asset_contexts: list[DailyAssetContext] = Field(default_factory=list)
     agent_states: list[DailyAgentState]
     daily_risk_themes: list[str]

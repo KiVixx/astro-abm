@@ -1,5 +1,6 @@
 import type {
   DailyScenarioSnapshot,
+  DailyRetrogradeBodyContext,
   WorldlineDay,
   WorldlineSimulation,
 } from "@/lib/types";
@@ -19,6 +20,8 @@ import {
 import { edgeEndpointIds } from "@/lib/workbenchForceGraph";
 import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
+import type { RetrogradeBody } from "@/lib/retrograde";
+import { retrogradeBodyLabel } from "./RetrogradeBodySelector";
 
 interface WorkbenchPanelProps {
   snapshot: DailyScenarioSnapshot;
@@ -35,6 +38,107 @@ interface WorkbenchPanelProps {
   regenerationActive?: boolean;
   regenerationMessage?: string;
   regenerationError?: string | null;
+  selectedRetrogradeBodies?: RetrogradeBody[];
+}
+
+function RetrogradeBodyReadout({
+  context,
+}: {
+  context: DailyRetrogradeBodyContext;
+}) {
+  const { t } = useI18n();
+  const body = context.body as RetrogradeBody;
+  const speed = context.lon_speed_deg_day;
+  return (
+    <div className="retrograde-readout-row">
+      <div className="retrograde-readout-heading">
+        <strong>{retrogradeBodyLabel(body, t)}</strong>
+        <span>{context.body}</span>
+      </div>
+      <div className="tag-row">
+        <span className={`tag ${context.is_retrograde ? "is-retrograde" : ""}`}>
+          {formatEnumLabel(t, "retrograde_phase", context.phase)}
+        </span>
+        <span className="tag">
+          {t("retrograde.longitudeSpeed")}: {speed === null || speed === undefined
+            ? t("value.common.unknown")
+            : `${speed.toFixed(6)}°/${t("common.day")}`}
+        </span>
+      </div>
+      <dl className="retrograde-readout-facts">
+        <div>
+          <dt>{t("retrograde.nearestStation")}</dt>
+          <dd>
+            {context.nearest_station_type
+              ? formatEnumLabel(t, "station_type", context.nearest_station_type)
+              : t("value.common.unknown")}
+          </dd>
+        </div>
+        <div>
+          <dt>{t("retrograde.stationTime")}</dt>
+          <dd>{context.nearest_station_ts || t("value.common.unknown")}</dd>
+        </div>
+        <div>
+          <dt>{t("retrograde.nearestDistance")}</dt>
+          <dd>
+            {context.days_to_station_nearest ?? t("value.common.unknown")} {t("retrograde.days")}
+          </dd>
+        </div>
+        <div>
+          <dt>{t("retrograde.cycle")}</dt>
+          <dd>{context.cycle_id || t("value.common.unknown")}</dd>
+        </div>
+        <div>
+          <dt>{t("common.source")}</dt>
+          <dd>{context.source}</dd>
+        </div>
+        <div>
+          <dt>{t("common.quality")}</dt>
+          <dd>{context.data_quality}</dd>
+        </div>
+      </dl>
+      {context.notes.length ? <BulletList items={context.notes} /> : null}
+    </div>
+  );
+}
+
+function RetrogradeContextPanel({
+  snapshot,
+  selectedBodies,
+}: {
+  snapshot: DailyScenarioSnapshot;
+  selectedBodies: RetrogradeBody[];
+}) {
+  const { t } = useI18n();
+  const context = snapshot.retrograde_context;
+  const bodies = selectedBodies
+    .map((body) => context?.bodies.find((item) => item.body === body))
+    .filter((item): item is DailyRetrogradeBodyContext => Boolean(item));
+  return (
+    <details className="retrograde-readout" open>
+      <summary>
+        {t("retrograde.dailyDetails")} · {snapshot.date} ({bodies.length})
+      </summary>
+      <div className="retrograde-readout-content">
+        {!selectedBodies.length ? (
+          <p className="muted">{t("retrograde.noBodiesSelected")}</p>
+        ) : !context?.bodies.length ? (
+          <p className="muted">{t("retrograde.noData")}</p>
+        ) : (
+          bodies.map((body) => <RetrogradeBodyReadout context={body} key={body.body} />)
+        )}
+        {context?.notes.length ? (
+          <div className="retrograde-readout-notes">
+            <strong>{t("workbench.notes")}</strong>
+            <BulletList items={context.notes} />
+          </div>
+        ) : null}
+        <p className="retrograde-context-disclaimer">
+          {t("retrograde.contextDisclaimer")}
+        </p>
+      </div>
+    </details>
+  );
 }
 
 function hasKind<T extends string>(
@@ -363,6 +467,7 @@ export function WorkbenchPanel({
   regenerationActive = false,
   regenerationMessage = "",
   regenerationError = null,
+  selectedRetrogradeBodies = [],
 }: WorkbenchPanelProps) {
   const { t } = useI18n();
   const payload = selectedNode?.payload;
@@ -412,6 +517,10 @@ export function WorkbenchPanel({
       ) : (
         <OverviewPanel snapshot={snapshot} />
       )}
+      <RetrogradeContextPanel
+        selectedBodies={selectedRetrogradeBodies}
+        snapshot={snapshot}
+      />
       {!worldlinePrimary ? (
         <WorldlinePanel
           canRegenerateWorldline={canRegenerateWorldline}

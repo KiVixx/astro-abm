@@ -192,6 +192,20 @@ const enumLabels: Record<string, LabelMap> = {
     low: "value.intensity.low",
     calm: "value.stress.calm",
   },
+  retrograde_phase: {
+    direct: "value.retrogradePhase.direct",
+    pre_station: "value.retrogradePhase.preStation",
+    retrograde_entry: "value.retrogradePhase.entry",
+    retrograde_core: "value.retrogradePhase.core",
+    retrograde_exit: "value.retrogradePhase.exit",
+    retrograde: "value.retrogradePhase.retrograde",
+    post_station: "value.retrogradePhase.postStation",
+    unknown: "value.common.unknown",
+  },
+  station_type: {
+    direct_to_retrograde: "value.stationType.directToRetrograde",
+    retrograde_to_direct: "value.stationType.retrogradeToDirect",
+  },
   agent_mood: {
     watchful: "value.mood.watchful",
     "narrative-sensitive": "value.mood.narrativeSensitive",

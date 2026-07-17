@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { AssetStressSentimentChart } from "./AssetStressSentimentChart";
+import { RetrogradeBodySelector } from "./RetrogradeBodySelector";
 import type { AssetStressSeries } from "@/lib/assetStressSentiment";
+import type { RetrogradeBody } from "@/lib/retrograde";
 import type { DailyScenarioSnapshot } from "@/lib/types";
 import {
   getDailyDataCoverage,
@@ -15,6 +17,8 @@ interface DailyTimelineRailProps {
   timeline: DailyScenarioSnapshot[];
   selectedDate: string;
   assetStressSeries: AssetStressSeries[];
+  selectedRetrogradeBodies: RetrogradeBody[];
+  onChangeRetrogradeBodies: (bodies: RetrogradeBody[]) => void;
   onSelectDate: (date: string) => void;
 }
 
@@ -93,6 +97,8 @@ function AssetStressAssetSelector({
 export function DailyTimelineRail({
   timeline,
   assetStressSeries,
+  selectedRetrogradeBodies,
+  onChangeRetrogradeBodies,
   selectedDate,
   onSelectDate,
 }: DailyTimelineRailProps) {
@@ -113,8 +119,6 @@ export function DailyTimelineRail({
     timeline.findIndex((snapshot) => snapshot.date === selectedDate),
   );
   const selectedSnapshot = timeline[selectedIndex] || timeline[0];
-  const previousSnapshot = timeline[selectedIndex - 1];
-  const nextSnapshot = timeline[selectedIndex + 1];
 
   useEffect(() => {
     setSelectedAssets((currentAssets) => {
@@ -207,6 +211,10 @@ export function DailyTimelineRail({
           selectedAssets={selectedAssets}
           series={assetStressSeries}
         />
+        <RetrogradeBodySelector
+          onChange={onChangeRetrogradeBodies}
+          selectedBodies={selectedRetrogradeBodies}
+        />
         <div className="button-row">
           <button
             className="button secondary"
@@ -221,22 +229,6 @@ export function DailyTimelineRail({
             type="button"
           >
             {t("workbench.scrollRight")}
-          </button>
-          <button
-            className="button secondary"
-            disabled={!previousSnapshot}
-            onClick={() => previousSnapshot && onSelectDate(previousSnapshot.date)}
-            type="button"
-          >
-            {t("workbench.previous")}
-          </button>
-          <button
-            className="button secondary"
-            disabled={!nextSnapshot}
-            onClick={() => nextSnapshot && onSelectDate(nextSnapshot.date)}
-            type="button"
-          >
-            {t("workbench.next")}
           </button>
         </div>
       </div>
@@ -253,8 +245,10 @@ export function DailyTimelineRail({
           <AssetStressSentimentChart
             onSelectDate={onSelectDate}
             selectedAssets={selectedAssets}
+            selectedRetrogradeBodies={selectedRetrogradeBodies}
             selectedDate={selectedDate}
             series={assetStressSeries}
+            timeline={timeline}
           />
           <div className="workbench-day-strip">
             {timeline.map((snapshot, snapshotIndex) => {

@@ -135,6 +135,29 @@ export interface DailyResearchSignals {
   data_quality: string;
 }
 
+export interface DailyRetrogradeBodyContext {
+  body: string;
+  phase: string;
+  is_retrograde?: boolean | null;
+  lon_speed_deg_day?: number | null;
+  nearest_station_type?: string | null;
+  nearest_station_ts?: string | null;
+  days_to_station_nearest?: number | null;
+  days_since_station?: number | null;
+  days_until_station?: number | null;
+  cycle_id?: string | null;
+  source: string;
+  data_quality: string;
+  notes: string[];
+}
+
+export interface DailyRetrogradeContext {
+  bodies: DailyRetrogradeBodyContext[];
+  source: string;
+  data_quality: string;
+  notes: string[];
+}
+
 export interface DailyAgentState {
   agent_id: string;
   agent_name: string;
@@ -168,6 +191,7 @@ export interface DailyScenarioSnapshot {
   market_context: DailyMarketContext;
   data_coverage?: DailyDataCoverage;
   research_signals?: DailyResearchSignals;
+  retrograde_context?: DailyRetrogradeContext;
   asset_contexts?: DailyAssetContext[];
   agent_states: DailyAgentState[];
   daily_risk_themes: string[];

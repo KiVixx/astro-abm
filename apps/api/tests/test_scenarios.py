@@ -21,6 +21,7 @@ from astro_abm_api.services.llm_client import (
 )
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
+from astro_abm_api.services.daily_research_context import DailyResearchContextProvider
 from astro_abm_api.services.scenario_store import report_to_summary
 from astro_abm_api.services.worldline_llm_prompts import (
     build_worldline_messages,
@@ -731,6 +732,20 @@ def test_future_date_uses_computed_ephemeris_without_market_observations(
     assert day["data_coverage"]["market_daily"] in {"missing", "future_placeholder"}
     assert "本機計算星曆" in day["daily_summary"]
     assert "天象日線可用天數：1" in report["markdown_report"]
+    retrograde = day["retrograde_context"]
+    assert [body["body"] for body in retrograde["bodies"]] == [
+        "Mercury",
+        "Venus",
+        "Mars",
+        "Jupiter",
+        "Saturn",
+        "Uranus",
+        "Neptune",
+        "Pluto",
+    ]
+    assert all(body["lon_speed_deg_day"] is not None for body in retrograde["bodies"])
+    assert all(body["source"] != "mock" for body in retrograde["bodies"])
+    assert "market causality" in retrograde["notes"][0]
 
 
 def test_llm_daily_context_includes_ephemeris_details(
@@ -773,6 +788,64 @@ def test_llm_daily_context_includes_ephemeris_details(
     assert all("lon_deg" in body for body in ephemeris["bodies"])
     assert all("lon_speed_deg_day" in body for body in ephemeris["bodies"])
     assert all("is_retrograde" in body for body in ephemeris["bodies"])
+
+
+def test_far_future_retrograde_context_computes_fresh_station_cycles(tmp_path: Path) -> None:
+    provider = DailyResearchContextProvider(output_root=tmp_path)
+
+    context = provider.context_for_date(
+        date(2030, 1, 1),
+        assets=["BTC"],
+        fallback_stress_regime="unknown",
+        fallback_volatility_regime="unknown",
+        fallback_liquidity_regime="unknown",
+        fallback_astro_activity="unknown",
+    )
+
+    mercury = next(
+        body for body in context.retrograde_context.bodies if body.body == "Mercury"
+    )
+    assert mercury.is_retrograde is True
+    assert mercury.phase in {"retrograde_entry", "retrograde_core", "retrograde_exit"}
+    assert mercury.days_to_station_nearest is not None
+    assert mercury.days_to_station_nearest < 100
+    assert mercury.cycle_id and "2030" in mercury.cycle_id
+    assert "computed_station_cycles" in mercury.source
+    assert mercury.data_quality == "computed_station_and_position"
+
+
+def test_retrograde_context_fills_missing_upcoming_buffer_station(tmp_path: Path) -> None:
+    astro_dir = tmp_path / "parquet/astro_daily_1926_2025"
+    astro_dir.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "body": ["Uranus"],
+            "cycle_id": ["Uranus_20250906_20260204"],
+            "station_in_ts": [pd.Timestamp("2025-09-06T04:50:44Z")],
+            "station_out_ts": [pd.Timestamp("2026-02-04T02:33:37Z")],
+            "pre_window_start_ts": [pd.Timestamp("2025-08-23T00:00:00Z")],
+            "post_window_end_ts": [pd.Timestamp("2026-02-18T00:00:00Z")],
+            "station_phase_days": [7],
+        }
+    ).to_parquet(astro_dir / "astro_retrograde_cycles.parquet", index=False)
+    provider = DailyResearchContextProvider(output_root=tmp_path)
+
+    context = provider.context_for_date(
+        date(2026, 7, 18),
+        assets=["BTC"],
+        fallback_stress_regime="unknown",
+        fallback_volatility_regime="unknown",
+        fallback_liquidity_regime="unknown",
+        fallback_astro_activity="unknown",
+    )
+
+    uranus = next(
+        body for body in context.retrograde_context.bodies if body.body == "Uranus"
+    )
+    assert uranus.nearest_station_type == "direct_to_retrograde"
+    assert uranus.days_to_station_nearest is not None
+    assert uranus.days_to_station_nearest < 100
+    assert "computed_station_cycles" in uranus.source
 
 
 def test_llm_user_prompt_is_sent_to_llm_context_but_not_saved(
@@ -973,6 +1046,7 @@ def test_old_daily_timeline_without_research_fields_loads(
     report["scenario_id"] = scenario_id
     report["daily_timeline"][0].pop("data_coverage")
     report["daily_timeline"][0].pop("research_signals")
+    report["daily_timeline"][0].pop("retrograde_context")
     (tmp_path / f"{scenario_id}.json").write_text(json.dumps(report), encoding="utf-8")
 
     get_response = client.get(f"/scenarios/{scenario_id}")
@@ -981,6 +1055,8 @@ def test_old_daily_timeline_without_research_fields_loads(
     loaded_day = get_response.json()["daily_timeline"][0]
     assert loaded_day["data_coverage"]["source"] == "legacy_report"
     assert loaded_day["research_signals"]["data_quality"] == "unknown"
+    assert loaded_day["retrograde_context"]["source"] == "legacy_report"
+    assert loaded_day["retrograde_context"]["bodies"] == []
 
 
 def test_scenario_uses_local_research_context_when_available(
@@ -1028,6 +1104,15 @@ def test_scenario_uses_local_research_context_when_available(
     assert "elevated_stress_review" in day["daily_risk_themes"]
     assert "stress_stress_review" not in day["daily_risk_themes"]
     assert "stress stress" not in day["agent_states"][0]["likely_reaction"]
+    mercury = next(
+        body for body in day["retrograde_context"]["bodies"] if body["body"] == "Mercury"
+    )
+    assert mercury["phase"] == "retrograde_entry"
+    assert mercury["is_retrograde"] is True
+    assert mercury["nearest_station_type"] == "direct_to_retrograde"
+    assert mercury["days_to_station_nearest"] == 2
+    assert mercury["cycle_id"] == "Mercury_20260629_20260723"
+    assert mercury["data_quality"] == "canonical_station_computed_position"
     assert "local research" in report["markdown_report"]
 
 
@@ -2770,8 +2855,24 @@ def _write_minimal_research_context(root: Path) -> None:
             "station_cluster_count_7d": [2],
             "major_aspect_cluster_count_7d": [3],
             "moon_phase_name": ["FullMoonZone"],
+            "mercury_phase": ["retrograde_entry"],
+            "mercury_is_retrograde": [True],
+            "mercury_days_since_station": [2],
+            "mercury_days_until_station": [22],
+            "mercury_cycle_id": ["Mercury_20260629_20260723"],
         }
     ).to_parquet(astro_dir / "astro_daily_features.parquet", index=False)
+    pd.DataFrame(
+        {
+            "station_in_ts": [pd.Timestamp("2026-06-29T12:00:00Z")],
+            "station_out_ts": [pd.Timestamp("2026-07-23T18:00:00Z")],
+            "pre_window_start_ts": [pd.Timestamp("2026-06-15T00:00:00Z")],
+            "post_window_end_ts": [pd.Timestamp("2026-08-06T00:00:00Z")],
+            "station_phase_days": [7],
+            "body": ["Mercury"],
+            "cycle_id": ["Mercury_20260629_20260723"],
+        }
+    ).to_parquet(astro_dir / "astro_retrograde_cycles.parquet", index=False)
     pd.DataFrame(
         {
             "ts": [ts],

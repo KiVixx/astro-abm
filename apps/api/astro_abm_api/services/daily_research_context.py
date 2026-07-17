@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from astro_abm_api.models.report import DailyDataCoverage, DailyResearchSignals
+from astro_abm_api.models.report import (
+    DailyDataCoverage,
+    DailyResearchSignals,
+    DailyRetrogradeBodyContext,
+    DailyRetrogradeContext,
+)
 
 
 RESEARCH_OUTPUT_ROOT_ENV = "ASTRO_ABM_RESEARCH_OUTPUT_ROOT"
@@ -45,6 +51,7 @@ MAJOR_ASPECTS = {
 class DailyResearchContext:
     coverage: DailyDataCoverage
     signals: DailyResearchSignals
+    retrograde_context: DailyRetrogradeContext
 
 
 def repo_root() -> Path:
@@ -168,7 +175,177 @@ class DailyResearchContextProvider:
                 astro_activity=astro_activity,
                 data_quality=data_quality,
             ),
+            retrograde_context=self._retrograde_context_for_date(current_date, astro),
         )
+
+    def _retrograde_context_for_date(
+        self,
+        current_date: date,
+        astro_row: dict[str, Any] | None,
+    ) -> DailyRetrogradeContext:
+        computed = self._computed_ephemeris_row(current_date)
+        details = computed.get("_ephemeris_details", {}) if computed else {}
+        positions = {
+            str(item.get("body")): item
+            for item in details.get("bodies", [])
+            if isinstance(item, dict) and item.get("body")
+        }
+        cycles = _cycles_with_computed_fallback(current_date, self._retrograde_cycles())
+        bodies = [
+            self._retrograde_body_context(
+                current_date,
+                body=body,
+                astro_row=astro_row,
+                position=positions.get(body),
+                cycles=cycles,
+            )
+            for body in RETROGRADE_BODIES
+        ]
+        has_station_cycles = any(item.cycle_id or item.nearest_station_ts for item in bodies)
+        has_positions = all(item.lon_speed_deg_day is not None for item in bodies)
+        if has_positions and has_station_cycles:
+            source = "retrograde_cycles_and_computed_ephemeris"
+            quality = "station_timing_with_computed_position"
+        elif has_positions:
+            source = "computed_ephemeris"
+            quality = "computed_position_only"
+        elif has_station_cycles:
+            source = "local_retrograde_cycles"
+            quality = "canonical_station_only"
+        else:
+            source = "unavailable"
+            quality = "missing"
+        notes = [
+            "Retrograde context is astronomical timing context only and does not imply market causality.",
+        ]
+        if not has_station_cycles:
+            notes.append(
+                "Canonical station-cycle coverage was unavailable; station and cycle fields remain empty."
+            )
+        if not has_positions:
+            notes.append(
+                "Swiss Ephemeris position calculation was unavailable; no position values were invented."
+            )
+        return DailyRetrogradeContext(
+            bodies=bodies,
+            source=source,
+            data_quality=quality,
+            notes=notes,
+        )
+
+    def _retrograde_body_context(
+        self,
+        current_date: date,
+        *,
+        body: str,
+        astro_row: dict[str, Any] | None,
+        position: dict[str, Any] | None,
+        cycles: list[dict[str, Any]],
+    ) -> DailyRetrogradeBodyContext:
+        body_key = body.lower()
+        speed = _float_value(position.get("lon_speed_deg_day")) if position else None
+        is_retrograde = bool(position.get("is_retrograde")) if position else None
+        phase = _clean_symbol(astro_row.get(f"{body_key}_phase")) if astro_row else None
+        cycle_id = _clean_symbol(astro_row.get(f"{body_key}_cycle_id")) if astro_row else None
+        matching_cycle = _cycle_for_day(current_date, body, cycles, cycle_id=cycle_id)
+        if phase is None and matching_cycle is not None:
+            phase = _phase_from_cycle(current_date, matching_cycle)
+            cycle_id = _clean_symbol(matching_cycle.get("cycle_id"))
+        if phase is None:
+            phase = "retrograde" if is_retrograde else "direct" if is_retrograde is not None else "unknown"
+
+        station_events = _station_events_for_body(body, cycles)
+        previous = [event for event in station_events if event[0].date() <= current_date]
+        upcoming = [event for event in station_events if event[0].date() >= current_date]
+        nearest = min(
+            station_events,
+            key=lambda event: abs((event[0].date() - current_date).days),
+            default=None,
+        )
+        days_since = (current_date - previous[-1][0].date()).days if previous else None
+        days_until = (upcoming[0][0].date() - current_date).days if upcoming else None
+        source_parts: list[str] = []
+        uses_computed_station = bool(
+            matching_cycle and matching_cycle.get("_computed_station_cycle")
+        ) or any(
+            str(cycle.get("body")) == body and cycle.get("_computed_station_cycle")
+            for cycle in cycles
+        )
+        if position:
+            source_parts.append("computed_swiss_ephemeris")
+        if matching_cycle or nearest:
+            source_parts.append(
+                "computed_station_cycles"
+                if uses_computed_station
+                else "astro_retrograde_cycles"
+            )
+        source = "+".join(source_parts) or "unavailable"
+        quality = (
+            "computed_station_and_position"
+            if position and uses_computed_station
+            else "canonical_station_computed_position"
+            if position and (matching_cycle or nearest)
+            else "computed_position_only"
+            if position
+            else "computed_station_only"
+            if uses_computed_station
+            else "canonical_station_only"
+            if matching_cycle or nearest
+            else "missing"
+        )
+        notes: list[str] = []
+        if matching_cycle is None and is_retrograde:
+            notes.append(
+                "Position speed indicates retrograde motion, but no canonical cycle covers this date."
+            )
+        return DailyRetrogradeBodyContext(
+            body=body,
+            phase=phase,
+            is_retrograde=is_retrograde,
+            lon_speed_deg_day=speed,
+            nearest_station_type=nearest[1] if nearest else None,
+            nearest_station_ts=nearest[0] if nearest else None,
+            days_to_station_nearest=(
+                abs((nearest[0].date() - current_date).days) if nearest else None
+            ),
+            days_since_station=days_since,
+            days_until_station=days_until,
+            cycle_id=cycle_id,
+            source=source,
+            data_quality=quality,
+            notes=notes,
+        )
+
+    def _retrograde_cycles(self) -> list[dict[str, Any]]:
+        table_name = "astro_retrograde_cycles"
+        if table_name in self._tables:
+            cached = self._tables[table_name]
+            return cached if isinstance(cached, list) else []
+        path = self._retrograde_cycles_path()
+        if path is None:
+            self._tables[table_name] = []
+            return []
+        try:
+            import pandas as pd
+
+            frame = pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path)
+            rows = frame.to_dict("records")
+        except Exception:
+            rows = []
+        self._tables[table_name] = rows
+        return rows
+
+    def _retrograde_cycles_path(self) -> Path | None:
+        candidates = (
+            self.output_root / "parquet/astro_daily_1926_2025/astro_retrograde_cycles.parquet",
+            self.output_root / "parquet/astro_daily_1926_2025/astro_retrograde_cycles.csv",
+            self.output_root / "parquet/astro_daily/astro_retrograde_cycles.parquet",
+            self.output_root / "parquet/astro_daily/astro_retrograde_cycles.csv",
+        )
+        for path in candidates:
+            if path.exists() and path.stat().st_size > 0:
+                return path
+        return None
 
     def _coverage_notes(self, coverage: DailyDataCoverage) -> list[str]:
         notes: list[str] = []
@@ -330,6 +507,214 @@ def _float_value(value: Any) -> float | None:
     if number != number:
         return None
     return number
+
+
+def _as_utc_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text or text == "nan":
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _station_events_for_body(
+    body: str,
+    cycles: list[dict[str, Any]],
+) -> list[tuple[datetime, str]]:
+    events: dict[tuple[datetime, str], None] = {}
+    for cycle in cycles:
+        if str(cycle.get("body")) != body:
+            continue
+        station_in = _as_utc_datetime(cycle.get("station_in_ts"))
+        station_out = _as_utc_datetime(cycle.get("station_out_ts"))
+        if station_in:
+            events[(station_in, "direct_to_retrograde")] = None
+        if station_out:
+            events[(station_out, "retrograde_to_direct")] = None
+    return sorted(events, key=lambda event: event[0])
+
+
+def _cycle_for_day(
+    current_date: date,
+    body: str,
+    cycles: list[dict[str, Any]],
+    *,
+    cycle_id: str | None,
+) -> dict[str, Any] | None:
+    body_cycles = [cycle for cycle in cycles if str(cycle.get("body")) == body]
+    if cycle_id:
+        exact = next(
+            (cycle for cycle in body_cycles if str(cycle.get("cycle_id")) == cycle_id),
+            None,
+        )
+        if exact is not None:
+            return exact
+    for cycle in body_cycles:
+        window_start = _as_utc_datetime(cycle.get("pre_window_start_ts"))
+        window_end = _as_utc_datetime(cycle.get("post_window_end_ts"))
+        if window_start and window_end and window_start.date() <= current_date <= window_end.date():
+            return cycle
+    return None
+
+
+def _phase_from_cycle(current_date: date, cycle: dict[str, Any]) -> str:
+    station_in = _as_utc_datetime(cycle.get("station_in_ts"))
+    station_out = _as_utc_datetime(cycle.get("station_out_ts"))
+    pre_start = _as_utc_datetime(cycle.get("pre_window_start_ts"))
+    post_end = _as_utc_datetime(cycle.get("post_window_end_ts"))
+    if station_in is None or station_out is None:
+        return "unknown"
+    station_phase_days = int(_float_value(cycle.get("station_phase_days")) or 7)
+    station_in_date = station_in.date()
+    station_out_date = station_out.date()
+    if station_in_date <= current_date <= station_in_date + timedelta(days=station_phase_days):
+        return "retrograde_entry"
+    if station_out_date - timedelta(days=station_phase_days) <= current_date <= station_out_date:
+        return "retrograde_exit"
+    if station_in_date < current_date < station_out_date:
+        return "retrograde_core"
+    if pre_start and pre_start.date() <= current_date < station_in_date:
+        return "pre_station"
+    if post_end and station_out_date < current_date <= post_end.date():
+        return "post_station"
+    return "direct"
+
+
+def _cycles_with_computed_fallback(
+    current_date: date,
+    cycles: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    supplemented = list(cycles)
+    computed: list[dict[str, Any]] | None = None
+    for body in RETROGRADE_BODIES:
+        events = _station_events_for_body(body, cycles)
+        has_previous = any(event[0].date() <= current_date for event in events)
+        has_upcoming = any(event[0].date() >= current_date for event in events)
+        nearest_distance = min(
+            (abs((event[0].date() - current_date).days) for event in events),
+            default=10_000,
+        )
+        if has_previous and has_upcoming and nearest_distance <= 400:
+            continue
+        if computed is None:
+            computed = list(_computed_retrograde_cycles(current_date.year))
+        supplemented.extend(
+            cycle for cycle in computed if str(cycle.get("body")) == body
+        )
+    return supplemented
+
+
+@lru_cache(maxsize=12)
+def _computed_retrograde_cycles(anchor_year: int) -> tuple[dict[str, Any], ...]:
+    import swisseph as swe
+
+    body_ids = {
+        "Mercury": swe.MERCURY,
+        "Venus": swe.VENUS,
+        "Mars": swe.MARS,
+        "Jupiter": swe.JUPITER,
+        "Saturn": swe.SATURN,
+        "Uranus": swe.URANUS,
+        "Neptune": swe.NEPTUNE,
+        "Pluto": swe.PLUTO,
+    }
+    start = datetime(anchor_year - 1, 1, 1, tzinfo=UTC)
+    end = datetime(anchor_year + 2, 1, 1, tzinfo=UTC)
+    rows: list[dict[str, Any]] = []
+    for body in RETROGRADE_BODIES:
+        events: list[tuple[datetime, str]] = []
+        left = start
+        left_speed = _swe_longitude_speed(swe, body_ids[body], left)
+        while left < end:
+            right = min(left + timedelta(days=1), end)
+            right_speed = _swe_longitude_speed(swe, body_ids[body], right)
+            if _speed_sign_changed(left_speed, right_speed):
+                exact = _refine_swe_station(
+                    swe,
+                    body_ids[body],
+                    left,
+                    right,
+                    left_speed,
+                    tolerance_seconds=60,
+                )
+                station_type = (
+                    "direct_to_retrograde"
+                    if left_speed >= 0 and right_speed < 0
+                    else "retrograde_to_direct"
+                )
+                events.append((exact, station_type))
+            left = right
+            left_speed = right_speed
+
+        pending_in: datetime | None = None
+        for exact, station_type in events:
+            if station_type == "direct_to_retrograde":
+                pending_in = exact
+                continue
+            if pending_in is None or pending_in >= exact:
+                continue
+            rows.append(
+                {
+                    "body": body,
+                    "cycle_id": f"{body}_{pending_in:%Y%m%d}_{exact:%Y%m%d}",
+                    "station_in_ts": pending_in,
+                    "station_out_ts": exact,
+                    "pre_window_start_ts": pending_in - timedelta(days=14),
+                    "post_window_end_ts": exact + timedelta(days=14),
+                    "station_phase_days": 7,
+                    "_computed_station_cycle": True,
+                }
+            )
+            pending_in = None
+    return tuple(rows)
+
+
+def _swe_longitude_speed(swe: Any, body_id: int, timestamp: datetime) -> float:
+    _jd_et, jd_ut = swe.utc_to_jd(
+        timestamp.year,
+        timestamp.month,
+        timestamp.day,
+        timestamp.hour,
+        timestamp.minute,
+        timestamp.second,
+        swe.GREG_CAL,
+    )
+    values, _ = swe.calc_ut(jd_ut, body_id, swe.FLG_SWIEPH | swe.FLG_SPEED)
+    return float(values[3])
+
+
+def _speed_sign_changed(left: float, right: float) -> bool:
+    return left == 0 or right == 0 or (left < 0 < right) or (right < 0 < left)
+
+
+def _refine_swe_station(
+    swe: Any,
+    body_id: int,
+    left: datetime,
+    right: datetime,
+    left_speed: float,
+    *,
+    tolerance_seconds: int,
+) -> datetime:
+    while (right - left).total_seconds() > tolerance_seconds:
+        midpoint = left + (right - left) / 2
+        midpoint_speed = _swe_longitude_speed(swe, body_id, midpoint)
+        if _speed_sign_changed(left_speed, midpoint_speed):
+            right = midpoint
+        else:
+            left = midpoint
+            left_speed = midpoint_speed
+    return left + (right - left) / 2
 
 
 def _volatility_regime_from_stress(row: dict[str, Any], fallback: str) -> str:
