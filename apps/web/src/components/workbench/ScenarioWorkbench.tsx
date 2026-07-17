@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ContextCoverageSummaryCard } from "../ContextCoverageSummaryCard";
 import { LlmScenarioReportCard } from "../LlmScenarioReportCard";
 import { DailyGraphCanvas } from "./DailyGraphCanvas";
@@ -148,6 +148,18 @@ export function ScenarioWorkbench({
     }
     return { chunkIndex, nextDate };
   }, [currentReport.worldline_simulation, fullTimeline.length]);
+
+  useEffect(() => {
+    if (!selectedSnapshot || typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("date") === selectedSnapshot.date) {
+      return;
+    }
+    url.searchParams.set("date", selectedSnapshot.date);
+    window.history.replaceState(window.history.state, "", url);
+  }, [selectedSnapshot]);
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
