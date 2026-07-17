@@ -170,12 +170,19 @@ export function ScenarioWorkbench({
     return Math.floor(selectedIndex / chunkSize);
   }, [currentReport.worldline_simulation, selectedIndex, selectedSnapshot, selectedWorldlineDay]);
 
+  const selectedAtHaltedChunk = Boolean(
+    haltedGeneration
+      && selectedSnapshot
+      && selectedSnapshot.date >= haltedGeneration.startDate
+      && selectedSnapshot.date <= haltedGeneration.endDate,
+  );
+
   const openRegenerationSettings = () => {
     const targetChunkIndex = interruptedRegeneration?.chunkIndex
-      ?? haltedGeneration?.chunkIndex
+      ?? (selectedAtHaltedChunk ? haltedGeneration?.chunkIndex : null)
       ?? selectedChunkIndex;
     const targetDate = interruptedRegeneration?.nextDate
-      ?? haltedGeneration?.startDate
+      ?? (selectedAtHaltedChunk ? haltedGeneration?.startDate : null)
       ?? selectedDate;
     if (!fullTimeline.length || targetChunkIndex === null) {
       return;
@@ -255,44 +262,63 @@ export function ScenarioWorkbench({
         </div>
       </header>
 
-      {isWorldline ? (
-        <section className="worldline-playback-bar">
-          <strong>{t("worldline.playback")}</strong>
-          <button
-            className="button secondary"
-            disabled={!previousSnapshot}
-            onClick={() => previousSnapshot && selectDate(previousSnapshot.date)}
-            type="button"
-          >
-            {t("workbench.previous")}
-          </button>
-          <span className="worldline-playback-date">{selectedSnapshot.date}</span>
-          <span className="worldline-playback-index">
-            {selectedIndex + 1}/{timeline.length}
-          </span>
-          <button
-            className="button secondary"
-            disabled={!nextSnapshot}
-            onClick={() => nextSnapshot && selectDate(nextSnapshot.date)}
-            type="button"
-          >
-            {t("workbench.next")}
-          </button>
-        </section>
-      ) : null}
-
       <main className="workbench-layout">
-        <DailyGraphCanvas
-          graph={graph}
-          nextDate={nextSnapshot?.date}
-          onSelectDate={selectDate}
-          onSelectEdge={setSelectedEdgeId}
-          onSelectNode={setSelectedNodeId}
-          previousDate={previousSnapshot?.date}
-          selectedDate={selectedSnapshot.date}
-          selectedEdgeId={selectedEdgeId}
-          selectedNodeId={selectedNodeId}
-        />
+        <div className="workbench-primary-column">
+          {isWorldline ? (
+            <section className="worldline-playback-bar">
+              <strong>{t("worldline.playback")}</strong>
+              <button
+                className="button secondary"
+                disabled={!previousSnapshot}
+                onClick={() => previousSnapshot && selectDate(previousSnapshot.date)}
+                type="button"
+              >
+                {t("workbench.previous")}
+              </button>
+              <span className="worldline-playback-date">{selectedSnapshot.date}</span>
+              <span className="worldline-playback-index">
+                {selectedIndex + 1}/{timeline.length}
+              </span>
+              <button
+                className="button secondary"
+                disabled={!nextSnapshot}
+                onClick={() => nextSnapshot && selectDate(nextSnapshot.date)}
+                type="button"
+              >
+                {t("workbench.next")}
+              </button>
+            </section>
+          ) : null}
+
+          <DailyTimelineRail
+            assetStressSeries={assetStressSeries}
+            onSelectDate={selectDate}
+            selectedDate={selectedSnapshot.date}
+            timeline={timeline}
+          />
+
+          <section className="workbench-supporting-data">
+            <ContextCoverageSummaryCard
+              compact
+              coverageSummary={currentReport.coverage_summary}
+            />
+            {!isWorldline ? (
+              <LlmScenarioReportCard compact llmReport={currentReport.llm_report} />
+            ) : null}
+          </section>
+
+          <DailyGraphCanvas
+            graph={graph}
+            nextDate={nextSnapshot?.date}
+            onSelectDate={selectDate}
+            onSelectEdge={setSelectedEdgeId}
+            onSelectNode={setSelectedNodeId}
+            previousDate={previousSnapshot?.date}
+            selectedDate={selectedSnapshot.date}
+            selectedEdgeId={selectedEdgeId}
+            selectedNodeId={selectedNodeId}
+          />
+        </div>
         <WorkbenchPanel
           graph={graph}
           selectedEdge={selectedEdge}
@@ -303,28 +329,13 @@ export function ScenarioWorkbench({
           onRegenerateWorldline={isWorldline ? openRegenerationSettings : undefined}
           canRegenerateWorldline={isWorldline && (interruptedRegeneration !== null || selectedChunkIndex !== null)}
           resumeRegeneration={interruptedRegeneration !== null}
-          retryHaltedGeneration={haltedGeneration !== null}
+          retryHaltedGeneration={selectedAtHaltedChunk}
           regenerationError={null}
           regenerationMessage=""
           regenerationActive={false}
           worldlinePrimary={isWorldline}
         />
       </main>
-
-      <DailyTimelineRail
-        assetStressSeries={assetStressSeries}
-        onSelectDate={selectDate}
-        selectedDate={selectedSnapshot.date}
-        timeline={timeline}
-      />
-
-      <section className="workbench-supporting-data">
-        <ContextCoverageSummaryCard
-          compact
-          coverageSummary={currentReport.coverage_summary}
-        />
-        {!isWorldline ? <LlmScenarioReportCard compact llmReport={currentReport.llm_report} /> : null}
-      </section>
     </div>
   );
 }

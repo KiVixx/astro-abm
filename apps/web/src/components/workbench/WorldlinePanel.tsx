@@ -327,7 +327,7 @@ function WorldlineReviewHeader({
           </div>
         </div>
       ) : null}
-      {Boolean(provenance.generation_halted) ? (
+      {Boolean(provenance.generation_halted) && retryHaltedGeneration ? (
         <p className="notice warning">
           <strong>{t("worldline.generationHalted")}</strong>
           <br />
