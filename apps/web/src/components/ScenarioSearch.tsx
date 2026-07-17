@@ -18,6 +18,7 @@ export function ScenarioSearch({ scenarios }: { scenarios: ScenarioSummary[] }) 
     }
     return scenarioItems.filter((scenario) => {
       const haystack = [
+        scenario.scenario_id,
         scenario.title,
         scenario.description || "",
         scenario.visibility,

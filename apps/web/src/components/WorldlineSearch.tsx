@@ -49,6 +49,7 @@ export function WorldlineSearch({
         return true;
       }
       const haystack = [
+        report.scenario_id,
         report.title,
         report.description || "",
         report.worldline_status || "",
