@@ -4153,6 +4153,18 @@ pre {
     min-height: 480px;
   }
 
+  .force-graph-node .node-label {
+    font-size: 17px;
+  }
+
+  .force-graph-node .node-subtitle {
+    display: none;
+  }
+
+  .force-graph-node.is-selected .node-subtitle {
+    display: block;
+  }
+
   .workbench-graph-card.is-expanded {
     inset: 4px;
     padding: 12px;
