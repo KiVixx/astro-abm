@@ -28,12 +28,15 @@ interface ScenarioWorkbenchProps {
 function getInitialSnapshot(
   timeline: DailyScenarioSnapshot[],
   initialDate?: string,
+  fallbackDate?: string,
 ): DailyScenarioSnapshot | null {
   if (!timeline.length) {
     return null;
   }
   if (initialDate) {
-    return timeline.find((snapshot) => snapshot.date === initialDate) || timeline[0];
+    return timeline.find((snapshot) => snapshot.date === initialDate)
+      || timeline.find((snapshot) => snapshot.date === fallbackDate)
+      || timeline[0];
   }
   return timeline[0];
 }
@@ -92,7 +95,11 @@ export function ScenarioWorkbench({
   );
   const preferredInitialDate = initialDate
     || (isWorldline ? haltedGeneration?.startDate : undefined);
-  const initialSnapshot = getInitialSnapshot(timeline, preferredInitialDate);
+  const initialSnapshot = getInitialSnapshot(
+    timeline,
+    preferredInitialDate,
+    haltedGeneration?.startDate,
+  );
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
