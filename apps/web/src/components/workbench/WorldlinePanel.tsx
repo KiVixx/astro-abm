@@ -8,7 +8,7 @@ import type {
   WorldlineState,
 } from "@/lib/types";
 import { worldlineGenerationMode } from "@/lib/worldline";
-import { formatAgentName } from "@/i18n/labels";
+import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import {
   worldlineDisplayStatus,
@@ -172,15 +172,19 @@ function WorldlineProvenanceTags({
         {String(provenance.chunk_size_days || "n/a")}
       </span>
       <span className="tag">
-        {t("worldline.chunkStatus")}: {worldlineDisplayStatus(simulation)}
+        {t("worldline.chunkStatus")}: {formatEnumLabel(
+          t,
+          "worldline_status",
+          worldlineDisplayStatus(simulation),
+        )}
       </span>
       <span className="tag">
         {t("worldline.continuityStatus")}:{" "}
-        {simulation.continuity_status === "consistent"
-          ? t("worldline.consistent")
-          : simulation.continuity_status === "rebuilding"
-            ? t("worldline.rebuilding")
-          : String(simulation.continuity_status || "legacy_unknown")}
+        {formatEnumLabel(
+          t,
+          "continuity_status",
+          simulation.continuity_status || "legacy_unknown",
+        )}
       </span>
       <span className="tag">
         {t("worldline.failedChunks")}:{" "}
@@ -344,7 +348,11 @@ function WorldlineReviewHeader({
       </div>
       <div className="tag-row">
         <span className="tag">
-          {t("worldline.selectedDaySource")}: {selectedDay.generation_source || "unknown"}
+            {t("worldline.selectedDaySource")}: {formatEnumLabel(
+              t,
+              "generation_source",
+              selectedDay.generation_source || "unknown",
+            )}
         </span>
         {selectedDay.chunk_index ? (
           <span className="tag">
@@ -353,7 +361,11 @@ function WorldlineReviewHeader({
         ) : null}
         {selectedDay.chunk_status ? (
           <span className="tag">
-            {t("worldline.chunkStatus")}: {selectedDay.chunk_status}
+            {t("worldline.chunkStatus")}: {formatEnumLabel(
+              t,
+              "chunk_status",
+              selectedDay.chunk_status,
+            )}
           </span>
         ) : null}
         {selectedAttemptCount > 0 ? (
@@ -376,7 +388,9 @@ function WorldlineReviewHeader({
                   <span className="tag">
                     {String(chunk.chunk_start_date || "?")} → {String(chunk.chunk_end_date || "?")}
                   </span>
-                  <span className="tag">{String(chunk.status || "unknown")}</span>
+                  <span className="tag">
+                    {formatEnumLabel(t, "chunk_status", String(chunk.status || "unknown"))}
+                  </span>
                   <span className="tag">
                     {String(chunk.output_validation_status || "unknown")}
                   </span>

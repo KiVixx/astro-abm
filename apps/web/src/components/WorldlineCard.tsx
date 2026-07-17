@@ -49,7 +49,7 @@ export function WorldlineCard({
         <div className="worldline-record-signals">
           <span className="worldline-status-signal">
             <i aria-hidden="true" />
-            {t("worldline.status")}: {status}
+            {t("worldline.status")}: {formatEnumLabel(t, "worldline_status", status)}
           </span>
           <span>{t("worldline.mode")}: {generationModeLabel}</span>
           <span>{t("worldline.dayCount")}: {report.worldline_day_count || 0}</span>

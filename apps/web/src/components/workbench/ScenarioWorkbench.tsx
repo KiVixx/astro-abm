@@ -229,7 +229,11 @@ export function ScenarioWorkbench({
             {isWorldline && currentReport.worldline_simulation ? (
               <>
                 <span className="tag">
-                  {t("worldline.status")}: {worldlineDisplayStatus(currentReport.worldline_simulation)}
+                  {t("worldline.status")}: {formatEnumLabel(
+                    t,
+                    "worldline_status",
+                    worldlineDisplayStatus(currentReport.worldline_simulation),
+                  )}
                 </span>
                 <span className="tag">
                   {t("worldline.dayCount")}: {selectedIndex + 1}/
