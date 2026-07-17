@@ -68,6 +68,10 @@ export function ScenarioForm({
   const { language: uiLanguage, t } = useI18n();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [defaultDateRange] = useState(() => getDefaultScenarioDateRange());
+  const [title, setTitle] = useState(() => getDefaultScenarioTitle(uiLanguage));
+  const [description, setDescription] = useState(() => getDefaultScenarioDescription(uiLanguage));
+  const [hasEditedTitle, setHasEditedTitle] = useState(false);
+  const [hasEditedDescription, setHasEditedDescription] = useState(false);
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>(uiLanguage);
   const [hasManualLanguageOverride, setHasManualLanguageOverride] = useState(false);
   const [llmPresets, setLlmPresets] = useState<LlmPresetSummary[]>(initialLlmPresets);
@@ -92,6 +96,15 @@ export function ScenarioForm({
       setReportLanguage(uiLanguage);
     }
   }, [hasManualLanguageOverride, uiLanguage]);
+
+  useEffect(() => {
+    if (!hasEditedTitle) {
+      setTitle(getDefaultScenarioTitle(uiLanguage));
+    }
+    if (!hasEditedDescription) {
+      setDescription(getDefaultScenarioDescription(uiLanguage));
+    }
+  }, [hasEditedDescription, hasEditedTitle, uiLanguage]);
 
   const progressPct =
     progress.totalChunks > 0
@@ -413,14 +426,22 @@ export function ScenarioForm({
           <input
             name="title"
             required
-            defaultValue={getDefaultScenarioTitle(uiLanguage)}
+            onChange={(event) => {
+              setHasEditedTitle(true);
+              setTitle(event.target.value);
+            }}
+            value={title}
           />
         </label>
         <label className="form-field full">
           <span>{t("scenarioCreate.formDescription")}</span>
           <textarea
             name="description"
-            defaultValue={getDefaultScenarioDescription(uiLanguage)}
+            onChange={(event) => {
+              setHasEditedDescription(true);
+              setDescription(event.target.value);
+            }}
+            value={description}
           />
         </label>
         <label className="form-field">
