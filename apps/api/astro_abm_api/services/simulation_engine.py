@@ -62,9 +62,13 @@ def create_scenario_id(title: str, now: datetime | None = None) -> str:
 
 def build_agent_output(agent: AgentProfile, language: ReportLanguage = "en") -> AgentOutput:
     if language == "zh-Hant":
+        agent_name = _agent_name_for_language(agent, language)
+        category = _zh_agent_category(agent.category)
+        time_horizon = _zh_time_horizon(agent.time_horizon)
+        decision_style = _zh_decision_style(agent.decision_style)
         behavior = (
-            f"{agent.name} 被建模為 {agent.category} 參與者，時間視角為 "
-            f"{agent.time_horizon}，決策風格為 {agent.decision_style}。"
+            f"{agent_name} 被建模為{category}參與者，時間視角為"
+            f"{time_horizon}，決策風格為{decision_style}。"
             "在此 MVP 中，代理群體會把壓力狀態、市場波動、宏觀脈絡、"
             "流動性壓力與天象敘事作為情境輸入來審視。"
         )
@@ -93,6 +97,8 @@ def build_agent_output(agent: AgentProfile, language: ReportLanguage = "en") -> 
             "代理行為是原型化描述，只應作為情境視角檢視。",
         ]
     else:
+        agent_name = agent.name
+        category = agent.category
         behavior = (
             f"{agent.name} is modeled as a {agent.category} participant with "
             f"{agent.time_horizon} horizon and {agent.decision_style} behavior. "
@@ -130,8 +136,8 @@ def build_agent_output(agent: AgentProfile, language: ReportLanguage = "en") -> 
 
     return AgentOutput(
         agent_id=agent.agent_id,
-        agent_name=agent.name,
-        role=agent.category,
+        agent_name=agent_name,
+        role=category,
         behavior_summary=behavior,
         risk_appetite=agent.risk_tolerance,
         likely_reaction=likely_reaction,
@@ -208,7 +214,7 @@ def build_daily_agent_state(
 
     return DailyAgentState(
         agent_id=agent.agent_id,
-        agent_name=agent.name,
+        agent_name=_agent_name_for_language(agent, language),
         mood=mood,
         risk_appetite=agent.risk_tolerance,
         likely_reaction=likely_reaction,
@@ -245,6 +251,51 @@ def _zh_astro_tag(value: str) -> str:
     if value.startswith("astro_activity:"):
         return f"天象活動：{_zh_context_label(value.split(':', 1)[1])}"
     return value.replace("_", " ")
+
+
+def _agent_name_for_language(agent: AgentProfile, language: ReportLanguage) -> str:
+    if language != "zh-Hant":
+        return agent.name
+    return {
+        "crypto_retail_fomo": "加密散戶 FOMO 群體",
+        "long_term_holder": "長期持有者",
+        "leveraged_trader": "槓桿交易者",
+        "macro_allocator": "宏觀配置者",
+        "big_tech_company_type": "大型科技公司類型",
+        "global_bank_type": "全球銀行類型",
+        "energy_company_type": "能源公司類型",
+    }.get(agent.agent_id, agent.name)
+
+
+def _zh_agent_category(value: str) -> str:
+    return {
+        "retail": "散戶群體",
+        "trading": "交易者",
+        "institutional": "機構",
+        "company_type": "公司類型",
+    }.get(value, value.replace("_", " "))
+
+
+def _zh_time_horizon(value: str) -> str:
+    return {
+        "intraday_to_days": "日內至數日",
+        "hours_to_days": "數小時至數日",
+        "weeks_to_quarters": "數週至數季",
+        "months_to_years": "數月至數年",
+        "quarters_to_years": "數季至數年",
+    }.get(value, value.replace("_", " "))
+
+
+def _zh_decision_style(value: str) -> str:
+    return {
+        "reactive narrative-following": "反應式敘事跟隨",
+        "slow conviction-based review": "緩慢信念審視",
+        "fast risk-adjustment": "快速風險調整",
+        "scenario-weighted allocation review": "情境加權配置審視",
+        "committee-based strategic planning": "委員會式策略規劃",
+        "risk committee balance-sheet review": "風險委員會資產負債表審視",
+        "operational hedging and capital planning": "營運避險與資本規劃",
+    }.get(value, value)
 
 
 def build_daily_timeline(
