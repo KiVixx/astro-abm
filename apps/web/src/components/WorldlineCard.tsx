@@ -22,7 +22,14 @@ export function WorldlineCard({
       ? t("worldline.deterministicMock")
       : generationMode || t("worldline.noWorldlineShort");
   const status = report.worldline_status || "legacy";
-  const statusTone = ["failed", "fallback"].includes(status)
+  const statusTone = [
+    "failed",
+    "fallback",
+    "halted",
+    "partial_fallback",
+    "failed_fallback",
+    "configuration_fallback",
+  ].includes(status)
     ? "alert"
     : ["completed", "mock_completed"].includes(status)
       ? "ready"
