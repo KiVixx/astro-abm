@@ -611,7 +611,7 @@ def _fallback_chunk(
         mode="llm_chunk_v1",
         horizon_days=len(merged_days),
         days=merged_days,
-        summary="LLM worldline chunk failed safely; deterministic fallback days were used.",
+        summary="LLM worldline chunk could not be validated; deterministic fallback days were used.",
         caveats=_merge_strings(
             report.worldline_simulation.caveats if report.worldline_simulation else [],
             fallback.caveats,

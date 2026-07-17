@@ -16,7 +16,7 @@ export default async function WorldlineDetailPage({
   const { date } = await searchParams;
 
   try {
-    const report = await getScenario(id);
+    const report = await getScenario(id, { includeMarkdown: false });
     return <ScenarioWorkbench initialDate={date} product="worldline" report={report} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {

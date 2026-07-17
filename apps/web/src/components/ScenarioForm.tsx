@@ -3,11 +3,22 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createLlmPreset, deleteLlmPreset, updateLlmPreset } from "@/lib/api";
+import {
+  createLlmPreset,
+  deleteLlmPreset,
+  testLlmConnection,
+  testLlmPreset,
+  updateLlmPreset,
+} from "@/lib/api";
 import { AgentSelector } from "./AgentSelector";
 import { AssetSelector } from "./AssetSelector";
+import {
+  LlmConnectionTestResult,
+  type LlmConnectionFeedback,
+} from "./LlmConnectionTestResult";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
+import { useLeaveWarning } from "@/lib/useLeaveWarning";
 import type {
   AgentProfile,
   LlmProvider,
@@ -68,6 +79,13 @@ export function ScenarioForm({
   const { language: uiLanguage, t } = useI18n();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [defaultDateRange] = useState(() => getDefaultScenarioDateRange());
+  const [startDate, setStartDate] = useState(defaultDateRange.startDate);
+  const [endDate, setEndDate] = useState(defaultDateRange.endDate);
+  const [chunkSizeDays, setChunkSizeDays] = useState(DEFAULT_LLM_CHUNK_SIZE_DAYS);
+  const [title, setTitle] = useState(() => getDefaultScenarioTitle(uiLanguage));
+  const [description, setDescription] = useState(() => getDefaultScenarioDescription(uiLanguage));
+  const [hasEditedTitle, setHasEditedTitle] = useState(false);
+  const [hasEditedDescription, setHasEditedDescription] = useState(false);
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>(uiLanguage);
   const [hasManualLanguageOverride, setHasManualLanguageOverride] = useState(false);
   const [llmPresets, setLlmPresets] = useState<LlmPresetSummary[]>(initialLlmPresets);
@@ -75,6 +93,8 @@ export function ScenarioForm({
   const [presetName, setPresetName] = useState("Gemini default");
   const [includeApiKeyInPreset, setIncludeApiKeyInPreset] = useState(false);
   const [presetMessage, setPresetMessage] = useState("");
+  const [connectionFeedback, setConnectionFeedback] =
+    useState<LlmConnectionFeedback | null>(null);
   const [llmProvider, setLlmProvider] = useState<LlmProvider>(DEFAULT_LLM_PROVIDER);
   const [worldlineProvider, setWorldlineProvider] =
     useState<WorldlineProvider>("deterministic_mock");
@@ -93,15 +113,40 @@ export function ScenarioForm({
     }
   }, [hasManualLanguageOverride, uiLanguage]);
 
+  useEffect(() => {
+    if (!hasEditedTitle) {
+      setTitle(getDefaultScenarioTitle(uiLanguage));
+    }
+    if (!hasEditedDescription) {
+      setDescription(getDefaultScenarioDescription(uiLanguage));
+    }
+  }, [hasEditedDescription, hasEditedTitle, uiLanguage]);
+
   const progressPct =
     progress.totalChunks > 0
-      ? Math.round((progress.currentChunk / progress.totalChunks) * 100)
+      ? Math.min(
+          100,
+          10 + Math.round((progress.currentChunk / progress.totalChunks) * 90),
+        )
       : progress.phase === "base"
         ? 10
         : progress.phase === "done"
           ? 100
           : 0;
   const realLlmCanCall = llmProvider === "openai_compatible" && realLlmEnabled;
+  const willCallLlm = realLlmCanCall;
+  const plannedDayCount = inclusiveDateCount(startDate, endDate);
+  const hasCompleteDateRange = Boolean(startDate && endDate);
+  const dateRangeValid = hasCompleteDateRange && plannedDayCount > 0;
+  const dateRangeOrderInvalid = hasCompleteDateRange && plannedDayCount === 0;
+  const estimatedChunkCount = !willCallLlm || plannedDayCount === 0
+    ? 0
+    : product === "worldline" && worldlineProvider !== "llm"
+      ? 1
+      : Math.ceil(plannedDayCount / chunkSizeDays);
+  const generationInProgress = progress.active
+    && !["done", "halted", "error"].includes(progress.phase);
+  useLeaveWarning(generationInProgress);
   const reportNarrativeLabel =
     product === "worldline" && worldlineProvider === "llm"
       ? t("scenarioCreate.callPlanReportMockDuringWorldline")
@@ -116,7 +161,7 @@ export function ScenarioForm({
           : t("scenarioCreate.callPlanWorldlineDryRun")
         : t("scenarioCreate.callPlanWorldlineMock")
       : t("scenarioCreate.callPlanWorldlineNotUsed");
-  const realCallLabel = realLlmCanCall
+  const realCallLabel = willCallLlm
     ? t("scenarioCreate.callPlanWillCall")
     : t("scenarioCreate.callPlanNoCall");
 
@@ -295,14 +340,15 @@ export function ScenarioForm({
         });
         const hasNextChunk = index < chunks.length - 1;
         if (hasNextChunk && callDelaySeconds > 0 && networkCallPerformed) {
-          setProgress({
-            active: true,
-            phase: "delay",
-            currentChunk: index + 1,
+          await waitForNextChunk({
+            completedChunks: index + 1,
+            delaySeconds: callDelaySeconds,
+            nextChunk: chunks[index + 1],
+            setProgress,
             totalChunks: chunks.length,
-            message: `${t("scenarioCreate.progressLlmDelay")} ${callDelaySeconds}s`,
+            waitingLabel: t("scenarioCreate.progressLlmDelay"),
+            nextChunkLabel: t("scenarioCreate.progressNextChunk"),
           });
-          await sleep(callDelaySeconds * 1000);
         }
       }
 
@@ -365,6 +411,7 @@ export function ScenarioForm({
     setIncludeApiKeyInPreset(preset.has_api_key);
     setLlmProvider(preset.provider);
     setWorldlineProvider((preset.worldline_provider as WorldlineProvider) || "deterministic_mock");
+    setChunkSizeDays(normalizePresetChunkSize(preset.chunk_size_days));
     setRealLlmEnabled(preset.real_enabled);
     setPresetMessage(t("scenarioCreate.llmPresetRecalled"));
   }
@@ -383,8 +430,65 @@ export function ScenarioForm({
     }
   }
 
+  async function testCurrentLlmConnection() {
+    const form = formRef.current;
+    if (!form) return;
+    const formData = new FormData(form);
+    const selectedPreset = llmPresets.find((preset) => preset.preset_id === selectedPresetId);
+    const baseUrl = getString(formData, "llm_base_url");
+    const model = getString(formData, "llm_model");
+    const apiKey = getString(formData, "llm_api_key");
+    const matchesSelectedPreset = Boolean(
+      selectedPreset
+      && !apiKey
+      && (selectedPreset.base_url || "") === baseUrl
+      && (selectedPreset.model || "") === model,
+    );
+    setConnectionFeedback({ message: "", reachable: false, status: "testing", testing: true });
+    try {
+      const result = matchesSelectedPreset && selectedPreset
+        ? await testLlmPreset(selectedPreset.preset_id)
+        : await testLlmConnection({
+            provider: (getString(formData, "llm_provider") || DEFAULT_LLM_PROVIDER) as LlmProvider,
+            real_enabled: formData.get("llm_real_enabled") === "on",
+            base_url: optionalString(baseUrl),
+            model: optionalString(model),
+            api_key: optionalString(apiKey),
+            timeout_seconds: optionalNumber(getString(formData, "llm_timeout_seconds")),
+            max_output_tokens: optionalNumber(getString(formData, "llm_max_output_tokens")),
+          });
+      setConnectionFeedback({
+        message: result.message,
+        reachable: result.reachable,
+        status: result.status,
+      });
+    } catch (error) {
+      setConnectionFeedback({
+        message: error instanceof Error ? error.message : t("common.unknownError"),
+        reachable: false,
+        status: "request_failed",
+      });
+    }
+  }
+
   return (
-    <form className="stack scenario-form" onSubmit={handleSubmit} ref={formRef}>
+    <form
+      className="stack scenario-form"
+      onChange={(event) => {
+        const target = event.target;
+        if (
+          !(target instanceof HTMLInputElement)
+          && !(target instanceof HTMLSelectElement)
+          && !(target instanceof HTMLTextAreaElement)
+        ) return;
+        const name = target.name;
+        if (name.startsWith("llm_") || name === "worldline_provider") {
+          setConnectionFeedback(null);
+        }
+      }}
+      onSubmit={handleSubmit}
+      ref={formRef}
+    >
       {product === "worldline" ? (
         <section className="notice worldline-mode-notice">
           <span className="worldline-mode-signal" aria-hidden="true" />
@@ -409,24 +513,55 @@ export function ScenarioForm({
           <input
             name="title"
             required
-            defaultValue={getDefaultScenarioTitle(uiLanguage)}
+            onChange={(event) => {
+              setHasEditedTitle(true);
+              setTitle(event.target.value);
+            }}
+            value={title}
           />
         </label>
         <label className="form-field full">
           <span>{t("scenarioCreate.formDescription")}</span>
           <textarea
             name="description"
-            defaultValue={getDefaultScenarioDescription(uiLanguage)}
+            onChange={(event) => {
+              setHasEditedDescription(true);
+              setDescription(event.target.value);
+            }}
+            value={description}
           />
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.startDate")}</span>
-          <input name="start_date" required type="date" defaultValue={defaultDateRange.startDate} />
+          <input
+            aria-describedby={dateRangeOrderInvalid ? "scenario-date-range-error" : undefined}
+            aria-invalid={dateRangeOrderInvalid || undefined}
+            max={endDate || undefined}
+            name="start_date"
+            onChange={(event) => setStartDate(event.target.value)}
+            required
+            type="date"
+            value={startDate}
+          />
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.endDate")}</span>
-          <input name="end_date" required type="date" defaultValue={defaultDateRange.endDate} />
+          <input
+            aria-describedby={dateRangeOrderInvalid ? "scenario-date-range-error" : undefined}
+            aria-invalid={dateRangeOrderInvalid || undefined}
+            min={startDate || undefined}
+            name="end_date"
+            onChange={(event) => setEndDate(event.target.value)}
+            required
+            type="date"
+            value={endDate}
+          />
         </label>
+        {dateRangeOrderInvalid ? (
+          <p className="notice warning full" id="scenario-date-range-error" role="alert">
+            {t("scenarioCreate.dateRangeInvalid")}
+          </p>
+        ) : null}
         <div className="form-field full">
           <span>{t("scenarioCreate.marketSeries")}</span>
           <AssetSelector marketSeries={marketSeries} />
@@ -516,7 +651,16 @@ export function ScenarioForm({
               <span>{t("scenarioCreate.callPlanNetwork")}</span>
               <strong>{realCallLabel}</strong>
             </div>
+            <div>
+              <span>{t("scenarioCreate.callPlanDays")}</span>
+              <strong>{plannedDayCount}</strong>
+            </div>
+            <div>
+              <span>{t("scenarioCreate.callPlanChunks")}</span>
+              <strong>{estimatedChunkCount}</strong>
+            </div>
           </div>
+          <p className="muted">{t("scenarioCreate.callPlanEstimateHelp")}</p>
         </section>
       </div>
       </section>
@@ -548,7 +692,13 @@ export function ScenarioForm({
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.llmChunkSizeDays")}</span>
-          <select name="llm_chunk_size_days" defaultValue={String(DEFAULT_LLM_CHUNK_SIZE_DAYS)}>
+          <select
+            name="llm_chunk_size_days"
+            onChange={(event) =>
+              setChunkSizeDays(normalizePresetChunkSize(Number(event.target.value)))
+            }
+            value={String(chunkSizeDays)}
+          >
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -661,6 +811,14 @@ export function ScenarioForm({
             </button>
             <button
               className="button secondary"
+              disabled={generationInProgress}
+              onClick={testCurrentLlmConnection}
+              type="button"
+            >
+              {t("worldline.regenerateTestConnection")}
+            </button>
+            <button
+              className="button secondary"
               disabled={!selectedPresetId}
               onClick={deleteSelectedLlmPreset}
               type="button"
@@ -668,7 +826,12 @@ export function ScenarioForm({
               {t("scenarioCreate.llmPresetDelete")}
             </button>
           </div>
-          {presetMessage ? <p className="muted">{presetMessage}</p> : null}
+          {presetMessage ? (
+            <p aria-live="polite" className="muted" role="status">
+              {presetMessage}
+            </p>
+          ) : null}
+          <LlmConnectionTestResult feedback={connectionFeedback} />
         </section>
         <div className="notice full">
           <p>{t("scenarioCreate.llmApiKeyNote")}</p>
@@ -684,7 +847,11 @@ export function ScenarioForm({
         <AgentSelector agents={agents} />
       </section>
       <div className="scenario-launch-zone">
-      <button className="scenario-launch-button" disabled={progress.active && progress.phase !== "error"} type="submit">
+      <button
+        className="scenario-launch-button"
+        disabled={!dateRangeValid || (progress.active && progress.phase !== "error")}
+        type="submit"
+      >
         {progress.active && progress.phase !== "error"
           ? t("scenarioCreate.generating")
           : product === "worldline"
@@ -699,10 +866,22 @@ export function ScenarioForm({
             <strong>{t("scenarioCreate.progressTitle")}</strong>
             <span>{progressPct}%</span>
           </div>
-          <div className="scenario-progress-bar" aria-hidden="true">
+          <div
+            aria-label={t("scenarioCreate.progressTitle")}
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={progressPct}
+            className="scenario-progress-bar"
+            role="progressbar"
+          >
             <div style={{ width: `${progressPct}%` }} />
           </div>
-          <p>{progress.message}</p>
+          <p aria-atomic="true" aria-live="polite" role="status">
+            {progress.message}
+          </p>
+          {generationInProgress ? (
+            <p className="muted">{t("common.keepTabOpen")}</p>
+          ) : null}
           {progress.phase === "error" && progress.savedReportPath ? (
             <div className="stack">
               <p className="muted">{t("scenarioCreate.progressPartialSaved")}</p>
@@ -779,6 +958,41 @@ function optionalNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+async function waitForNextChunk({
+  completedChunks,
+  delaySeconds,
+  nextChunk,
+  setProgress,
+  totalChunks,
+  waitingLabel,
+  nextChunkLabel,
+}: {
+  completedChunks: number;
+  delaySeconds: number;
+  nextChunk: { start: string; end: string };
+  setProgress: (progress: GenerationProgress) => void;
+  totalChunks: number;
+  waitingLabel: string;
+  nextChunkLabel: string;
+}) {
+  let remainingMilliseconds = Math.max(0, Math.round(delaySeconds * 1000));
+  while (remainingMilliseconds > 0) {
+    const displayedSeconds = Math.max(1, Math.ceil(remainingMilliseconds / 1000));
+    setProgress({
+      active: true,
+      phase: "delay",
+      currentChunk: completedChunks,
+      totalChunks,
+      message: `${waitingLabel}: ${displayedSeconds}s · ${nextChunkLabel} ${
+        completedChunks + 1
+      }/${totalChunks}: ${nextChunk.start} → ${nextChunk.end}`,
+    });
+    const interval = Math.min(1000, remainingMilliseconds);
+    await sleep(interval);
+    remainingMilliseconds -= interval;
+  }
+}
+
 function buildDateChunks(startDate: string, endDate: string, chunkSizeDays: number) {
   const chunks: Array<{ start: string; end: string }> = [];
   let current = parseDate(startDate);
@@ -795,6 +1009,15 @@ function buildDateChunks(startDate: string, endDate: string, chunkSizeDays: numb
     current.setUTCDate(current.getUTCDate() + 1);
   }
   return chunks;
+}
+
+function inclusiveDateCount(startDate: string, endDate: string): number {
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return 0;
+  }
+  return Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
 }
 
 function parseDate(value: string): Date {

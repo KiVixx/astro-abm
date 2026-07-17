@@ -3,6 +3,8 @@ import type {
   LlmPresetSaveRequest,
   LlmPresetSummary,
   LlmPresetTestResponse,
+  LlmTestRequest,
+  LlmTestResponse,
   MarketSeriesProfile,
   ScenarioCreateRequest,
   ScenarioLlmChunkRequest,
@@ -101,12 +103,25 @@ export async function testLlmPreset(presetId: string): Promise<LlmPresetTestResp
   );
 }
 
+export async function testLlmConnection(payload: LlmTestRequest): Promise<LlmTestResponse> {
+  return apiFetch<LlmTestResponse>("/llm/test", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getScenarios(): Promise<ScenarioSummary[]> {
   return apiFetch<ScenarioSummary[]>("/scenarios");
 }
 
-export async function getScenario(scenarioId: string): Promise<ScenarioReport> {
-  return apiFetch<ScenarioReport>(`/scenarios/${encodeURIComponent(scenarioId)}`);
+export async function getScenario(
+  scenarioId: string,
+  options: { includeMarkdown?: boolean } = {},
+): Promise<ScenarioReport> {
+  const query = options.includeMarkdown === false ? "?include_markdown=false" : "";
+  return apiFetch<ScenarioReport>(
+    `/scenarios/${encodeURIComponent(scenarioId)}${query}`,
+  );
 }
 
 export async function deleteScenario(

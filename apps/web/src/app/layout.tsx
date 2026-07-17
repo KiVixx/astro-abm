@@ -18,7 +18,9 @@ export default function RootLayout({
       <body>
         <I18nProvider>
           <SiteHeader />
-          <main>{children}</main>
+          <main id="main-content" tabIndex={-1}>
+            {children}
+          </main>
         </I18nProvider>
       </body>
     </html>

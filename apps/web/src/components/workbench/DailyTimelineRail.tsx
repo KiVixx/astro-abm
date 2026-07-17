@@ -22,6 +22,10 @@ function monthLabel(dateValue: string): string {
   return dateValue.slice(0, 7);
 }
 
+function dayChipId(dateValue: string): string {
+  return `workbench-day-${dateValue}`;
+}
+
 function AssetStressAssetSelector({
   series,
   selectedAssets,
@@ -253,16 +257,42 @@ export function DailyTimelineRail({
             series={assetStressSeries}
           />
           <div className="workbench-day-strip">
-            {timeline.map((snapshot) => {
+            {timeline.map((snapshot, snapshotIndex) => {
               const coverage = getDailyDataCoverage(snapshot);
               const signals = getDailyResearchSignals(snapshot);
               const isSelected = snapshot.date === selectedDate;
               return (
                 <button
+                  aria-pressed={isSelected}
                   className={`workbench-day-chip ${isSelected ? "is-selected" : ""}`}
+                  id={dayChipId(snapshot.date)}
                   key={snapshot.date}
                   onClick={() => onSelectDate(snapshot.date)}
+                  onKeyDown={(event) => {
+                    let targetIndex: number | null = null;
+                    if (event.key === "ArrowLeft") {
+                      targetIndex = snapshotIndex - 1;
+                    } else if (event.key === "ArrowRight") {
+                      targetIndex = snapshotIndex + 1;
+                    } else if (event.key === "Home") {
+                      targetIndex = 0;
+                    } else if (event.key === "End") {
+                      targetIndex = timeline.length - 1;
+                    }
+                    const targetSnapshot = targetIndex === null
+                      ? undefined
+                      : timeline[targetIndex];
+                    if (!targetSnapshot) {
+                      return;
+                    }
+                    event.preventDefault();
+                    onSelectDate(targetSnapshot.date);
+                    requestAnimationFrame(() => {
+                      document.getElementById(dayChipId(targetSnapshot.date))?.focus();
+                    });
+                  }}
                   ref={isSelected ? selectedChipRef : null}
+                  tabIndex={isSelected ? 0 : -1}
                   type="button"
                 >
                   <span className="workbench-day-month">{monthLabel(snapshot.date)}</span>

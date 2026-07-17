@@ -148,6 +148,16 @@ export function DailyGraphCanvas({
     () => toForceGraph(graph, canvasSize.width, canvasSize.height),
     [canvasSize.height, canvasSize.width, graph],
   );
+  const graphKeyboardIds = useMemo(
+    () => [
+      ...forceGraph.nodes.map((node) => `node:${node.id}`),
+      ...forceGraph.edges.map((edge) => `edge:${edge.id}`),
+    ],
+    [forceGraph.edges, forceGraph.nodes],
+  );
+  const [keyboardFocusId, setKeyboardFocusId] = useState(
+    () => graphKeyboardIds[0] || "",
+  );
 
   const nodeById = useMemo(
     () => new Map(forceGraph.nodes.map((node) => [node.id, node])),
@@ -160,6 +170,49 @@ export function DailyGraphCanvas({
     }
     return selectedEdgeNodeIds(forceGraph.edges, selectedEdgeId);
   }, [forceGraph.edges, selectedEdgeId, selectedNodeId]);
+
+  useEffect(() => {
+    const selectedId = selectedNodeId
+      ? `node:${selectedNodeId}`
+      : selectedEdgeId
+        ? `edge:${selectedEdgeId}`
+        : null;
+    setKeyboardFocusId((current) => {
+      if (selectedId && graphKeyboardIds.includes(selectedId)) {
+        return selectedId;
+      }
+      return graphKeyboardIds.includes(current) ? current : graphKeyboardIds[0] || "";
+    });
+  }, [graphKeyboardIds, selectedEdgeId, selectedNodeId]);
+
+  const moveGraphFocus = (
+    event: React.KeyboardEvent<SVGElement>,
+    currentId: string,
+  ) => {
+    let nextIndex: number | null = null;
+    const currentIndex = graphKeyboardIds.indexOf(currentId);
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = Math.min(graphKeyboardIds.length - 1, currentIndex + 1);
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = Math.max(0, currentIndex - 1);
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = graphKeyboardIds.length - 1;
+    }
+    if (nextIndex === null || nextIndex === currentIndex || nextIndex < 0) {
+      return;
+    }
+    event.preventDefault();
+    const nextId = graphKeyboardIds[nextIndex];
+    setKeyboardFocusId(nextId);
+    requestAnimationFrame(() => {
+      const nextElement = Array.from(
+        svgRef.current?.querySelectorAll<SVGElement>("[data-graph-keyboard-id]") || [],
+      ).find((element) => element.dataset.graphKeyboardId === nextId);
+      nextElement?.focus();
+    });
+  };
 
   const displayNodeLabel = (node: WorkbenchNode) => {
     const contextKeys: Partial<Record<WorkbenchNode["type"], string>> = {
@@ -196,6 +249,9 @@ export function DailyGraphCanvas({
     if (node.type === "astro") {
       return formatEnumLabel(t, "astro_intensity", node.subtitle);
     }
+    if (node.type === "agent") {
+      return formatEnumLabel(t, "agent_level", node.subtitle);
+    }
     if (node.type === "risk") {
       return t("legend.risk");
     }
@@ -217,7 +273,7 @@ export function DailyGraphCanvas({
         detail: [displayNodeSubtitle(node), node.detail].filter(Boolean).join(" - "),
       });
     },
-    [],
+    [t],
   );
 
   const showEdgeTooltip = useCallback(
@@ -449,7 +505,7 @@ export function DailyGraphCanvas({
       <div className="workbench-svg-frame force-graph-frame" ref={frameRef}>
         <svg
           className="workbench-svg force-graph-svg"
-          role="img"
+          role="group"
           ref={svgRef}
           viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
           aria-label={t("workbench.graphAria")}
@@ -475,8 +531,14 @@ export function DailyGraphCanvas({
           <g className="force-graph-viewport" ref={viewportRef} transform={zoomTransform.toString()}>
             <g className="workbench-edges force-graph-edges" ref={edgeLayerRef}>
               {forceGraph.edges.map((edge) => {
+                const keyboardId = `edge:${edge.id}`;
                 const source = nodeById.get(edge.sourceId);
                 const target = nodeById.get(edge.targetId);
+                const edgeAccessibleLabel = `${t("workbench.relationship")}: ${
+                  source ? displayNodeLabel(source) : edge.sourceId
+                } ${t("common.to")} ${
+                  target ? displayNodeLabel(target) : edge.targetId
+                }`;
                 return (
                   <g key={edge.id}>
                     <line
@@ -495,7 +557,10 @@ export function DailyGraphCanvas({
                       y2={target?.initialY || 0}
                     />
                     <line
+                      aria-label={edgeAccessibleLabel}
+                      aria-pressed={selectedEdgeId === edge.id}
                       className={edgeClassName(edge, selectedNodeId, selectedEdgeId)}
+                      data-graph-keyboard-id={keyboardId}
                       markerEnd="url(#force-graph-arrow)"
                       onClick={(event) => {
                         event.stopPropagation();
@@ -507,13 +572,16 @@ export function DailyGraphCanvas({
                           event.preventDefault();
                           onSelectEdge(edge.id);
                           onSelectNode(null);
+                          return;
                         }
+                        moveGraphFocus(event, keyboardId);
                       }}
+                      onFocus={() => setKeyboardFocusId(keyboardId)}
                       onMouseEnter={(event) => showEdgeTooltip(event, edge)}
                       onMouseLeave={() => setTooltip(null)}
                       onMouseMove={(event) => showEdgeTooltip(event, edge)}
                       role="button"
-                      tabIndex={0}
+                      tabIndex={keyboardFocusId === keyboardId ? 0 : -1}
                       x1={source?.initialX || 0}
                       x2={target?.initialX || 0}
                       y1={source?.initialY || 0}
@@ -524,9 +592,17 @@ export function DailyGraphCanvas({
               })}
             </g>
             <g className="workbench-nodes force-graph-nodes" ref={nodeLayerRef}>
-              {forceGraph.nodes.map((node) => (
+              {forceGraph.nodes.map((node) => {
+                const keyboardId = `node:${node.id}`;
+                return (
                 <g
+                  aria-label={[
+                    displayNodeLabel(node),
+                    displayNodeSubtitle(node),
+                  ].filter(Boolean).join(": ")}
+                  aria-pressed={selectedNodeId === node.id}
                   className={nodeClassName(node, selectedNodeId, selectedEdgeId, highlightedNodeIds)}
+                  data-graph-keyboard-id={keyboardId}
                   key={node.id}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -538,13 +614,16 @@ export function DailyGraphCanvas({
                       event.preventDefault();
                       onSelectNode(node.id);
                       onSelectEdge(null);
+                      return;
                     }
+                    moveGraphFocus(event, keyboardId);
                   }}
+                  onFocus={() => setKeyboardFocusId(keyboardId)}
                   onMouseEnter={(event) => showNodeTooltip(event, node)}
                   onMouseLeave={() => setTooltip(null)}
                   onMouseMove={(event) => showNodeTooltip(event, node)}
                   role="button"
-                  tabIndex={0}
+                  tabIndex={keyboardFocusId === keyboardId ? 0 : -1}
                   transform={`translate(${node.initialX} ${node.initialY})`}
                 >
                   <circle className="force-node-hit-target" r={Math.max(38, node.radius + 28)} />
@@ -560,7 +639,8 @@ export function DailyGraphCanvas({
                     ) : null}
                   </g>
                 </g>
-              ))}
+                );
+              })}
             </g>
           </g>
         </svg>

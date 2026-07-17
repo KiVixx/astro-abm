@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AssetStressPoint,
   AssetStressSeries,
@@ -50,6 +50,10 @@ function sourceLabelKey(source: AssetStressPoint["source"]): string {
   return "workbench.mockMetric";
 }
 
+function pointElementId(asset: string, date: string): string {
+  return `asset-stress-${encodeURIComponent(asset)}-${date}`;
+}
+
 export function AssetStressSentimentChart({
   series,
   selectedAssets,
@@ -77,6 +81,12 @@ export function AssetStressSentimentChart({
       })),
     [visibleSeries],
   );
+
+  useEffect(() => {
+    setActivePoint((current) =>
+      current?.date === selectedDate ? current : null,
+    );
+  }, [selectedDate]);
 
   if (!series.length) {
     return null;
@@ -166,11 +176,16 @@ export function AssetStressSentimentChart({
           />
         ))}
         {chartSeries.flatMap((assetSeries) =>
-          assetSeries.points.map((point) => (
+          assetSeries.points.map((point, pointIndex) => (
             <g
+              aria-hidden={point.date === selectedDate ? undefined : true}
+              aria-label={`${t("legend.asset")}: ${point.asset}, ${t(
+                "workbench.assetStressValue",
+              )}: ${point.displayValue}, ${point.date}`}
               className={`asset-stress-point ${
                 point.date === selectedDate ? "is-selected" : ""
               }`}
+              id={pointElementId(point.asset, point.date)}
               key={`${point.asset}-${point.date}`}
               onClick={() => {
                 setActivePoint(point);
@@ -183,11 +198,33 @@ export function AssetStressSentimentChart({
                   event.preventDefault();
                   setActivePoint(point);
                   onSelectDate(point.date);
+                  return;
+                }
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                  event.preventDefault();
+                  const offset = event.key === "ArrowLeft" ? -1 : 1;
+                  const nextPoint = assetSeries.points[pointIndex + offset];
+                  if (!nextPoint) {
+                    return;
+                  }
+                  setActivePoint(nextPoint);
+                  onSelectDate(nextPoint.date);
+                  requestAnimationFrame(() => {
+                    document
+                      .getElementById(pointElementId(nextPoint.asset, nextPoint.date))
+                      ?.focus();
+                  });
                 }
               }}
-              role="button"
-              tabIndex={0}
+              role={point.date === selectedDate ? "button" : undefined}
+              tabIndex={point.date === selectedDate ? 0 : -1}
             >
+              <circle
+                className="asset-stress-hit-target"
+                cx={point.x}
+                cy={point.y}
+                r="22"
+              />
               <circle
                 cx={point.x}
                 cy={point.y}

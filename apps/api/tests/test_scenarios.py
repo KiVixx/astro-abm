@@ -502,6 +502,8 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert summaries[0]["worldline_status"] == "mock_completed"
     assert summaries[0]["worldline_generation_mode"] == "deterministic_mock_v1"
     assert summaries[0]["worldline_day_count"] == len(report["daily_timeline"])
+    assert summaries[0]["worldline_playable_day_count"] == len(report["daily_timeline"])
+    assert summaries[0]["worldline_generation_halted"] is False
     assert summaries[0]["worldline_failed_chunk_count"] == 0
     assert summaries[0]["llm_report_status"] is None
     assert summaries[0]["coverage_total_days"] == len(report["daily_timeline"])
@@ -528,6 +530,30 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert fallback_summary.worldline_failed_chunk_count == 2
     assert fallback_summary.worldline_configuration_fallback_chunk_count == 0
     assert fallback_summary.worldline_llm_failed_chunk_count == 2
+
+    halted_end = report_model.worldline_simulation.days[0].date.isoformat()
+    halted_worldline = report_model.worldline_simulation.model_copy(
+        update={
+            "provenance": {
+                **report_model.worldline_simulation.provenance,
+                "generation_halted": True,
+                "chunk_history": [
+                    {
+                        "status": "fallback",
+                        "generation_halted": True,
+                        "chunk_start_date": halted_end,
+                        "chunk_end_date": halted_end,
+                    }
+                ],
+            },
+        }
+    )
+    halted_summary = report_to_summary(
+        report_model.model_copy(update={"worldline_simulation": halted_worldline})
+    )
+    assert halted_summary.worldline_generation_halted is True
+    assert halted_summary.worldline_playable_day_count == 1
+    assert halted_summary.worldline_day_count == len(report_model.worldline_simulation.days)
 
     configuration_worldline = report_model.worldline_simulation.model_copy(
         update={
@@ -577,6 +603,44 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     get_response = client.get(f"/scenarios/{scenario_id}")
     assert get_response.status_code == 200
     assert get_response.json()["scenario_id"] == scenario_id
+    assert get_response.json()["markdown_report"]
+
+    lightweight_response = client.get(
+        f"/scenarios/{scenario_id}?include_markdown=false"
+    )
+    assert lightweight_response.status_code == 200
+    assert lightweight_response.json()["markdown_report"] == ""
+    assert json.loads((tmp_path / f"{scenario_id}.json").read_text())["markdown_report"]
+
+
+def test_traditional_chinese_deterministic_worldline_uses_report_language(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update(
+        {
+            "language": "zh-Hant",
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-02",
+        }
+    )
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    worldline = response.json()["worldline_simulation"]
+    first_day = worldline["days"][0]
+    first_event = first_day["agent_events"][0]
+    assert "確定性 mock 世界線" in worldline["summary"]
+    assert "脈絡" in first_day["input_context_summary"]
+    assert "模擬路徑" in first_event["what_happened"]
+    assert "明日情境" in first_event["impact_on_tomorrow"]
+    assert "模擬因果鏈" in first_day["causal_links"][0]["caveats"][0]
+    assert "僅為模擬世界線" in first_day["disclaimer"]
+    assert "reacted to" not in json.dumps(worldline, ensure_ascii=False)
 
 
 def test_delete_scenario_removes_saved_json_and_markdown(
@@ -818,7 +882,15 @@ def test_traditional_chinese_report_generation(monkeypatch, tmp_path: Path) -> N
     assert "情境報告" in report["simulation_summary"]
     assert "第 1 天" in first_day["daily_summary"]
     assert "可能反應" in report["agent_outputs"][0]["likely_reaction"]
+    assert report["agent_outputs"][0]["agent_name"] == "加密散戶 FOMO 群體"
+    assert report["agent_outputs"][0]["role"] == "散戶群體"
+    assert "數小時至數日" in report["agent_outputs"][0]["behavior_summary"]
+    assert "reactive narrative-following" not in report["agent_outputs"][0]["behavior_summary"]
+    assert first_day["agent_states"][0]["agent_name"] == "加密散戶 FOMO 群體"
     assert "風險討論" in first_day["agent_states"][0]["likely_reaction"]
+    assert "computed_ephemeris_available" not in first_day["agent_states"][0]["likely_reaction"]
+    assert "stress_regime:" not in first_day["agent_states"][0]["attention_triggers"]
+    assert first_day["agent_states"][0]["attention_triggers"][0].startswith("壓力狀態：")
     assert "僅為相關性分析" in report["caveats"][0]
     assert "## 執行摘要" in report["markdown_report"]
     assert "## 每日時間線" in report["markdown_report"]
@@ -957,6 +1029,62 @@ def test_scenario_uses_local_research_context_when_available(
     assert "stress_stress_review" not in day["daily_risk_themes"]
     assert "stress stress" not in day["agent_states"][0]["likely_reaction"]
     assert "local research" in report["markdown_report"]
+
+
+def test_mixed_computed_context_counts_as_local_research_day(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    research_root = tmp_path / "research-output"
+    monkeypatch.setenv("ASTRO_ABM_RESEARCH_OUTPUT_ROOT", str(research_root))
+    _write_minimal_research_context(research_root)
+    (research_root / "parquet/astro_daily_1926_2025/astro_daily_features.parquet").unlink()
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"start_date": "2026-07-01", "end_date": "2026-07-01"})
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["daily_timeline"][0]["data_coverage"]["source"] == "mixed_computed_research"
+    assert report["coverage_summary"]["local_research_days"] == 1
+    assert report["coverage_summary"]["mixed_context_days"] == 1
+    assert report["coverage_summary"]["source_counts"]["mixed_computed_research"] == 1
+
+
+def test_saved_coverage_summary_is_refreshed_from_daily_timeline(
+    monkeypatch, tmp_path: Path
+) -> None:
+    scenario_dir = tmp_path / "scenarios"
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(scenario_dir))
+    research_root = tmp_path / "research-output"
+    monkeypatch.setenv("ASTRO_ABM_RESEARCH_OUTPUT_ROOT", str(research_root))
+    _write_minimal_research_context(research_root)
+    (research_root / "parquet/astro_daily_1926_2025/astro_daily_features.parquet").unlink()
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"start_date": "2026-07-01", "end_date": "2026-07-01"})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_path = scenario_dir / f"{created['scenario_id']}.json"
+    saved = json.loads(scenario_path.read_text(encoding="utf-8"))
+    saved["coverage_summary"]["local_research_days"] = 0
+    saved["coverage_summary"]["mixed_context_days"] = 0
+    scenario_path.write_text(json.dumps(saved), encoding="utf-8")
+
+    loaded = client.get(f"/scenarios/{created['scenario_id']}")
+    summaries = client.get("/scenarios")
+
+    assert loaded.status_code == 200
+    assert loaded.json()["coverage_summary"]["local_research_days"] == 1
+    assert loaded.json()["coverage_summary"]["mixed_context_days"] == 1
+    summary = next(
+        item for item in summaries.json() if item["scenario_id"] == created["scenario_id"]
+    )
+    assert summary["coverage_local_research_days"] == 1
+    assert json.loads(scenario_path.read_text(encoding="utf-8"))["coverage_summary"][
+        "local_research_days"
+    ] == 0
 
 
 def test_scenario_generation_does_not_call_external_http(
@@ -2051,7 +2179,7 @@ def test_worldline_final_json_retry_prioritizes_short_complete_output() -> None:
     assert "優先確保 JSON 完整閉合" in retried[-1]["content"]
 
 
-def test_worldline_chunk_invalid_json_falls_back_safely(
+def test_worldline_chunk_invalid_json_uses_validation_fallback(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -2328,6 +2456,9 @@ def test_worldline_chunk_stops_after_first_exhausted_chunk(
     assert responses[1].json()["consecutive_failed_chunk_count"] == 1
     assert responses[1].json()["generation_halted"] is True
     halted_worldline = responses[0].json()["report"]["worldline_simulation"]
+    assert halted_worldline["summary"] == (
+        "LLM worldline chunk could not be validated; deterministic fallback days were used."
+    )
     halted_history = halted_worldline["provenance"]["chunk_history"]
     assert [item["status"] for item in halted_history] == [
         "fallback",

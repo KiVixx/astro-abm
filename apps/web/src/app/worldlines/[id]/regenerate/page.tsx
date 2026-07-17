@@ -14,7 +14,10 @@ export default async function RegenerateWorldlinePage({ params, searchParams }: 
   const query = await searchParams;
   const startChunkIndex = Math.max(0, Number.parseInt(query.start_chunk_index || "0", 10) || 0);
   try {
-    const [report, presets] = await Promise.all([getScenario(id), getLlmPresets()]);
+    const [report, presets] = await Promise.all([
+      getScenario(id, { includeMarkdown: false }),
+      getLlmPresets(),
+    ]);
     return (
       <div className="page stack">
         <header>

@@ -8,8 +8,9 @@ import stat
 import tempfile
 from pathlib import Path
 
-from astro_abm_api.models.report import ScenarioReport
+from astro_abm_api.models.report import ScenarioReport, WorldlineSimulation
 from astro_abm_api.models.scenario import ScenarioSummary
+from astro_abm_api.services.simulation_engine import build_coverage_summary
 
 
 SCENARIO_OUTPUT_DIR_ENV = "ASTRO_ABM_SCENARIO_OUTPUT_DIR"
@@ -106,6 +107,8 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         worldline_status=worldline.status if worldline else None,
         worldline_generation_mode=generation_mode,
         worldline_day_count=worldline.horizon_days if worldline else 0,
+        worldline_playable_day_count=_playable_worldline_day_count(worldline),
+        worldline_generation_halted=bool(provenance.get("generation_halted", False)),
         worldline_failed_chunk_count=(
             int(failed_chunk_count) if isinstance(failed_chunk_count, (int, float)) else 0
         ),
@@ -116,6 +119,45 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         coverage_local_research_days=coverage.local_research_days if coverage else None,
         coverage_future_placeholder_days=coverage.future_placeholder_days if coverage else None,
     )
+
+
+def _playable_worldline_day_count(worldline: WorldlineSimulation | None) -> int:
+    if worldline is None:
+        return 0
+    provenance = worldline.provenance
+    if not provenance.get("generation_halted"):
+        return worldline.horizon_days
+    chunk_history = provenance.get("chunk_history")
+    if not isinstance(chunk_history, list):
+        return worldline.horizon_days
+    failed_chunk = next(
+        (
+            chunk
+            for chunk in chunk_history
+            if isinstance(chunk, dict)
+            and chunk.get("status") == "fallback"
+            and chunk.get("generation_halted") is True
+        ),
+        None,
+    )
+    if failed_chunk is None:
+        return worldline.horizon_days
+    end_date = failed_chunk.get("chunk_end_date")
+    if not isinstance(end_date, str):
+        return worldline.horizon_days
+    return sum(1 for day in worldline.days if day.date.isoformat() <= end_date)
+
+
+def _refresh_derived_coverage(report: ScenarioReport) -> ScenarioReport:
+    if report.coverage_summary is None or not report.daily_timeline:
+        return report
+    coverage_summary = build_coverage_summary(
+        report.daily_timeline,
+        report.assets,
+        created_at=report.created_at,
+        language=report.language or "en",
+    )
+    return report.model_copy(update={"coverage_summary": coverage_summary})
 
 
 def _summary_fallback_counts(
@@ -198,7 +240,7 @@ class ScenarioStore:
             raise ScenarioNotFoundError(scenario_id)
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
-            return ScenarioReport.model_validate(data)
+            return _refresh_derived_coverage(ScenarioReport.model_validate(data))
         except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
             category = _report_read_error_category(error)
             logger.warning(
@@ -225,7 +267,7 @@ class ScenarioStore:
         for json_path in sorted(self.output_dir.glob("*.json")):
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
-                report = ScenarioReport.model_validate(data)
+                report = _refresh_derived_coverage(ScenarioReport.model_validate(data))
             except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
                 logger.warning(
                     "Skipping unreadable scenario report %s (%s)",

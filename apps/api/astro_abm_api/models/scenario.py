@@ -88,6 +88,8 @@ class ScenarioSummary(BaseModel):
     worldline_status: str | None = None
     worldline_generation_mode: str | None = None
     worldline_day_count: int = 0
+    worldline_playable_day_count: int = 0
+    worldline_generation_halted: bool = False
     worldline_failed_chunk_count: int = 0
     worldline_configuration_fallback_chunk_count: int = 0
     worldline_llm_failed_chunk_count: int = 0

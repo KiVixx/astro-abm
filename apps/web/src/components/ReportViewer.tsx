@@ -658,8 +658,12 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                 <span className="tag">
                   {formatEnumLabel(t, "agent_category", agent.category)}
                 </span>
-                <span className="tag">{agent.risk_tolerance}</span>
-                <span className="tag">{agent.time_horizon}</span>
+                <span className="tag">
+                  {formatEnumLabel(t, "agent_level", agent.risk_tolerance)}
+                </span>
+                <span className="tag">
+                  {formatEnumLabel(t, "time_horizon", agent.time_horizon)}
+                </span>
               </div>
             </div>
           ))}

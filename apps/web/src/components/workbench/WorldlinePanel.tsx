@@ -8,7 +8,7 @@ import type {
   WorldlineState,
 } from "@/lib/types";
 import { worldlineGenerationMode } from "@/lib/worldline";
-import { formatAgentName } from "@/i18n/labels";
+import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import {
   worldlineDisplayStatus,
@@ -165,22 +165,30 @@ function WorldlineProvenanceTags({
     <div className="tag-row">
       <span className="tag">
         {t("worldline.generationMode")}:{" "}
-        {worldlineGenerationMode(simulation)}
+        {formatEnumLabel(
+          t,
+          "worldline_generation_mode",
+          worldlineGenerationMode(simulation),
+        )}
       </span>
       <span className="tag">
         {t("worldline.chunkSize")}:{" "}
         {String(provenance.chunk_size_days || "n/a")}
       </span>
       <span className="tag">
-        {t("worldline.chunkStatus")}: {worldlineDisplayStatus(simulation)}
+        {t("worldline.chunkStatus")}: {formatEnumLabel(
+          t,
+          "worldline_status",
+          worldlineDisplayStatus(simulation),
+        )}
       </span>
       <span className="tag">
         {t("worldline.continuityStatus")}:{" "}
-        {simulation.continuity_status === "consistent"
-          ? t("worldline.consistent")
-          : simulation.continuity_status === "rebuilding"
-            ? t("worldline.rebuilding")
-          : String(simulation.continuity_status || "legacy_unknown")}
+        {formatEnumLabel(
+          t,
+          "continuity_status",
+          simulation.continuity_status || "legacy_unknown",
+        )}
       </span>
       <span className="tag">
         {t("worldline.failedChunks")}:{" "}
@@ -230,6 +238,24 @@ function WorldlineReviewHeader({
   const selectedMaxAttempts = selectedChunk
     ? numberFromUnknown(selectedChunk.max_attempts)
     : 0;
+  const selectedAttemptHistory = selectedChunk
+    ? arrayOfRecords(selectedChunk.attempt_history)
+    : [];
+  const selectedLastAttempt = selectedAttemptHistory.at(-1) || null;
+  const selectedResponseDiagnostics = recordFromUnknown(
+    selectedChunk?.response_diagnostics ?? selectedLastAttempt?.response_diagnostics,
+  );
+  const selectedRequestDiagnostics = recordFromUnknown(
+    selectedChunk?.request_diagnostics ?? selectedLastAttempt?.request_diagnostics,
+  );
+  const selectedOutputStatus = String(
+    selectedChunk?.output_validation_status
+      ?? selectedLastAttempt?.output_validation_status
+      ?? selectedDay.chunk_status
+      ?? "unknown",
+  );
+  const selectedChunkFailed = selectedChunk?.status === "fallback"
+    || selectedChunk?.status === "failed";
   const regeneration = regenerationOutcome(simulation.last_regeneration, chunkHistory);
   const qualityNotes = stringArray(provenance.llm_output_quality_notes);
   const sourceCounts = countDaySources(simulation.days);
@@ -334,17 +360,59 @@ function WorldlineReviewHeader({
           {t("worldline.generationHaltedReason")}
         </p>
       ) : null}
+      {selectedChunkFailed ? (
+        <div className="notice warning">
+          <strong>{t("worldline.selectedChunkDiagnosis")}</strong>
+          <p>{t("worldline.selectedChunkDiagnosisHelp")}</p>
+          <div className="tag-row">
+            <span className="tag">
+              {t("worldline.parseResult")}: {formatEnumLabel(
+                t,
+                "chunk_status",
+                selectedOutputStatus,
+              )}
+            </span>
+            {selectedAttemptCount > 0 ? (
+              <span className="tag">
+                {t("worldline.attemptCount")}: {selectedAttemptCount}/
+                {selectedMaxAttempts || 3}
+              </span>
+            ) : null}
+          </div>
+          {selectedResponseDiagnostics?.probable_truncation === true ? (
+            <p>
+              <strong>{t("worldline.probableTruncation")}</strong>
+              <br />
+              {t("worldline.probableTruncationHelp")}
+            </p>
+          ) : null}
+          {selectedRequestDiagnostics?.recommended_action ? (
+            <p>
+              <strong>{t("worldline.recommendedAction")}:</strong>{" "}
+              {t(
+                `worldline.requestAction.${String(selectedRequestDiagnostics.recommended_action)}`,
+                String(selectedRequestDiagnostics.recommended_action),
+              )}
+            </p>
+          ) : null}
+          <p className="muted">{t("worldline.selectedChunkDiagnosisPrivacy")}</p>
+        </div>
+      ) : null}
       <WorldlineProvenanceTags simulation={simulation} />
       <div className="tag-row">
         {Object.entries(sourceCounts).map(([source, count]) => (
           <span className="tag" key={source}>
-            {t("worldline.daysFrom")} {source}: {count}
+            {t("worldline.daysFrom")} {formatEnumLabel(t, "generation_source", source)}: {count}
           </span>
         ))}
       </div>
       <div className="tag-row">
         <span className="tag">
-          {t("worldline.selectedDaySource")}: {selectedDay.generation_source || "unknown"}
+            {t("worldline.selectedDaySource")}: {formatEnumLabel(
+              t,
+              "generation_source",
+              selectedDay.generation_source || "unknown",
+            )}
         </span>
         {selectedDay.chunk_index ? (
           <span className="tag">
@@ -353,7 +421,11 @@ function WorldlineReviewHeader({
         ) : null}
         {selectedDay.chunk_status ? (
           <span className="tag">
-            {t("worldline.chunkStatus")}: {selectedDay.chunk_status}
+            {t("worldline.chunkStatus")}: {formatEnumLabel(
+              t,
+              "chunk_status",
+              selectedDay.chunk_status,
+            )}
           </span>
         ) : null}
         {selectedAttemptCount > 0 ? (
@@ -376,12 +448,22 @@ function WorldlineReviewHeader({
                   <span className="tag">
                     {String(chunk.chunk_start_date || "?")} → {String(chunk.chunk_end_date || "?")}
                   </span>
-                  <span className="tag">{String(chunk.status || "unknown")}</span>
                   <span className="tag">
-                    {String(chunk.output_validation_status || "unknown")}
+                    {formatEnumLabel(t, "chunk_status", String(chunk.status || "unknown"))}
                   </span>
                   <span className="tag">
-                    {String(chunk.safety_check_status || "unknown")}
+                    {formatEnumLabel(
+                      t,
+                      "output_validation_status",
+                      String(chunk.output_validation_status || "unknown"),
+                    )}
+                  </span>
+                  <span className="tag">
+                    {formatEnumLabel(
+                      t,
+                      "safety_check_status",
+                      String(chunk.safety_check_status || "unknown"),
+                    )}
                   </span>
                   <span className="tag">
                     {t("worldline.attemptCount")}: {String(chunk.attempt_count || "n/a")}/
@@ -432,9 +514,19 @@ function ChunkAttemptHistory({ value }: { value: unknown }) {
                 {t("worldline.attemptLabel")} {String(attempt.attempt || index + 1)}
               </span>
               <span className="tag">
-                {String(attempt.output_validation_status || "unknown")}
+                {formatEnumLabel(
+                  t,
+                  "output_validation_status",
+                  String(attempt.output_validation_status || "unknown"),
+                )}
               </span>
-              <span className="tag">{String(attempt.safety_check_status || "unknown")}</span>
+              <span className="tag">
+                {formatEnumLabel(
+                  t,
+                  "safety_check_status",
+                  String(attempt.safety_check_status || "unknown"),
+                )}
+              </span>
             </div>
             {Array.isArray(attempt.safety_violation_codes) && attempt.safety_violation_codes.length ? (
               <p className="notice warning">
@@ -475,7 +567,9 @@ function ChunkRequestDiagnostics({ value }: { value: unknown }) {
           {t("worldline.failureKind")}: {t(`worldline.failureKind.${failureKind}`, failureKind)}
         </span>
         <span className="tag">
-          {t("worldline.retryable")}: {diagnostics.retryable === true ? "true" : "false"}
+          {t("worldline.retryable")}: {diagnostics.retryable === true
+            ? t("value.common.yes")
+            : t("value.common.no")}
         </span>
         {diagnostics.http_status ? (
           <span className="tag">
@@ -554,8 +648,14 @@ function WorldlineStateCard({
     <div className="nested-panel">
       <h3>{label}</h3>
       <div className="tag-row">
-        <span className="tag">{state.sentiment_state}</span>
-        {state.regime_label ? <span className="tag">{state.regime_label}</span> : null}
+        <span className="tag">
+          {formatEnumLabel(t, "sentiment_state", state.sentiment_state)}
+        </span>
+        {state.regime_label ? (
+          <span className="tag">
+            {formatEnumLabel(t, "worldline_regime", state.regime_label)}
+          </span>
+        ) : null}
       </div>
       <dl className="worldline-score-grid">
         <ScoreTerm label={t("worldline.narrativePressure")} value={state.narrative_pressure} />
@@ -672,7 +772,11 @@ function regenerationOutcome(
   );
   const firstIssue = relevant
     .flatMap((chunk) => stringArray(chunk.issues))
-    .find((issue) => !issue.startsWith("LLM regeneration failed safely"));
+    .find(
+      (issue) =>
+        !issue.startsWith("LLM regeneration failed safely")
+        && !issue.startsWith("LLM regeneration could not be validated"),
+    );
   return {
     status,
     completed,

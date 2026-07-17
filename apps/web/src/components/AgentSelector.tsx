@@ -27,7 +27,8 @@ export function AgentSelector({ agents }: { agents: AgentProfile[] }) {
             <br />
             <span className="muted">
               {formatEnumLabel(t, "agent_category", agent.category)} ·{" "}
-              {agent.time_horizon} · {agent.decision_style}
+              {formatEnumLabel(t, "time_horizon", agent.time_horizon)} ·{" "}
+              {formatEnumLabel(t, "decision_style", agent.decision_style)}
             </span>
           </span>
         </label>

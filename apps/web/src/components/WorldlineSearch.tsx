@@ -1,18 +1,36 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { WorldlineCard } from "./WorldlineCard";
 import { deleteScenario } from "@/lib/api";
 import type { ScenarioSummary } from "@/lib/types";
 import { useI18n } from "@/i18n/useI18n";
 
 type WorldlineFilter = "all" | "ready" | "llm" | "deterministic" | "failed" | "legacy";
+type WorldlineSort = "newest" | "oldest" | "start_date";
+const WORLDLINES_PAGE_SIZE = 12;
 
-export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] }) {
+export function WorldlineSearch({
+  initialFilter,
+  initialQuery,
+  initialSort,
+  summaries,
+}: {
+  initialFilter?: string;
+  initialQuery?: string;
+  initialSort?: string;
+  summaries: ScenarioSummary[];
+}) {
   const { t } = useI18n();
   const [items, setItems] = useState(summaries);
-  const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<WorldlineFilter>("all");
+  const [query, setQuery] = useState(initialQuery || "");
+  const [activeFilter, setActiveFilter] = useState<WorldlineFilter>(() =>
+    normalizeWorldlineFilter(initialFilter),
+  );
+  const [sortOrder, setSortOrder] = useState<WorldlineSort>(() =>
+    normalizeWorldlineSort(initialSort),
+  );
+  const [visibleLimit, setVisibleLimit] = useState(WORLDLINES_PAGE_SIZE);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filterOptions = useMemo(
@@ -31,7 +49,7 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
     [items],
   );
   const filtered = useMemo(() => {
-    return items.filter((report) => {
+    const matchingItems = items.filter((report) => {
       if (!matchesWorldlineFilter(report, activeFilter)) {
         return false;
       }
@@ -39,6 +57,7 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
         return true;
       }
       const haystack = [
+        report.scenario_id,
         report.title,
         report.description || "",
         report.worldline_status || "",
@@ -51,7 +70,37 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
         .toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [activeFilter, items, normalizedQuery]);
+    return matchingItems.sort((left, right) => compareWorldlines(left, right, sortOrder));
+  }, [activeFilter, items, normalizedQuery, sortOrder]);
+  const visibleItems = filtered.slice(0, visibleLimit);
+  const remainingCount = Math.max(0, filtered.length - visibleItems.length);
+
+  useEffect(() => {
+    setVisibleLimit(WORLDLINES_PAGE_SIZE);
+  }, [activeFilter, normalizedQuery, sortOrder]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (query.trim()) {
+      url.searchParams.set("q", query);
+    } else {
+      url.searchParams.delete("q");
+    }
+    if (activeFilter === "all") {
+      url.searchParams.delete("status");
+    } else {
+      url.searchParams.set("status", activeFilter);
+    }
+    if (sortOrder === "newest") {
+      url.searchParams.delete("sort");
+    } else {
+      url.searchParams.set("sort", sortOrder);
+    }
+    window.history.replaceState(window.history.state, "", url);
+  }, [activeFilter, query, sortOrder]);
 
   const confirmAndDelete = async (report: ScenarioSummary) => {
     const confirmed = window.confirm(
@@ -90,10 +139,23 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
               value={query}
             />
           </label>
-          <div className="worldline-result-count" aria-live="polite">
-            <span>{t("worldline.recordsVisible")}</span>
-            <strong>{String(filtered.length).padStart(2, "0")}</strong>
-            <span>/ {String(items.length).padStart(2, "0")}</span>
+          <div className="worldline-search-tools">
+            <label className="worldline-sort-field">
+              <span>{t("worldline.sortLabel")}</span>
+              <select
+                onChange={(event) => setSortOrder(event.target.value as WorldlineSort)}
+                value={sortOrder}
+              >
+                <option value="newest">{t("worldline.sort.newest")}</option>
+                <option value="oldest">{t("worldline.sort.oldest")}</option>
+                <option value="start_date">{t("worldline.sort.startDate")}</option>
+              </select>
+            </label>
+            <div className="worldline-result-count" aria-live="polite">
+              <span>{t("worldline.recordsVisible")}</span>
+              <strong>{String(filtered.length).padStart(2, "0")}</strong>
+              <span>/ {String(items.length).padStart(2, "0")}</span>
+            </div>
           </div>
         </div>
         <div className="filter-row" role="list" aria-label={t("worldline.filterLabel")}>
@@ -112,23 +174,63 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
       </div>
       <div className="worldline-records">
         {filtered.length ? (
-          filtered.map((report) => (
-            <WorldlineCard
-              isDeleting={deletingId === report.scenario_id}
-              key={report.scenario_id}
-              onDelete={confirmAndDelete}
-              report={report}
-            />
-          ))
+          <>
+            {visibleItems.map((report) => (
+              <WorldlineCard
+                isDeleting={deletingId === report.scenario_id}
+                key={report.scenario_id}
+                onDelete={confirmAndDelete}
+                report={report}
+              />
+            ))}
+            {remainingCount > 0 ? (
+              <div className="worldline-load-more">
+                <button
+                  className="button secondary"
+                  onClick={() => setVisibleLimit((current) => current + WORLDLINES_PAGE_SIZE)}
+                  type="button"
+                >
+                  {t("worldline.loadMore")} ({Math.min(WORLDLINES_PAGE_SIZE, remainingCount)})
+                </button>
+                <span aria-live="polite">
+                  {t("worldline.recordsRemaining")}: {remainingCount}
+                </span>
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="worldline-empty-state">
             <span aria-hidden="true">00</span>
             <p>{t("worldline.noMatches")}</p>
+            <button
+              className="button secondary"
+              onClick={() => {
+                setQuery("");
+                setActiveFilter("all");
+              }}
+              type="button"
+            >
+              {t("worldline.clearFilters")}
+            </button>
           </div>
         )}
       </div>
     </section>
   );
+}
+
+function normalizeWorldlineFilter(value?: string): WorldlineFilter {
+  return ["all", "ready", "llm", "deterministic", "failed", "legacy"].includes(
+    value || "",
+  )
+    ? (value as WorldlineFilter)
+    : "all";
+}
+
+function normalizeWorldlineSort(value?: string): WorldlineSort {
+  return ["newest", "oldest", "start_date"].includes(value || "")
+    ? (value as WorldlineSort)
+    : "newest";
 }
 
 function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter): boolean {
@@ -162,7 +264,25 @@ function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter
     return generationMode.includes("deterministic");
   }
   if (filter === "ready") {
-    return ["completed", "mock_completed"].includes(report.worldline_status);
+    return (
+      ["completed", "mock_completed"].includes(report.worldline_status)
+      && failedChunks === 0
+    );
   }
   return true;
+}
+
+function compareWorldlines(
+  left: ScenarioSummary,
+  right: ScenarioSummary,
+  sortOrder: WorldlineSort,
+): number {
+  if (sortOrder === "oldest") {
+    return left.created_at.localeCompare(right.created_at);
+  }
+  if (sortOrder === "start_date") {
+    return right.start_date.localeCompare(left.start_date)
+      || right.created_at.localeCompare(left.created_at);
+  }
+  return right.created_at.localeCompare(left.created_at);
 }

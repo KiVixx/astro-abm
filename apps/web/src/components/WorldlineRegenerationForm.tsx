@@ -6,6 +6,7 @@ import {
   createLlmPreset,
   deleteLlmPreset,
   regenerateScenarioWorldlineFromChunk,
+  testLlmConnection,
   testLlmPreset,
   updateLlmPreset,
 } from "@/lib/api";
@@ -14,7 +15,13 @@ import type {
   LlmPresetSummary,
   ScenarioReport,
 } from "@/lib/types";
+import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
+import { useLeaveWarning } from "@/lib/useLeaveWarning";
+import {
+  LlmConnectionTestResult,
+  type LlmConnectionFeedback,
+} from "./LlmConnectionTestResult";
 
 interface Settings {
   name: string;
@@ -65,6 +72,8 @@ export function WorldlineRegenerationForm({
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [connectionFeedback, setConnectionFeedback] =
+    useState<LlmConnectionFeedback | null>(null);
   const chunkSize = normalizeChunkSize(config?.worldline_chunk_days);
   const chunks = useMemo(
     () => buildChunks((report.daily_timeline || []).map((item) => item.date), chunkSize),
@@ -72,6 +81,10 @@ export function WorldlineRegenerationForm({
   );
   const selectedChunk = chunks[startChunkIndex];
   const affectedChunks = Math.max(0, chunks.length - startChunkIndex);
+  const previousChunkFailure = useMemo(
+    () => findChunkFailure(report, startChunkIndex),
+    [report, startChunkIndex],
+  );
   const [progress, setProgress] = useState<RegenerationProgress>({
     currentChunk: 0,
     message: "",
@@ -90,6 +103,7 @@ export function WorldlineRegenerationForm({
   const progressPct = progress.totalChunks > 0
     ? Math.round((progress.currentChunk / progress.totalChunks) * 100)
     : 0;
+  useLeaveWarning(active);
 
   function recallPreset(presetId: string) {
     setSelectedPresetId(presetId);
@@ -141,14 +155,32 @@ export function WorldlineRegenerationForm({
     }
   }
 
-  async function testPreset() {
-    if (!selectedPresetId) return;
-    setMessage(t("worldline.regeneratePresetTesting"));
+  async function testConnection() {
+    setError("");
+    setConnectionFeedback({ message: "", reachable: false, status: "testing", testing: true });
     try {
-      const result = await testLlmPreset(selectedPresetId);
-      setMessage(`${result.status}: ${result.message}`);
+      const result = selectedPresetId && !settings.apiKey
+        ? await testLlmPreset(selectedPresetId)
+        : await testLlmConnection({
+            provider: "openai_compatible",
+            real_enabled: settings.realEnabled,
+            base_url: settings.baseUrl || null,
+            model: settings.model || null,
+            api_key: settings.apiKey || null,
+            timeout_seconds: Number(settings.timeoutSeconds),
+            max_output_tokens: Number(settings.maxOutputTokens),
+          });
+      setConnectionFeedback({
+        message: result.message,
+        reachable: result.reachable,
+        status: result.status,
+      });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("common.unknownError"));
+      setConnectionFeedback({
+        message: caught instanceof Error ? caught.message : t("common.unknownError"),
+        reachable: false,
+        status: "request_failed",
+      });
     }
   }
 
@@ -209,11 +241,21 @@ export function WorldlineRegenerationForm({
         const networkCallPerformed = Boolean(
           response.report.worldline_simulation?.provenance?.network_call_performed,
         );
+        if (halted) {
+          setActive(false);
+          setMessage("");
+          setProgress({
+            currentChunk: current,
+            message: t("worldline.regenerateProgressHalted"),
+            phase: "error",
+            totalChunks: affectedChunks,
+          });
+          return;
+        }
         if (
           chunkIndex < chunks.length - 1
           && callDelaySeconds > 0
           && networkCallPerformed
-          && !halted
         ) {
           setProgress({
             currentChunk: current,
@@ -262,7 +304,11 @@ export function WorldlineRegenerationForm({
   }
 
   return (
-    <form className="stack" onSubmit={submit}>
+    <form
+      className="stack"
+      onChange={() => setConnectionFeedback(null)}
+      onSubmit={submit}
+    >
       <section className="form-section">
         <div>
           <h2>{t("worldline.regenerateLockedContext")}</h2>
@@ -277,6 +323,53 @@ export function WorldlineRegenerationForm({
           <div><span>{t("report.generatedLanguage")}</span><strong>{report.language || "legacy"}</strong></div>
         </div>
       </section>
+
+      {previousChunkFailure ? (
+        <section className="notice warning regeneration-diagnosis">
+          <div>
+            <h2>{t("worldline.regeneratePreviousFailure")}</h2>
+            <p>{t("worldline.regeneratePreviousFailureHelp")}</p>
+          </div>
+          <div className="tag-row">
+            <span className="tag">
+              {t("worldline.chunkStatus")}: {formatEnumLabel(
+                t,
+                "chunk_status",
+                previousChunkFailure.status,
+              )}
+            </span>
+            <span className="tag">
+              {t("worldline.parseResult")}: {formatEnumLabel(
+                t,
+                "output_validation_status",
+                previousChunkFailure.outputStatus,
+              )}
+            </span>
+            {previousChunkFailure.attemptCount > 0 ? (
+              <span className="tag">
+                {t("worldline.attemptCount")}: {previousChunkFailure.attemptCount}/
+                {previousChunkFailure.maxAttempts || 3}
+              </span>
+            ) : null}
+          </div>
+          {previousChunkFailure.probableTruncation ? (
+            <p>
+              <strong>{t("worldline.probableTruncation")}</strong>
+              <br />
+              {t("worldline.probableTruncationHelp")}
+            </p>
+          ) : null}
+          {previousChunkFailure.recommendedAction ? (
+            <p>
+              <strong>{t("worldline.recommendedAction")}:</strong>{" "}
+              {t(
+                `worldline.requestAction.${previousChunkFailure.recommendedAction}`,
+                previousChunkFailure.recommendedAction,
+              )}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="form-section">
         <div>
@@ -304,7 +397,14 @@ export function WorldlineRegenerationForm({
         <div className="button-row">
           <button className="button secondary" type="button" onClick={() => savePreset(false)}>{t("worldline.regenerateSaveNewPreset")}</button>
           <button className="button secondary" disabled={!selectedPresetId} type="button" onClick={() => savePreset(true)}>{t("worldline.regenerateUpdatePreset")}</button>
-          <button className="button secondary" disabled={!selectedPresetId} type="button" onClick={testPreset}>{t("worldline.regenerateTestPreset")}</button>
+          <button
+            className="button secondary"
+            disabled={active || !settings.baseUrl || !settings.model}
+            type="button"
+            onClick={testConnection}
+          >
+            {t("worldline.regenerateTestConnection")}
+          </button>
           <button className="button secondary" disabled={!selectedPresetId} type="button" onClick={removePreset}>{t("scenarioCreate.llmPresetDelete")}</button>
         </div>
       </section>
@@ -316,8 +416,17 @@ export function WorldlineRegenerationForm({
       {settings.realEnabled && !selectedPreset?.has_api_key && !settings.apiKey ? (
         <p className="notice warning">{t("worldline.regenerateCredentialWarning")}</p>
       ) : null}
-      {message ? <p className="notice">{message}</p> : null}
-      {error ? <p className="notice warning">{error}</p> : null}
+      <LlmConnectionTestResult feedback={connectionFeedback} />
+      {message ? (
+        <p aria-live="polite" className="notice" role="status">
+          {message}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="notice warning" role="alert">
+          {error}
+        </p>
+      ) : null}
       <button disabled={active || !selectedChunk} type="submit">
         {active
           ? t("worldline.regenerationInProgress")
@@ -335,6 +444,7 @@ export function WorldlineRegenerationForm({
             <div style={{ width: `${progressPct}%` }} />
           </div>
           <p>{progress.message}</p>
+          {active ? <p className="muted">{t("common.keepTabOpen")}</p> : null}
         </section>
       ) : null}
     </form>
@@ -379,4 +489,50 @@ function buildChunks(dates: string[], chunkSize: number) {
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function findChunkFailure(report: ScenarioReport, startChunkIndex: number) {
+  const history = report.worldline_simulation?.provenance?.chunk_history;
+  if (!Array.isArray(history)) return null;
+  const chunk = history.find((value) => {
+    const record = recordFromUnknown(value);
+    return record && Number(record.chunk_index) === startChunkIndex + 1;
+  });
+  const record = recordFromUnknown(chunk);
+  if (!record || !["fallback", "failed"].includes(String(record.status || ""))) {
+    return null;
+  }
+  const attempts = Array.isArray(record.attempt_history)
+    ? record.attempt_history.map(recordFromUnknown).filter((value) => value !== null)
+    : [];
+  const lastAttempt = attempts.at(-1) || null;
+  const responseDiagnostics = recordFromUnknown(
+    record.response_diagnostics ?? lastAttempt?.response_diagnostics,
+  );
+  const requestDiagnostics = recordFromUnknown(
+    record.request_diagnostics ?? lastAttempt?.request_diagnostics,
+  );
+  return {
+    attemptCount: numberFromUnknown(record.attempt_count) || attempts.length,
+    maxAttempts: numberFromUnknown(record.max_attempts),
+    outputStatus: String(
+      record.output_validation_status ?? lastAttempt?.output_validation_status ?? "unknown",
+    ),
+    probableTruncation: responseDiagnostics?.probable_truncation === true,
+    recommendedAction: requestDiagnostics?.recommended_action
+      ? String(requestDiagnostics.recommended_action)
+      : "",
+    status: String(record.status),
+  };
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function numberFromUnknown(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }

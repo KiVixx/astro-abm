@@ -62,9 +62,13 @@ def create_scenario_id(title: str, now: datetime | None = None) -> str:
 
 def build_agent_output(agent: AgentProfile, language: ReportLanguage = "en") -> AgentOutput:
     if language == "zh-Hant":
+        agent_name = _agent_name_for_language(agent, language)
+        category = _zh_agent_category(agent.category)
+        time_horizon = _zh_time_horizon(agent.time_horizon)
+        decision_style = _zh_decision_style(agent.decision_style)
         behavior = (
-            f"{agent.name} 被建模為 {agent.category} 參與者，時間視角為 "
-            f"{agent.time_horizon}，決策風格為 {agent.decision_style}。"
+            f"{agent_name} 被建模為{category}參與者，時間視角為"
+            f"{time_horizon}，決策風格為{decision_style}。"
             "在此 MVP 中，代理群體會把壓力狀態、市場波動、宏觀脈絡、"
             "流動性壓力與天象敘事作為情境輸入來審視。"
         )
@@ -93,6 +97,8 @@ def build_agent_output(agent: AgentProfile, language: ReportLanguage = "en") -> 
             "代理行為是原型化描述，只應作為情境視角檢視。",
         ]
     else:
+        agent_name = agent.name
+        category = agent.category
         behavior = (
             f"{agent.name} is modeled as a {agent.category} participant with "
             f"{agent.time_horizon} horizon and {agent.decision_style} behavior. "
@@ -130,8 +136,8 @@ def build_agent_output(agent: AgentProfile, language: ReportLanguage = "en") -> 
 
     return AgentOutput(
         agent_id=agent.agent_id,
-        agent_name=agent.name,
-        role=agent.category,
+        agent_name=agent_name,
+        role=category,
         behavior_summary=behavior,
         risk_appetite=agent.risk_tolerance,
         likely_reaction=likely_reaction,
@@ -164,11 +170,25 @@ def build_daily_agent_state(
         mood = "planning-focused"
 
     if language == "zh-Hant":
-        likely_reaction = (
-            f"檢視壓力狀態：{stress_regime}、波動狀態：{volatility_regime}、"
-            f"流動性狀態：{liquidity_regime}，以及天象敘事標籤（{astro_tags}）。"
-            f"資料品質為 {research_signals.data_quality}；這些內容僅作為風險討論的情境脈絡。"
+        stress_label = _zh_context_label(stress_regime)
+        volatility_label = _zh_context_label(volatility_regime)
+        liquidity_label = _zh_context_label(liquidity_regime)
+        data_quality_label = _zh_context_label(research_signals.data_quality)
+        astro_tag_labels = "、".join(
+            _zh_astro_tag(tag) for tag in astro_context.event_tags
         )
+        likely_reaction = (
+            f"檢視壓力狀態：{stress_label}、波動狀態：{volatility_label}、"
+            f"流動性狀態：{liquidity_label}，以及天象敘事標籤（{astro_tag_labels}）。"
+            f"資料品質為{data_quality_label}；這些內容僅作為風險討論的情境脈絡。"
+        )
+        attention_triggers = [
+            f"壓力狀態：{stress_label}",
+            f"波動狀態：{volatility_label}",
+            f"流動性狀態：{liquidity_label}",
+            f"天象強度：{_zh_context_label(astro_context.intensity)}",
+            f"資料品質：{data_quality_label}",
+        ]
         caveats = [
             "每日代理狀態是 deterministic mock 輸出。",
             "這不是方向性市場判斷，也不是交易訊號。",
@@ -184,22 +204,98 @@ def build_daily_agent_state(
             "Daily agent state is deterministic mock output.",
             "This is not a directional market call and not a trading signal.",
         ]
-
-    return DailyAgentState(
-        agent_id=agent.agent_id,
-        agent_name=agent.name,
-        mood=mood,
-        risk_appetite=agent.risk_tolerance,
-        likely_reaction=likely_reaction,
-        attention_triggers=[
+        attention_triggers = [
             f"stress_regime:{stress_regime}",
             f"volatility_regime:{volatility_regime}",
             f"liquidity_regime:{liquidity_regime}",
             f"astro_intensity:{astro_context.intensity}",
             f"data_quality:{research_signals.data_quality}",
-        ],
+        ]
+
+    return DailyAgentState(
+        agent_id=agent.agent_id,
+        agent_name=_agent_name_for_language(agent, language),
+        mood=mood,
+        risk_appetite=agent.risk_tolerance,
+        likely_reaction=likely_reaction,
+        attention_triggers=attention_triggers,
         caveats=caveats,
     )
+
+
+def _zh_context_label(value: str) -> str:
+    return {
+        "stress": "高壓",
+        "elevated": "壓力升高",
+        "watchful": "觀望警戒",
+        "calm": "平穩",
+        "expanded": "波動擴張",
+        "compressed": "波動壓縮",
+        "normal": "正常",
+        "thin": "偏薄",
+        "selective": "選擇性",
+        "orderly": "有序",
+        "high": "高",
+        "medium": "中",
+        "low": "低",
+        "computed_ephemeris_available": "可計算星曆資料可用",
+        "local_research_available": "本地研究資料可用",
+        "placeholder_fallback": "佔位資料回退",
+        "future_placeholder": "未來佔位資料",
+    }.get(value, value.replace("_", " "))
+
+
+def _zh_astro_tag(value: str) -> str:
+    if value == "computed_ephemeris":
+        return "本機計算星曆"
+    if value.startswith("astro_activity:"):
+        return f"天象活動：{_zh_context_label(value.split(':', 1)[1])}"
+    return value.replace("_", " ")
+
+
+def _agent_name_for_language(agent: AgentProfile, language: ReportLanguage) -> str:
+    if language != "zh-Hant":
+        return agent.name
+    return {
+        "crypto_retail_fomo": "加密散戶 FOMO 群體",
+        "long_term_holder": "長期持有者",
+        "leveraged_trader": "槓桿交易者",
+        "macro_allocator": "宏觀配置者",
+        "big_tech_company_type": "大型科技公司類型",
+        "global_bank_type": "全球銀行類型",
+        "energy_company_type": "能源公司類型",
+    }.get(agent.agent_id, agent.name)
+
+
+def _zh_agent_category(value: str) -> str:
+    return {
+        "retail": "散戶群體",
+        "trading": "交易者",
+        "institutional": "機構",
+        "company_type": "公司類型",
+    }.get(value, value.replace("_", " "))
+
+
+def _zh_time_horizon(value: str) -> str:
+    return {
+        "intraday_to_days": "日內至數日",
+        "hours_to_days": "數小時至數日",
+        "weeks_to_quarters": "數週至數季",
+        "months_to_years": "數月至數年",
+        "quarters_to_years": "數季至數年",
+    }.get(value, value.replace("_", " "))
+
+
+def _zh_decision_style(value: str) -> str:
+    return {
+        "reactive narrative-following": "反應式敘事跟隨",
+        "slow conviction-based review": "緩慢信念審視",
+        "fast risk-adjustment": "快速風險調整",
+        "scenario-weighted allocation review": "情境加權配置審視",
+        "committee-based strategic planning": "委員會式策略規劃",
+        "risk committee balance-sheet review": "風險委員會資產負債表審視",
+        "operational hedging and capital planning": "營運避險與資本規劃",
+    }.get(value, value)
 
 
 def build_daily_timeline(
@@ -372,7 +468,18 @@ def build_coverage_summary(
 
     def is_mixed(snapshot: DailyScenarioSnapshot) -> bool:
         values = status_values(snapshot)
-        return "available" in values and any(value != "available" for value in values)
+        return (
+            snapshot.data_coverage.source == "mixed_computed_research"
+            or ("available" in values and any(value != "available" for value in values))
+        )
+
+    def has_local_research(snapshot: DailyScenarioSnapshot) -> bool:
+        return (
+            snapshot.data_coverage.source
+            in {"local_research_snapshot", "mixed_computed_research"}
+            or snapshot.research_signals.data_quality
+            in {"local_research_available", "partial_local_research_available"}
+        )
 
     component_available_counts = {
         key: sum(getattr(snapshot.data_coverage, key) == "available" for snapshot in daily_timeline)
@@ -387,7 +494,7 @@ def build_coverage_summary(
     notes = coverage_summary_notes(language)
     return ScenarioCoverageSummary(
         total_days=total_days,
-        local_research_days=source_counts.get("local_research_snapshot", 0),
+        local_research_days=sum(has_local_research(snapshot) for snapshot in daily_timeline),
         placeholder_days=sum(is_placeholder(snapshot) for snapshot in daily_timeline),
         future_placeholder_days=sum(is_future_placeholder(snapshot) for snapshot in daily_timeline),
         mixed_context_days=sum(is_mixed(snapshot) for snapshot in daily_timeline),
@@ -489,6 +596,7 @@ def coverage_summary_notes(language: ReportLanguage) -> list[str]:
     if language == "zh-Hant":
         return [
             "local_research_snapshot 表示當天可使用只讀本地研究脈絡。",
+            "mixed_computed_research 表示當天同時使用本地研究脈絡與本機即時計算星曆。",
             "computed_ephemeris 表示當天星曆由本機 Swiss Ephemeris 即時計算，不代表市場觀測資料可用。",
             "future_placeholder 表示未來日期尚無已觀測市場或壓力資料。",
             "coverage summary 只描述資料覆蓋，不代表逐點回測。",
@@ -496,6 +604,7 @@ def coverage_summary_notes(language: ReportLanguage) -> list[str]:
         ]
     return [
         "local_research_snapshot indicates read-only local research context was available for that day.",
+        "mixed_computed_research indicates that local research context and locally computed ephemeris were both used for that day.",
         "computed_ephemeris indicates local Swiss Ephemeris calculations were used for astro context; it does not imply observed market data is available.",
         "future_placeholder indicates no observed market/stress data is available for future dates.",
         "coverage summary is descriptive only and is not a point-in-time backtest.",

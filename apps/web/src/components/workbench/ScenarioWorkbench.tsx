@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ContextCoverageSummaryCard } from "../ContextCoverageSummaryCard";
 import { LlmScenarioReportCard } from "../LlmScenarioReportCard";
 import { DailyGraphCanvas } from "./DailyGraphCanvas";
@@ -28,12 +28,15 @@ interface ScenarioWorkbenchProps {
 function getInitialSnapshot(
   timeline: DailyScenarioSnapshot[],
   initialDate?: string,
+  fallbackDate?: string,
 ): DailyScenarioSnapshot | null {
   if (!timeline.length) {
     return null;
   }
   if (initialDate) {
-    return timeline.find((snapshot) => snapshot.date === initialDate) || timeline[0];
+    return timeline.find((snapshot) => snapshot.date === initialDate)
+      || timeline.find((snapshot) => snapshot.date === fallbackDate)
+      || timeline[0];
   }
   return timeline[0];
 }
@@ -90,7 +93,13 @@ export function ScenarioWorkbench({
       : fullTimeline,
     [fullTimeline, haltedGeneration],
   );
-  const initialSnapshot = getInitialSnapshot(timeline, initialDate);
+  const preferredInitialDate = initialDate
+    || (isWorldline ? haltedGeneration?.startDate : undefined);
+  const initialSnapshot = getInitialSnapshot(
+    timeline,
+    preferredInitialDate,
+    haltedGeneration?.startDate,
+  );
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -148,6 +157,18 @@ export function ScenarioWorkbench({
     }
     return { chunkIndex, nextDate };
   }, [currentReport.worldline_simulation, fullTimeline.length]);
+
+  useEffect(() => {
+    if (!selectedSnapshot || typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("date") === selectedSnapshot.date) {
+      return;
+    }
+    url.searchParams.set("date", selectedSnapshot.date);
+    window.history.replaceState(window.history.state, "", url);
+  }, [selectedSnapshot]);
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
@@ -229,12 +250,22 @@ export function ScenarioWorkbench({
             {isWorldline && currentReport.worldline_simulation ? (
               <>
                 <span className="tag">
-                  {t("worldline.status")}: {worldlineDisplayStatus(currentReport.worldline_simulation)}
+                  {t("worldline.status")}: {formatEnumLabel(
+                    t,
+                    "worldline_status",
+                    worldlineDisplayStatus(currentReport.worldline_simulation),
+                  )}
                 </span>
                 <span className="tag">
                   {t("worldline.dayCount")}: {selectedIndex + 1}/
                   {timeline.length}
                 </span>
+                {haltedGeneration ? (
+                  <span className="tag workbench-halted-status">
+                    {t("worldline.playableDays")}: {timeline.length} · {" "}
+                    {t("worldline.plannedDays")}: {fullTimeline.length}
+                  </span>
+                ) : null}
               </>
             ) : null}
             <span className="tag">
@@ -262,7 +293,7 @@ export function ScenarioWorkbench({
         </div>
       </header>
 
-      <main className="workbench-layout">
+      <div className="workbench-layout">
         <div className="workbench-primary-column">
           {isWorldline ? (
             <section className="worldline-playback-bar">
@@ -335,7 +366,7 @@ export function ScenarioWorkbench({
           regenerationActive={false}
           worldlinePrimary={isWorldline}
         />
-      </main>
+      </div>
     </div>
   );
 }

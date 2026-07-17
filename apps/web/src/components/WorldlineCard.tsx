@@ -22,7 +22,14 @@ export function WorldlineCard({
       ? t("worldline.deterministicMock")
       : generationMode || t("worldline.noWorldlineShort");
   const status = report.worldline_status || "legacy";
-  const statusTone = ["failed", "fallback"].includes(status)
+  const statusTone = [
+    "failed",
+    "fallback",
+    "halted",
+    "partial_fallback",
+    "failed_fallback",
+    "configuration_fallback",
+  ].includes(status)
     ? "alert"
     : ["completed", "mock_completed"].includes(status)
       ? "ready"
@@ -49,10 +56,17 @@ export function WorldlineCard({
         <div className="worldline-record-signals">
           <span className="worldline-status-signal">
             <i aria-hidden="true" />
-            {t("worldline.status")}: {status}
+            {t("worldline.status")}: {formatEnumLabel(t, "worldline_status", status)}
           </span>
           <span>{t("worldline.mode")}: {generationModeLabel}</span>
-          <span>{t("worldline.dayCount")}: {report.worldline_day_count || 0}</span>
+          {report.worldline_generation_halted ? (
+            <span className="worldline-record-warning">
+              {t("worldline.playableDays")}: {report.worldline_playable_day_count || 0}
+              {" / "}{t("worldline.plannedDays")}: {report.worldline_day_count || 0}
+            </span>
+          ) : (
+            <span>{t("worldline.dayCount")}: {report.worldline_day_count || 0}</span>
+          )}
           {Number(report.worldline_llm_failed_chunk_count || 0) > 0 ? (
             <span className="worldline-record-warning">
               {t("worldline.failedChunks")}: {report.worldline_llm_failed_chunk_count}

@@ -5,8 +5,13 @@ import { getScenarios } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export default async function WorldlinesPage() {
+export default async function WorldlinesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; sort?: string; status?: string }>;
+}) {
   try {
+    const { q, sort, status } = await searchParams;
     const summaries = await getScenarios();
 
     return (
@@ -32,7 +37,12 @@ export default async function WorldlinesPage() {
             </Link>
           </div>
         </header>
-        <WorldlineSearch summaries={summaries} />
+        <WorldlineSearch
+          initialFilter={status}
+          initialQuery={q}
+          initialSort={sort}
+          summaries={summaries}
+        />
       </div>
     );
   } catch (error) {
@@ -47,6 +57,9 @@ export default async function WorldlinesPage() {
         <p className="muted">
           {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
         </p>
+        <Link className="button secondary" href="/worldlines">
+          <I18nText tKey="common.retry" />
+        </Link>
       </div>
     );
   }

@@ -53,9 +53,14 @@ export default async function NewWorldlinePage() {
         <p className="muted">
           {error instanceof Error ? error.message : <I18nText tKey="common.unknownError" />}
         </p>
-        <Link className="button secondary" href="/">
-          <I18nText tKey="common.backHome" />
-        </Link>
+        <div className="button-row">
+          <Link className="button" href="/worldlines/new">
+            <I18nText tKey="common.retry" />
+          </Link>
+          <Link className="button secondary" href="/">
+            <I18nText tKey="common.backHome" />
+          </Link>
+        </div>
       </div>
     );
   }
