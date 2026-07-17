@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 export default async function WorldlinesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; sort?: string; status?: string }>;
 }) {
   try {
-    const { q, status } = await searchParams;
+    const { q, sort, status } = await searchParams;
     const summaries = await getScenarios();
 
     return (
@@ -40,6 +40,7 @@ export default async function WorldlinesPage({
         <WorldlineSearch
           initialFilter={status}
           initialQuery={q}
+          initialSort={sort}
           summaries={summaries}
         />
       </div>

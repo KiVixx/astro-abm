@@ -7,14 +7,17 @@ import type { ScenarioSummary } from "@/lib/types";
 import { useI18n } from "@/i18n/useI18n";
 
 type WorldlineFilter = "all" | "ready" | "llm" | "deterministic" | "failed" | "legacy";
+type WorldlineSort = "newest" | "oldest" | "start_date";
 
 export function WorldlineSearch({
   initialFilter,
   initialQuery,
+  initialSort,
   summaries,
 }: {
   initialFilter?: string;
   initialQuery?: string;
+  initialSort?: string;
   summaries: ScenarioSummary[];
 }) {
   const { t } = useI18n();
@@ -22,6 +25,9 @@ export function WorldlineSearch({
   const [query, setQuery] = useState(initialQuery || "");
   const [activeFilter, setActiveFilter] = useState<WorldlineFilter>(() =>
     normalizeWorldlineFilter(initialFilter),
+  );
+  const [sortOrder, setSortOrder] = useState<WorldlineSort>(() =>
+    normalizeWorldlineSort(initialSort),
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
@@ -41,7 +47,7 @@ export function WorldlineSearch({
     [items],
   );
   const filtered = useMemo(() => {
-    return items.filter((report) => {
+    const matchingItems = items.filter((report) => {
       if (!matchesWorldlineFilter(report, activeFilter)) {
         return false;
       }
@@ -62,7 +68,8 @@ export function WorldlineSearch({
         .toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [activeFilter, items, normalizedQuery]);
+    return matchingItems.sort((left, right) => compareWorldlines(left, right, sortOrder));
+  }, [activeFilter, items, normalizedQuery, sortOrder]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -79,8 +86,13 @@ export function WorldlineSearch({
     } else {
       url.searchParams.set("status", activeFilter);
     }
+    if (sortOrder === "newest") {
+      url.searchParams.delete("sort");
+    } else {
+      url.searchParams.set("sort", sortOrder);
+    }
     window.history.replaceState(window.history.state, "", url);
-  }, [activeFilter, query]);
+  }, [activeFilter, query, sortOrder]);
 
   const confirmAndDelete = async (report: ScenarioSummary) => {
     const confirmed = window.confirm(
@@ -119,10 +131,23 @@ export function WorldlineSearch({
               value={query}
             />
           </label>
-          <div className="worldline-result-count" aria-live="polite">
-            <span>{t("worldline.recordsVisible")}</span>
-            <strong>{String(filtered.length).padStart(2, "0")}</strong>
-            <span>/ {String(items.length).padStart(2, "0")}</span>
+          <div className="worldline-search-tools">
+            <label className="worldline-sort-field">
+              <span>{t("worldline.sortLabel")}</span>
+              <select
+                onChange={(event) => setSortOrder(event.target.value as WorldlineSort)}
+                value={sortOrder}
+              >
+                <option value="newest">{t("worldline.sort.newest")}</option>
+                <option value="oldest">{t("worldline.sort.oldest")}</option>
+                <option value="start_date">{t("worldline.sort.startDate")}</option>
+              </select>
+            </label>
+            <div className="worldline-result-count" aria-live="polite">
+              <span>{t("worldline.recordsVisible")}</span>
+              <strong>{String(filtered.length).padStart(2, "0")}</strong>
+              <span>/ {String(items.length).padStart(2, "0")}</span>
+            </div>
           </div>
         </div>
         <div className="filter-row" role="list" aria-label={t("worldline.filterLabel")}>
@@ -178,6 +203,12 @@ function normalizeWorldlineFilter(value?: string): WorldlineFilter {
     : "all";
 }
 
+function normalizeWorldlineSort(value?: string): WorldlineSort {
+  return ["newest", "oldest", "start_date"].includes(value || "")
+    ? (value as WorldlineSort)
+    : "newest";
+}
+
 function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter): boolean {
   if (filter === "all") {
     return true;
@@ -215,4 +246,19 @@ function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter
     );
   }
   return true;
+}
+
+function compareWorldlines(
+  left: ScenarioSummary,
+  right: ScenarioSummary,
+  sortOrder: WorldlineSort,
+): number {
+  if (sortOrder === "oldest") {
+    return left.created_at.localeCompare(right.created_at);
+  }
+  if (sortOrder === "start_date") {
+    return right.start_date.localeCompare(left.start_date)
+      || right.created_at.localeCompare(left.created_at);
+  }
+  return right.created_at.localeCompare(left.created_at);
 }

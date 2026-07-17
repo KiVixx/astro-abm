@@ -1246,6 +1246,30 @@ pre {
   padding-inline: 14px;
 }
 
+.worldline-search-tools {
+  align-items: flex-end;
+  display: flex;
+  gap: 18px;
+}
+
+.worldline-sort-field {
+  display: grid;
+  gap: 6px;
+}
+
+.worldline-sort-field > span {
+  color: var(--muted);
+  font-family: var(--font-signal);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.worldline-sort-field select {
+  min-height: 48px;
+  min-width: 170px;
+}
+
 .worldline-result-count {
   align-items: baseline;
   display: flex;
@@ -3244,6 +3268,16 @@ pre {
 
   .worldline-result-count {
     justify-content: flex-start;
+  }
+
+  .worldline-search-tools {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .worldline-sort-field select {
+    width: 100%;
   }
 
   .worldline-search-console .filter-row {
