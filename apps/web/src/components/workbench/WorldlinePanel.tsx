@@ -772,7 +772,11 @@ function regenerationOutcome(
   );
   const firstIssue = relevant
     .flatMap((chunk) => stringArray(chunk.issues))
-    .find((issue) => !issue.startsWith("LLM regeneration failed safely"));
+    .find(
+      (issue) =>
+        !issue.startsWith("LLM regeneration failed safely")
+        && !issue.startsWith("LLM regeneration could not be validated"),
+    );
   return {
     status,
     completed,

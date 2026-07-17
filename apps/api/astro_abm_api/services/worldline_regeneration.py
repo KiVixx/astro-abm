@@ -545,7 +545,7 @@ def _regenerate_llm_chunk(
     ]
     if not chunk_days or generated.status != "completed":
         issues = [
-            "LLM regeneration failed safely; deterministic fallback chunk was used.",
+            "LLM regeneration could not be validated; deterministic fallback chunk was used.",
             str(provenance.get("last_error") or provenance.get("output_validation_status") or ""),
         ]
         chunk_days = _regenerate_deterministic_chunk(

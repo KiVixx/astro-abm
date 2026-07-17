@@ -2145,7 +2145,7 @@ def test_worldline_final_json_retry_prioritizes_short_complete_output() -> None:
     assert "優先確保 JSON 完整閉合" in retried[-1]["content"]
 
 
-def test_worldline_chunk_invalid_json_falls_back_safely(
+def test_worldline_chunk_invalid_json_uses_validation_fallback(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path))
@@ -2422,6 +2422,9 @@ def test_worldline_chunk_stops_after_first_exhausted_chunk(
     assert responses[1].json()["consecutive_failed_chunk_count"] == 1
     assert responses[1].json()["generation_halted"] is True
     halted_worldline = responses[0].json()["report"]["worldline_simulation"]
+    assert halted_worldline["summary"] == (
+        "LLM worldline chunk could not be validated; deterministic fallback days were used."
+    )
     halted_history = halted_worldline["provenance"]["chunk_history"]
     assert [item["status"] for item in halted_history] == [
         "fallback",
