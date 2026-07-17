@@ -59,7 +59,14 @@ export function WorldlineCard({
             {t("worldline.status")}: {formatEnumLabel(t, "worldline_status", status)}
           </span>
           <span>{t("worldline.mode")}: {generationModeLabel}</span>
-          <span>{t("worldline.dayCount")}: {report.worldline_day_count || 0}</span>
+          {report.worldline_generation_halted ? (
+            <span className="worldline-record-warning">
+              {t("worldline.playableDays")}: {report.worldline_playable_day_count || 0}
+              {" / "}{t("worldline.plannedDays")}: {report.worldline_day_count || 0}
+            </span>
+          ) : (
+            <span>{t("worldline.dayCount")}: {report.worldline_day_count || 0}</span>
+          )}
           {Number(report.worldline_llm_failed_chunk_count || 0) > 0 ? (
             <span className="worldline-record-warning">
               {t("worldline.failedChunks")}: {report.worldline_llm_failed_chunk_count}

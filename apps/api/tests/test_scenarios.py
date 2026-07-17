@@ -502,6 +502,8 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert summaries[0]["worldline_status"] == "mock_completed"
     assert summaries[0]["worldline_generation_mode"] == "deterministic_mock_v1"
     assert summaries[0]["worldline_day_count"] == len(report["daily_timeline"])
+    assert summaries[0]["worldline_playable_day_count"] == len(report["daily_timeline"])
+    assert summaries[0]["worldline_generation_halted"] is False
     assert summaries[0]["worldline_failed_chunk_count"] == 0
     assert summaries[0]["llm_report_status"] is None
     assert summaries[0]["coverage_total_days"] == len(report["daily_timeline"])
@@ -528,6 +530,30 @@ def test_create_list_and_get_scenario(monkeypatch, tmp_path: Path) -> None:
     assert fallback_summary.worldline_failed_chunk_count == 2
     assert fallback_summary.worldline_configuration_fallback_chunk_count == 0
     assert fallback_summary.worldline_llm_failed_chunk_count == 2
+
+    halted_end = report_model.worldline_simulation.days[0].date.isoformat()
+    halted_worldline = report_model.worldline_simulation.model_copy(
+        update={
+            "provenance": {
+                **report_model.worldline_simulation.provenance,
+                "generation_halted": True,
+                "chunk_history": [
+                    {
+                        "status": "fallback",
+                        "generation_halted": True,
+                        "chunk_start_date": halted_end,
+                        "chunk_end_date": halted_end,
+                    }
+                ],
+            },
+        }
+    )
+    halted_summary = report_to_summary(
+        report_model.model_copy(update={"worldline_simulation": halted_worldline})
+    )
+    assert halted_summary.worldline_generation_halted is True
+    assert halted_summary.worldline_playable_day_count == 1
+    assert halted_summary.worldline_day_count == len(report_model.worldline_simulation.days)
 
     configuration_worldline = report_model.worldline_simulation.model_copy(
         update={

@@ -8,7 +8,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-from astro_abm_api.models.report import ScenarioReport
+from astro_abm_api.models.report import ScenarioReport, WorldlineSimulation
 from astro_abm_api.models.scenario import ScenarioSummary
 from astro_abm_api.services.simulation_engine import build_coverage_summary
 
@@ -107,6 +107,8 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         worldline_status=worldline.status if worldline else None,
         worldline_generation_mode=generation_mode,
         worldline_day_count=worldline.horizon_days if worldline else 0,
+        worldline_playable_day_count=_playable_worldline_day_count(worldline),
+        worldline_generation_halted=bool(provenance.get("generation_halted", False)),
         worldline_failed_chunk_count=(
             int(failed_chunk_count) if isinstance(failed_chunk_count, (int, float)) else 0
         ),
@@ -117,6 +119,33 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
         coverage_local_research_days=coverage.local_research_days if coverage else None,
         coverage_future_placeholder_days=coverage.future_placeholder_days if coverage else None,
     )
+
+
+def _playable_worldline_day_count(worldline: WorldlineSimulation | None) -> int:
+    if worldline is None:
+        return 0
+    provenance = worldline.provenance
+    if not provenance.get("generation_halted"):
+        return worldline.horizon_days
+    chunk_history = provenance.get("chunk_history")
+    if not isinstance(chunk_history, list):
+        return worldline.horizon_days
+    failed_chunk = next(
+        (
+            chunk
+            for chunk in chunk_history
+            if isinstance(chunk, dict)
+            and chunk.get("status") == "fallback"
+            and chunk.get("generation_halted") is True
+        ),
+        None,
+    )
+    if failed_chunk is None:
+        return worldline.horizon_days
+    end_date = failed_chunk.get("chunk_end_date")
+    if not isinstance(end_date, str):
+        return worldline.horizon_days
+    return sum(1 for day in worldline.days if day.date.isoformat() <= end_date)
 
 
 def _refresh_derived_coverage(report: ScenarioReport) -> ScenarioReport:
