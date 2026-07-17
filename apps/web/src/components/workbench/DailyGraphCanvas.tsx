@@ -48,6 +48,8 @@ interface GraphTooltip {
   detail?: string;
 }
 
+type RelationshipViewMode = "focused" | "all";
+
 const MIN_CANVAS_WIDTH = 760;
 const CANVAS_HEIGHT = 620;
 
@@ -137,17 +139,37 @@ export function DailyGraphCanvas({
   });
   const [zoomTransform, setZoomTransform] = useState<ZoomTransform>(zoomIdentity);
   const [tooltip, setTooltip] = useState<GraphTooltip | null>(null);
+  const [relationshipView, setRelationshipView] = useState<RelationshipViewMode>("focused");
 
   const forceGraph = useMemo(
     () => toForceGraph(graph, canvasSize.width, canvasSize.height),
     [canvasSize.height, canvasSize.width, graph],
   );
+  const visibleEdges = useMemo(() => {
+    if (relationshipView === "all") {
+      return forceGraph.edges;
+    }
+    if (selectedEdgeId) {
+      return forceGraph.edges.filter((edge) => edge.id === selectedEdgeId);
+    }
+    if (selectedNodeId) {
+      return forceGraph.edges.filter((edge) => {
+        const [sourceId, targetId] = edgeEndpointIds(edge);
+        return sourceId === selectedNodeId || targetId === selectedNodeId;
+      });
+    }
+    return forceGraph.edges.filter((edge) => edge.type !== "agent_attention");
+  }, [forceGraph.edges, relationshipView, selectedEdgeId, selectedNodeId]);
+  const visibleEdgeIds = useMemo(
+    () => new Set(visibleEdges.map((edge) => edge.id)),
+    [visibleEdges],
+  );
   const graphKeyboardIds = useMemo(
     () => [
       ...forceGraph.nodes.map((node) => `node:${node.id}`),
-      ...forceGraph.edges.map((edge) => `edge:${edge.id}`),
+      ...visibleEdges.map((edge) => `edge:${edge.id}`),
     ],
-    [forceGraph.edges, forceGraph.nodes],
+    [forceGraph.nodes, visibleEdges],
   );
   const [keyboardFocusId, setKeyboardFocusId] = useState(
     () => graphKeyboardIds[0] || "",
@@ -157,6 +179,7 @@ export function DailyGraphCanvas({
     () => new Map(forceGraph.nodes.map((node) => [node.id, node])),
     [forceGraph.nodes],
   );
+  const selectedNodeForStatus = selectedNodeId ? nodeById.get(selectedNodeId) : undefined;
 
   const highlightedNodeIds = useMemo(() => {
     if (selectedNodeId) {
@@ -467,6 +490,44 @@ export function DailyGraphCanvas({
         </div>
       </div>
       <GraphLegend />
+      <div className="graph-relationship-toolbar">
+        <div
+          aria-label={t("workbench.relationshipView")}
+          className="graph-relationship-segments"
+          role="group"
+        >
+          <button
+            aria-pressed={relationshipView === "focused"}
+            className={relationshipView === "focused" ? "is-active" : ""}
+            onClick={() => setRelationshipView("focused")}
+            type="button"
+          >
+            {t("workbench.focusedRelationships")}
+          </button>
+          <button
+            aria-pressed={relationshipView === "all"}
+            className={relationshipView === "all" ? "is-active" : ""}
+            onClick={() => setRelationshipView("all")}
+            type="button"
+          >
+            {t("workbench.allRelationships")}
+          </button>
+        </div>
+        <div aria-live="polite" className="graph-focus-summary">
+          <strong>
+            {selectedNodeForStatus
+              ? `${t("workbench.focusedOn")}: ${displayNodeLabel(selectedNodeForStatus)}`
+              : selectedEdgeId
+                ? `${t("workbench.focusedOn")}: ${t("workbench.selectedRelationship")}`
+                : relationshipView === "focused"
+                  ? t("workbench.focusedRelationshipsHelp")
+                  : t("workbench.allRelationshipsHelp")}
+          </strong>
+          <span>
+            {visibleEdges.length}/{forceGraph.edges.length} {t("workbench.relationshipsVisible")}
+          </span>
+        </div>
+      </div>
       <div className="force-graph-controls">
         <span className="muted">{t("workbench.zoomPanHint")}</span>
         <div className="button-row">
@@ -508,6 +569,7 @@ export function DailyGraphCanvas({
             <g className="workbench-edges force-graph-edges" ref={edgeLayerRef}>
               {forceGraph.edges.map((edge) => {
                 const keyboardId = `edge:${edge.id}`;
+                const isVisible = visibleEdgeIds.has(edge.id);
                 const source = nodeById.get(edge.sourceId);
                 const target = nodeById.get(edge.targetId);
                 const edgeAccessibleLabel = `${t("workbench.relationship")}: ${
@@ -516,7 +578,11 @@ export function DailyGraphCanvas({
                   target ? displayNodeLabel(target) : edge.targetId
                 }`;
                 return (
-                  <g key={edge.id}>
+                  <g
+                    aria-hidden={!isVisible}
+                    className={`force-graph-edge-group ${isVisible ? "" : "is-filtered"}`}
+                    key={edge.id}
+                  >
                     <line
                       className="force-graph-edge-hit"
                       onClick={(event) => {
@@ -557,7 +623,7 @@ export function DailyGraphCanvas({
                       onMouseLeave={() => setTooltip(null)}
                       onMouseMove={(event) => showEdgeTooltip(event, edge)}
                       role="button"
-                      tabIndex={keyboardFocusId === keyboardId ? 0 : -1}
+                      tabIndex={isVisible && keyboardFocusId === keyboardId ? 0 : -1}
                       x1={source?.initialX || 0}
                       x2={target?.initialX || 0}
                       y1={source?.initialY || 0}
