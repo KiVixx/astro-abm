@@ -734,6 +734,12 @@ export function DailyGraphCanvas({
           ref={svgRef}
           viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
           aria-label={t("workbench.graphAria")}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              clearSelection();
+            }
+          }}
         >
           <defs>
             <marker
