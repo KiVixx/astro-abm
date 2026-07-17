@@ -208,7 +208,10 @@ function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter
     return generationMode.includes("deterministic");
   }
   if (filter === "ready") {
-    return ["completed", "mock_completed"].includes(report.worldline_status);
+    return (
+      ["completed", "mock_completed"].includes(report.worldline_status)
+      && failedChunks === 0
+    );
   }
   return true;
 }
