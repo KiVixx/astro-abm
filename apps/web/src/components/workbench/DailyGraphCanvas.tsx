@@ -14,7 +14,11 @@ import { select } from "d3-selection";
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphLegend } from "./GraphLegend";
-import type { WorkbenchGraph, WorkbenchNode } from "@/lib/workbenchGraph";
+import type {
+  WorkbenchGraph,
+  WorkbenchNode,
+  WorkbenchNodeType,
+} from "@/lib/workbenchGraph";
 import {
   connectedNodeIds,
   edgeEndpointIds,
@@ -52,6 +56,16 @@ type RelationshipViewMode = "focused" | "all";
 
 const MIN_CANVAS_WIDTH = 760;
 const CANVAS_HEIGHT = 620;
+const ALL_NODE_TYPES: WorkbenchNodeType[] = [
+  "agent",
+  "astro",
+  "stress",
+  "volatility",
+  "liquidity",
+  "data_quality",
+  "asset",
+  "risk",
+];
 
 function shortLabel(value?: string, length = 26): string {
   if (!value) {
@@ -140,36 +154,51 @@ export function DailyGraphCanvas({
   const [zoomTransform, setZoomTransform] = useState<ZoomTransform>(zoomIdentity);
   const [tooltip, setTooltip] = useState<GraphTooltip | null>(null);
   const [relationshipView, setRelationshipView] = useState<RelationshipViewMode>("focused");
+  const [activeNodeTypes, setActiveNodeTypes] = useState<Set<WorkbenchNodeType>>(
+    () => new Set(ALL_NODE_TYPES),
+  );
 
   const forceGraph = useMemo(
     () => toForceGraph(graph, canvasSize.width, canvasSize.height),
     [canvasSize.height, canvasSize.width, graph],
   );
+  const visibleNodes = useMemo(
+    () => forceGraph.nodes.filter((node) => activeNodeTypes.has(node.type)),
+    [activeNodeTypes, forceGraph.nodes],
+  );
+  const visibleNodeIds = useMemo(
+    () => new Set(visibleNodes.map((node) => node.id)),
+    [visibleNodes],
+  );
   const visibleEdges = useMemo(() => {
+    const edgesForVisibleNodes = forceGraph.edges.filter((edge) => {
+      const [sourceId, targetId] = edgeEndpointIds(edge);
+      return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+    });
     if (relationshipView === "all") {
-      return forceGraph.edges;
+      return edgesForVisibleNodes;
     }
     if (selectedEdgeId) {
-      return forceGraph.edges.filter((edge) => edge.id === selectedEdgeId);
+      return edgesForVisibleNodes.filter((edge) => edge.id === selectedEdgeId);
     }
     if (selectedNodeId) {
-      return forceGraph.edges.filter((edge) => {
+      return edgesForVisibleNodes.filter((edge) => {
         const [sourceId, targetId] = edgeEndpointIds(edge);
         return sourceId === selectedNodeId || targetId === selectedNodeId;
       });
     }
-    return forceGraph.edges.filter((edge) => edge.type !== "agent_attention");
-  }, [forceGraph.edges, relationshipView, selectedEdgeId, selectedNodeId]);
+    return edgesForVisibleNodes.filter((edge) => edge.type !== "agent_attention");
+  }, [forceGraph.edges, relationshipView, selectedEdgeId, selectedNodeId, visibleNodeIds]);
   const visibleEdgeIds = useMemo(
     () => new Set(visibleEdges.map((edge) => edge.id)),
     [visibleEdges],
   );
   const graphKeyboardIds = useMemo(
     () => [
-      ...forceGraph.nodes.map((node) => `node:${node.id}`),
+      ...visibleNodes.map((node) => `node:${node.id}`),
       ...visibleEdges.map((edge) => `edge:${edge.id}`),
     ],
-    [forceGraph.nodes, visibleEdges],
+    [visibleEdges, visibleNodes],
   );
   const [keyboardFocusId, setKeyboardFocusId] = useState(
     () => graphKeyboardIds[0] || "",
@@ -371,6 +400,26 @@ export function DailyGraphCanvas({
     focusNodeInView(nodeId);
   };
 
+  const toggleNodeTypes = (nodeTypes: WorkbenchNodeType[]) => {
+    setActiveNodeTypes((current) => {
+      const next = new Set(current);
+      const shouldHide = nodeTypes.every((type) => current.has(type));
+      nodeTypes.forEach((type) => {
+        if (shouldHide) {
+          next.delete(type);
+        } else {
+          next.add(type);
+        }
+      });
+      return next.size ? next : current;
+    });
+    if (selectedNodeForStatus && nodeTypes.includes(selectedNodeForStatus.type)) {
+      clearSelection();
+    } else if (selectedEdgeId) {
+      onSelectEdge(null);
+    }
+  };
+
   const fitView = useCallback(() => {
     const svg = svgRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
@@ -532,7 +581,10 @@ export function DailyGraphCanvas({
           ) : null}
         </div>
       </div>
-      <GraphLegend />
+      <GraphLegend
+        activeNodeTypes={activeNodeTypes}
+        onToggleNodeTypes={toggleNodeTypes}
+      />
       <div className="graph-relationship-toolbar">
         <div
           aria-label={t("workbench.relationshipView")}
@@ -567,6 +619,7 @@ export function DailyGraphCanvas({
                   : t("workbench.allRelationshipsHelp")}
           </strong>
           <span>
+            {visibleNodes.length}/{forceGraph.nodes.length} {t("workbench.nodesVisible")} ·{" "}
             {visibleEdges.length}/{forceGraph.edges.length} {t("workbench.relationshipsVisible")}
           </span>
         </div>
@@ -580,7 +633,7 @@ export function DailyGraphCanvas({
             value={selectedNodeId || ""}
           >
             <option value="">{t("workbench.chooseNode")}</option>
-            {forceGraph.nodes.map((node) => (
+            {visibleNodes.map((node) => (
               <option key={node.id} value={node.id}>
                 {displayNodeLabel(node)} ({displayNodeType(node)})
               </option>
@@ -694,14 +747,16 @@ export function DailyGraphCanvas({
             <g className="workbench-nodes force-graph-nodes" ref={nodeLayerRef}>
               {forceGraph.nodes.map((node) => {
                 const keyboardId = `node:${node.id}`;
+                const isVisible = visibleNodeIds.has(node.id);
                 return (
                 <g
+                  aria-hidden={!isVisible}
                   aria-label={[
                     displayNodeLabel(node),
                     displayNodeSubtitle(node),
                   ].filter(Boolean).join(": ")}
                   aria-pressed={selectedNodeId === node.id}
-                  className={nodeClassName(node, selectedNodeId, selectedEdgeId, highlightedNodeIds)}
+                  className={`${nodeClassName(node, selectedNodeId, selectedEdgeId, highlightedNodeIds)} ${isVisible ? "" : "is-filtered"}`}
                   data-graph-keyboard-id={keyboardId}
                   key={node.id}
                   onClick={(event) => {
@@ -723,7 +778,7 @@ export function DailyGraphCanvas({
                   onMouseLeave={() => setTooltip(null)}
                   onMouseMove={(event) => showNodeTooltip(event, node)}
                   role="button"
-                  tabIndex={keyboardFocusId === keyboardId ? 0 : -1}
+                  tabIndex={isVisible && keyboardFocusId === keyboardId ? 0 : -1}
                   transform={`translate(${node.initialX} ${node.initialY})`}
                 >
                   <circle className="force-node-hit-target" r={Math.max(38, node.radius + 28)} />

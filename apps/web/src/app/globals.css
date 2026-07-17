@@ -2533,6 +2533,29 @@ pre {
   gap: 6px;
 }
 
+.workbench-legend-filter {
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.workbench-legend-filter:hover,
+.workbench-legend-filter:focus-visible {
+  border-color: var(--border-strong);
+}
+
+.workbench-legend-filter:not(.is-active) {
+  color: var(--muted);
+  opacity: 0.48;
+  text-decoration: line-through;
+}
+
+.workbench-legend-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .legend-dot {
   border-radius: 999px;
   display: inline-block;
@@ -2806,6 +2829,10 @@ pre {
   cursor: grab;
   outline: none;
   transition: opacity 120ms ease;
+}
+
+.force-graph-node.is-filtered {
+  display: none;
 }
 
 .force-graph-node:active {

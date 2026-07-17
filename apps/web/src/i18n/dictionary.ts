@@ -569,6 +569,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "workbench.allRelationshipsHelp": "All scenario relationships are visible.",
     "workbench.focusedOn": "Focused on",
     "workbench.relationshipsVisible": "relationships visible",
+    "workbench.nodesVisible": "nodes visible",
     "workbench.findNode": "Find a node",
     "workbench.chooseNode": "Choose an agent, context, asset, or risk",
     "workbench.timelineTitle": "Daily Timeline",
@@ -663,6 +664,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "legend.relationship": "Relationship edge",
     "legend.assetStressSentiment": "Asset Stress Sentiment",
     "legend.note": "Scenario visualization only; not a causal graph or trading signal.",
+    "legend.filterNote": "Select a node type to show or hide it. Scenario visualization only; not a causal graph or trading signal.",
 
     "safety.associationOnly": "Association only",
     "safety.scenarioRehearsalOnly": "Scenario rehearsal only",
@@ -1366,6 +1368,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "workbench.allRelationshipsHelp": "目前顯示此日期的全部情境關係。",
     "workbench.focusedOn": "目前聚焦",
     "workbench.relationshipsVisible": "條可見關係",
+    "workbench.nodesVisible": "個可見節點",
     "workbench.findNode": "尋找節點",
     "workbench.chooseNode": "選擇代理、脈絡、資產或風險",
     "workbench.timelineTitle": "每日時間線",
@@ -1460,6 +1463,7 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "legend.relationship": "關係線",
     "legend.assetStressSentiment": "資產情緒壓力支撐",
     "legend.note": "這只是情境視覺化，不是因果圖，也不是交易訊號。",
+    "legend.filterNote": "選擇節點類型可顯示或隱藏；這只是情境視覺化，不是因果圖，也不是交易訊號。",
 
     "safety.associationOnly": "僅為相關性分析",
     "safety.scenarioRehearsalOnly": "僅為情境推演",
