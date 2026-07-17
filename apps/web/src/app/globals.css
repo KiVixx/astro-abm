@@ -2641,6 +2641,13 @@ pre {
   grid-column: 1 / -1;
 }
 
+.graph-zoom-button {
+  font-size: 20px;
+  min-width: 40px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
 .graph-relationship-toolbar {
   align-items: stretch;
   background: rgba(237, 243, 244, 0.74);

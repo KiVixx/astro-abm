@@ -371,6 +371,15 @@ export function DailyGraphCanvas({
     select(svg).call(zoomBehavior.transform, zoomIdentity);
   }, []);
 
+  const zoomViewBy = useCallback((factor: number) => {
+    const svg = svgRef.current;
+    const zoomBehavior = zoomBehaviorRef.current;
+    if (!svg || !zoomBehavior) {
+      return;
+    }
+    select(svg).call(zoomBehavior.scaleBy, factor);
+  }, []);
+
   const focusNodeInView = useCallback((nodeId: string) => {
     const svg = svgRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
@@ -682,6 +691,24 @@ export function DailyGraphCanvas({
           <span className="muted">{t("workbench.zoomPanHint")}</span>
         </div>
         <div className="button-row">
+          <button
+            aria-label={t("workbench.zoomIn")}
+            className="button secondary graph-zoom-button"
+            onClick={() => zoomViewBy(1.25)}
+            title={t("workbench.zoomIn")}
+            type="button"
+          >
+            +
+          </button>
+          <button
+            aria-label={t("workbench.zoomOut")}
+            className="button secondary graph-zoom-button"
+            onClick={() => zoomViewBy(0.8)}
+            title={t("workbench.zoomOut")}
+            type="button"
+          >
+            -
+          </button>
           {activeNodeTypes.size < ALL_NODE_TYPES.length ? (
             <button className="button secondary" onClick={showAllNodeTypes} type="button">
               {t("workbench.showAllNodeTypes")}
