@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { WorldlineCard } from "./WorldlineCard";
 import { deleteScenario } from "@/lib/api";
 import type { ScenarioSummary } from "@/lib/types";
@@ -8,11 +8,21 @@ import { useI18n } from "@/i18n/useI18n";
 
 type WorldlineFilter = "all" | "ready" | "llm" | "deterministic" | "failed" | "legacy";
 
-export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] }) {
+export function WorldlineSearch({
+  initialFilter,
+  initialQuery,
+  summaries,
+}: {
+  initialFilter?: string;
+  initialQuery?: string;
+  summaries: ScenarioSummary[];
+}) {
   const { t } = useI18n();
   const [items, setItems] = useState(summaries);
-  const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<WorldlineFilter>("all");
+  const [query, setQuery] = useState(initialQuery || "");
+  const [activeFilter, setActiveFilter] = useState<WorldlineFilter>(() =>
+    normalizeWorldlineFilter(initialFilter),
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filterOptions = useMemo(
@@ -52,6 +62,24 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
       return haystack.includes(normalizedQuery);
     });
   }, [activeFilter, items, normalizedQuery]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (query.trim()) {
+      url.searchParams.set("q", query);
+    } else {
+      url.searchParams.delete("q");
+    }
+    if (activeFilter === "all") {
+      url.searchParams.delete("status");
+    } else {
+      url.searchParams.set("status", activeFilter);
+    }
+    window.history.replaceState(window.history.state, "", url);
+  }, [activeFilter, query]);
 
   const confirmAndDelete = async (report: ScenarioSummary) => {
     const confirmed = window.confirm(
@@ -139,6 +167,14 @@ export function WorldlineSearch({ summaries }: { summaries: ScenarioSummary[] })
       </div>
     </section>
   );
+}
+
+function normalizeWorldlineFilter(value?: string): WorldlineFilter {
+  return ["all", "ready", "llm", "deterministic", "failed", "legacy"].includes(
+    value || "",
+  )
+    ? (value as WorldlineFilter)
+    : "all";
 }
 
 function matchesWorldlineFilter(report: ScenarioSummary, filter: WorldlineFilter): boolean {
