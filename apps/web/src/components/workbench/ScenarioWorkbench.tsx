@@ -90,7 +90,9 @@ export function ScenarioWorkbench({
       : fullTimeline,
     [fullTimeline, haltedGeneration],
   );
-  const initialSnapshot = getInitialSnapshot(timeline, initialDate);
+  const preferredInitialDate = initialDate
+    || (isWorldline ? haltedGeneration?.startDate : undefined);
+  const initialSnapshot = getInitialSnapshot(timeline, preferredInitialDate);
   const [selectedDate, setSelectedDate] = useState(initialSnapshot?.date || "");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
