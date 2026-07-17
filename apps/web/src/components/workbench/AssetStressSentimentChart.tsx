@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AssetStressPoint,
   AssetStressSeries,
@@ -81,6 +81,12 @@ export function AssetStressSentimentChart({
       })),
     [visibleSeries],
   );
+
+  useEffect(() => {
+    setActivePoint((current) =>
+      current?.date === selectedDate ? current : null,
+    );
+  }, [selectedDate]);
 
   if (!series.length) {
     return null;
@@ -172,6 +178,7 @@ export function AssetStressSentimentChart({
         {chartSeries.flatMap((assetSeries) =>
           assetSeries.points.map((point, pointIndex) => (
             <g
+              aria-hidden={point.date === selectedDate ? undefined : true}
               aria-label={`${t("legend.asset")}: ${point.asset}, ${t(
                 "workbench.assetStressValue",
               )}: ${point.displayValue}, ${point.date}`}
@@ -209,7 +216,7 @@ export function AssetStressSentimentChart({
                   });
                 }
               }}
-              role="button"
+              role={point.date === selectedDate ? "button" : undefined}
               tabIndex={point.date === selectedDate ? 0 : -1}
             >
               <circle
