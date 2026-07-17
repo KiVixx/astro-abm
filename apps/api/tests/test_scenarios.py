@@ -849,6 +849,9 @@ def test_traditional_chinese_report_generation(monkeypatch, tmp_path: Path) -> N
     assert "第 1 天" in first_day["daily_summary"]
     assert "可能反應" in report["agent_outputs"][0]["likely_reaction"]
     assert "風險討論" in first_day["agent_states"][0]["likely_reaction"]
+    assert "computed_ephemeris_available" not in first_day["agent_states"][0]["likely_reaction"]
+    assert "stress_regime:" not in first_day["agent_states"][0]["attention_triggers"]
+    assert first_day["agent_states"][0]["attention_triggers"][0].startswith("壓力狀態：")
     assert "僅為相關性分析" in report["caveats"][0]
     assert "## 執行摘要" in report["markdown_report"]
     assert "## 每日時間線" in report["markdown_report"]

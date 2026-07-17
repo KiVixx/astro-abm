@@ -164,11 +164,25 @@ def build_daily_agent_state(
         mood = "planning-focused"
 
     if language == "zh-Hant":
-        likely_reaction = (
-            f"檢視壓力狀態：{stress_regime}、波動狀態：{volatility_regime}、"
-            f"流動性狀態：{liquidity_regime}，以及天象敘事標籤（{astro_tags}）。"
-            f"資料品質為 {research_signals.data_quality}；這些內容僅作為風險討論的情境脈絡。"
+        stress_label = _zh_context_label(stress_regime)
+        volatility_label = _zh_context_label(volatility_regime)
+        liquidity_label = _zh_context_label(liquidity_regime)
+        data_quality_label = _zh_context_label(research_signals.data_quality)
+        astro_tag_labels = "、".join(
+            _zh_astro_tag(tag) for tag in astro_context.event_tags
         )
+        likely_reaction = (
+            f"檢視壓力狀態：{stress_label}、波動狀態：{volatility_label}、"
+            f"流動性狀態：{liquidity_label}，以及天象敘事標籤（{astro_tag_labels}）。"
+            f"資料品質為{data_quality_label}；這些內容僅作為風險討論的情境脈絡。"
+        )
+        attention_triggers = [
+            f"壓力狀態：{stress_label}",
+            f"波動狀態：{volatility_label}",
+            f"流動性狀態：{liquidity_label}",
+            f"天象強度：{_zh_context_label(astro_context.intensity)}",
+            f"資料品質：{data_quality_label}",
+        ]
         caveats = [
             "每日代理狀態是 deterministic mock 輸出。",
             "這不是方向性市場判斷，也不是交易訊號。",
@@ -184,6 +198,13 @@ def build_daily_agent_state(
             "Daily agent state is deterministic mock output.",
             "This is not a directional market call and not a trading signal.",
         ]
+        attention_triggers = [
+            f"stress_regime:{stress_regime}",
+            f"volatility_regime:{volatility_regime}",
+            f"liquidity_regime:{liquidity_regime}",
+            f"astro_intensity:{astro_context.intensity}",
+            f"data_quality:{research_signals.data_quality}",
+        ]
 
     return DailyAgentState(
         agent_id=agent.agent_id,
@@ -191,15 +212,39 @@ def build_daily_agent_state(
         mood=mood,
         risk_appetite=agent.risk_tolerance,
         likely_reaction=likely_reaction,
-        attention_triggers=[
-            f"stress_regime:{stress_regime}",
-            f"volatility_regime:{volatility_regime}",
-            f"liquidity_regime:{liquidity_regime}",
-            f"astro_intensity:{astro_context.intensity}",
-            f"data_quality:{research_signals.data_quality}",
-        ],
+        attention_triggers=attention_triggers,
         caveats=caveats,
     )
+
+
+def _zh_context_label(value: str) -> str:
+    return {
+        "stress": "高壓",
+        "elevated": "壓力升高",
+        "watchful": "觀望警戒",
+        "calm": "平穩",
+        "expanded": "波動擴張",
+        "compressed": "波動壓縮",
+        "normal": "正常",
+        "thin": "偏薄",
+        "selective": "選擇性",
+        "orderly": "有序",
+        "high": "高",
+        "medium": "中",
+        "low": "低",
+        "computed_ephemeris_available": "可計算星曆資料可用",
+        "local_research_available": "本地研究資料可用",
+        "placeholder_fallback": "佔位資料回退",
+        "future_placeholder": "未來佔位資料",
+    }.get(value, value.replace("_", " "))
+
+
+def _zh_astro_tag(value: str) -> str:
+    if value == "computed_ephemeris":
+        return "本機計算星曆"
+    if value.startswith("astro_activity:"):
+        return f"天象活動：{_zh_context_label(value.split(':', 1)[1])}"
+    return value.replace("_", " ")
 
 
 def build_daily_timeline(
