@@ -155,6 +155,7 @@ export function DailyGraphCanvas({
   const [zoomTransform, setZoomTransform] = useState<ZoomTransform>(zoomIdentity);
   const [tooltip, setTooltip] = useState<GraphTooltip | null>(null);
   const [relationshipView, setRelationshipView] = useState<RelationshipViewMode>("focused");
+  const [isExpanded, setIsExpanded] = useState(false);
   const [activeNodeTypes, setActiveNodeTypes] = useState<Set<WorkbenchNodeType>>(
     () => new Set(ALL_NODE_TYPES),
   );
@@ -371,6 +372,24 @@ export function DailyGraphCanvas({
     }
     select(svg).call(zoomBehavior.transform, zoomIdentity);
   }, []);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const exitExpandedView = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsExpanded(false);
+      }
+    };
+    document.addEventListener("keydown", exitExpandedView);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", exitExpandedView);
+    };
+  }, [isExpanded]);
 
   useEffect(() => {
     setTooltip(null);
@@ -622,7 +641,7 @@ export function DailyGraphCanvas({
   }, [canvasSize.height, canvasSize.width, forceGraph.edges, forceGraph.nodes, nodeById]);
 
   return (
-    <section className="workbench-card workbench-graph-card">
+    <section className={`workbench-card workbench-graph-card ${isExpanded ? "is-expanded" : ""}`}>
       <div className="workbench-card-header">
         <div>
           <p className="pixel-kicker workbench-module-kicker">
@@ -635,6 +654,17 @@ export function DailyGraphCanvas({
         </div>
         <div className="graph-date-controls">
           <span className="tag">{selectedDate}</span>
+          <button
+            aria-expanded={isExpanded}
+            className="button secondary"
+            onClick={() => {
+              setIsExpanded((current) => !current);
+              requestAnimationFrame(resetView);
+            }}
+            type="button"
+          >
+            {isExpanded ? t("workbench.exitExpandedGraph") : t("workbench.expandGraph")}
+          </button>
           {selectedNodeId || selectedEdgeId ? (
             <button
               className="button secondary"
@@ -748,7 +778,11 @@ export function DailyGraphCanvas({
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.preventDefault();
-              clearSelection();
+              if (isExpanded) {
+                setIsExpanded(false);
+              } else {
+                clearSelection();
+              }
             }
           }}
         >

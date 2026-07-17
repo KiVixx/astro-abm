@@ -2531,6 +2531,24 @@ pre {
   min-width: 0;
 }
 
+.workbench-graph-card.is-expanded {
+  background: var(--surface);
+  inset: 12px;
+  margin: 0;
+  overflow: auto;
+  position: fixed;
+  z-index: 80;
+}
+
+.workbench-graph-card.is-expanded .force-graph-frame {
+  min-height: calc(100vh - 330px);
+}
+
+.workbench-graph-card.is-expanded .force-graph-svg {
+  min-height: calc(100vh - 350px);
+  min-width: 100%;
+}
+
 .workbench-panel {
   align-self: start;
   border-top: 4px solid var(--signal-cyan);
@@ -4119,6 +4137,11 @@ pre {
 
   .force-graph-frame {
     min-height: 480px;
+  }
+
+  .workbench-graph-card.is-expanded {
+    inset: 4px;
+    padding: 12px;
   }
 
   .workbench-svg,
