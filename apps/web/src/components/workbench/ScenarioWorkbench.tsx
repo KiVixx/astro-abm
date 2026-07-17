@@ -287,7 +287,7 @@ export function ScenarioWorkbench({
         </div>
       </header>
 
-      <main className="workbench-layout">
+      <div className="workbench-layout">
         <div className="workbench-primary-column">
           {isWorldline ? (
             <section className="worldline-playback-bar">
@@ -360,7 +360,7 @@ export function ScenarioWorkbench({
           regenerationActive={false}
           worldlinePrimary={isWorldline}
         />
-      </main>
+      </div>
     </div>
   );
 }

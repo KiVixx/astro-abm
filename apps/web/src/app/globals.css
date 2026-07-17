@@ -134,6 +134,23 @@ pre {
   white-space: pre-wrap;
 }
 
+.skip-link {
+  background: var(--text);
+  color: var(--surface);
+  font-weight: 700;
+  left: 12px;
+  padding: 10px 14px;
+  position: fixed;
+  top: 10px;
+  transform: translateY(-160%);
+  transition: transform 120ms ease;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .site-header {
   align-items: center;
   background: var(--surface);

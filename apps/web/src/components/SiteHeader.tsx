@@ -32,25 +32,30 @@ export function SiteHeader() {
   ];
 
   return (
-    <header className="site-header">
-      <Link className="brand" href="/">
-        {t("app.brand")}
-      </Link>
-      <div className="site-header-actions">
-        <nav aria-label={t("nav.aria")}>
-          {links.map((link) => (
-            <Link
-              aria-current={link.active ? "page" : undefined}
-              className={link.active ? "is-active" : undefined}
-              href={link.href}
-              key={link.href}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-        <LanguageToggle />
-      </div>
-    </header>
+    <>
+      <a className="skip-link" href="#main-content">
+        {t("nav.skipToContent")}
+      </a>
+      <header className="site-header">
+        <Link className="brand" href="/">
+          {t("app.brand")}
+        </Link>
+        <div className="site-header-actions">
+          <nav aria-label={t("nav.aria")}>
+            {links.map((link) => (
+              <Link
+                aria-current={link.active ? "page" : undefined}
+                className={link.active ? "is-active" : undefined}
+                href={link.href}
+                key={link.href}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <LanguageToggle />
+        </div>
+      </header>
+    </>
   );
 }
