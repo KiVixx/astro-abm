@@ -14,7 +14,11 @@ import { select } from "d3-selection";
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphLegend } from "./GraphLegend";
-import type { WorkbenchGraph, WorkbenchNode } from "@/lib/workbenchGraph";
+import type {
+  WorkbenchGraph,
+  WorkbenchNode,
+  WorkbenchNodeType,
+} from "@/lib/workbenchGraph";
 import {
   connectedNodeIds,
   edgeEndpointIds,
@@ -48,8 +52,21 @@ interface GraphTooltip {
   detail?: string;
 }
 
+type RelationshipViewMode = "focused" | "all";
+
 const MIN_CANVAS_WIDTH = 760;
 const CANVAS_HEIGHT = 620;
+const SIMULATION_MAX_MS = 3000;
+const ALL_NODE_TYPES: WorkbenchNodeType[] = [
+  "agent",
+  "astro",
+  "stress",
+  "volatility",
+  "liquidity",
+  "data_quality",
+  "asset",
+  "risk",
+];
 
 function shortLabel(value?: string, length = 26): string {
   if (!value) {
@@ -125,29 +142,68 @@ export function DailyGraphCanvas({
 }: DailyGraphCanvasProps) {
   const { t } = useI18n();
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const viewportRef = useRef<SVGGElement | null>(null);
+  const expandButtonRef = useRef<HTMLButtonElement | null>(null);
   const edgeLayerRef = useRef<SVGGElement | null>(null);
   const nodeLayerRef = useRef<SVGGElement | null>(null);
   const simulationRef = useRef<Simulation<ForceGraphNode, ForceGraphEdge> | null>(null);
   const zoomBehaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const lastAutoFocusedNodeRef = useRef<string | null>(null);
   const [canvasSize, setCanvasSize] = useState<CanvasSize>({
     width: Math.max(MIN_CANVAS_WIDTH, graph.width),
     height: CANVAS_HEIGHT,
   });
   const [zoomTransform, setZoomTransform] = useState<ZoomTransform>(zoomIdentity);
   const [tooltip, setTooltip] = useState<GraphTooltip | null>(null);
+  const [relationshipView, setRelationshipView] = useState<RelationshipViewMode>("focused");
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [activeNodeTypes, setActiveNodeTypes] = useState<Set<WorkbenchNodeType>>(
+    () => new Set(ALL_NODE_TYPES),
+  );
 
   const forceGraph = useMemo(
     () => toForceGraph(graph, canvasSize.width, canvasSize.height),
     [canvasSize.height, canvasSize.width, graph],
   );
+  const visibleNodes = useMemo(
+    () => forceGraph.nodes.filter((node) => activeNodeTypes.has(node.type)),
+    [activeNodeTypes, forceGraph.nodes],
+  );
+  const visibleNodeIds = useMemo(
+    () => new Set(visibleNodes.map((node) => node.id)),
+    [visibleNodes],
+  );
+  const visibleEdges = useMemo(() => {
+    const edgesForVisibleNodes = forceGraph.edges.filter((edge) => {
+      const [sourceId, targetId] = edgeEndpointIds(edge);
+      return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+    });
+    if (relationshipView === "all") {
+      return edgesForVisibleNodes;
+    }
+    if (selectedEdgeId) {
+      return edgesForVisibleNodes.filter((edge) => edge.id === selectedEdgeId);
+    }
+    if (selectedNodeId) {
+      return edgesForVisibleNodes.filter((edge) => {
+        const [sourceId, targetId] = edgeEndpointIds(edge);
+        return sourceId === selectedNodeId || targetId === selectedNodeId;
+      });
+    }
+    return edgesForVisibleNodes.filter((edge) => edge.type !== "agent_attention");
+  }, [forceGraph.edges, relationshipView, selectedEdgeId, selectedNodeId, visibleNodeIds]);
+  const visibleEdgeIds = useMemo(
+    () => new Set(visibleEdges.map((edge) => edge.id)),
+    [visibleEdges],
+  );
   const graphKeyboardIds = useMemo(
     () => [
-      ...forceGraph.nodes.map((node) => `node:${node.id}`),
-      ...forceGraph.edges.map((edge) => `edge:${edge.id}`),
+      ...visibleNodes.map((node) => `node:${node.id}`),
+      ...visibleEdges.map((edge) => `edge:${edge.id}`),
     ],
-    [forceGraph.edges, forceGraph.nodes],
+    [visibleEdges, visibleNodes],
   );
   const [keyboardFocusId, setKeyboardFocusId] = useState(
     () => graphKeyboardIds[0] || "",
@@ -157,6 +213,21 @@ export function DailyGraphCanvas({
     () => new Map(forceGraph.nodes.map((node) => [node.id, node])),
     [forceGraph.nodes],
   );
+  const selectedNodeForStatus = selectedNodeId ? nodeById.get(selectedNodeId) : undefined;
+
+  const displayNodeType = (node: WorkbenchNode) => {
+    const typeKeys: Record<WorkbenchNode["type"], string> = {
+      agent: "legend.agent",
+      astro: "legend.astro",
+      stress: "legend.market",
+      volatility: "legend.market",
+      liquidity: "legend.market",
+      data_quality: "legend.data",
+      asset: "legend.asset",
+      risk: "legend.risk",
+    };
+    return t(typeKeys[node.type]);
+  };
 
   const highlightedNodeIds = useMemo(() => {
     if (selectedNodeId) {
@@ -305,15 +376,161 @@ export function DailyGraphCanvas({
     select(svg).call(zoomBehavior.transform, zoomIdentity);
   }, []);
 
-  const fitView = useCallback(() => {
+  useEffect(() => {
+    if (!isExpanded) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => expandButtonRef.current?.focus());
+    const exitExpandedView = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsExpanded(false);
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const focusable = Array.from(
+        sectionRef.current?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])",
+        ) || [],
+      ).filter((element) => !element.hasAttribute("aria-hidden"));
+      if (!focusable.length) {
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", exitExpandedView);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", exitExpandedView);
+    };
+  }, [isExpanded]);
+
+  useEffect(() => {
+    setTooltip(null);
+    resetView();
+  }, [resetView, selectedDate]);
+
+  const zoomViewBy = useCallback((factor: number) => {
     const svg = svgRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
     if (!svg || !zoomBehavior) {
       return;
     }
-    const fitted = zoomIdentity.translate(canvasSize.width * 0.04, canvasSize.height * 0.03).scale(0.92);
+    select(svg).call(zoomBehavior.scaleBy, factor);
+  }, []);
+
+  const focusNodeInView = useCallback((nodeId: string) => {
+    const svg = svgRef.current;
+    const zoomBehavior = zoomBehaviorRef.current;
+    const node = nodeById.get(nodeId);
+    if (!svg || !zoomBehavior || !node) {
+      return;
+    }
+    const scale = Math.max(zoomTransform.k, canvasSize.width <= MIN_CANVAS_WIDTH ? 1.35 : 1.1);
+    const nodeX = node.x ?? node.initialX;
+    const nodeY = node.y ?? node.initialY;
+    const focused = zoomIdentity
+      .translate(
+        canvasSize.width / 2 - nodeX * scale,
+        canvasSize.height / 2 - nodeY * scale,
+      )
+      .scale(scale);
+    select(svg).call(zoomBehavior.transform, focused);
+  }, [canvasSize.height, canvasSize.width, nodeById, zoomTransform.k]);
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      lastAutoFocusedNodeRef.current = null;
+      return;
+    }
+    if (lastAutoFocusedNodeRef.current === selectedNodeId) {
+      return;
+    }
+    lastAutoFocusedNodeRef.current = selectedNodeId;
+    const animationFrame = requestAnimationFrame(() => focusNodeInView(selectedNodeId));
+    return () => cancelAnimationFrame(animationFrame);
+  }, [focusNodeInView, selectedNodeId]);
+
+  const selectNodeFromNavigator = (nodeId: string) => {
+    if (!nodeId) {
+      clearSelection();
+      return;
+    }
+    onSelectNode(nodeId);
+    onSelectEdge(null);
+  };
+
+  const toggleNodeTypes = (nodeTypes: WorkbenchNodeType[]) => {
+    setActiveNodeTypes((current) => {
+      const next = new Set(current);
+      const shouldHide = nodeTypes.every((type) => current.has(type));
+      nodeTypes.forEach((type) => {
+        if (shouldHide) {
+          next.delete(type);
+        } else {
+          next.add(type);
+        }
+      });
+      return next.size ? next : current;
+    });
+    if (selectedNodeForStatus && nodeTypes.includes(selectedNodeForStatus.type)) {
+      clearSelection();
+    } else if (selectedEdgeId) {
+      onSelectEdge(null);
+    }
+  };
+
+  const fitView = useCallback(() => {
+    const svg = svgRef.current;
+    const zoomBehavior = zoomBehaviorRef.current;
+    if (!svg || !zoomBehavior || !visibleNodes.length) {
+      return;
+    }
+    const horizontalLabelRoom = 112;
+    const verticalLabelRoom = 58;
+    const minX = Math.min(
+      ...visibleNodes.map((node) => (node.x ?? node.initialX) - node.radius - horizontalLabelRoom),
+    );
+    const maxX = Math.max(
+      ...visibleNodes.map((node) => (node.x ?? node.initialX) + node.radius + horizontalLabelRoom),
+    );
+    const minY = Math.min(
+      ...visibleNodes.map((node) => (node.y ?? node.initialY) - node.radius - verticalLabelRoom),
+    );
+    const maxY = Math.max(
+      ...visibleNodes.map((node) => (node.y ?? node.initialY) + node.radius + verticalLabelRoom),
+    );
+    const boundsWidth = Math.max(1, maxX - minX);
+    const boundsHeight = Math.max(1, maxY - minY);
+    const scale = Math.max(
+      0.45,
+      Math.min(1.2, canvasSize.width / boundsWidth, canvasSize.height / boundsHeight),
+    );
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const fitted = zoomIdentity
+      .translate(
+        canvasSize.width / 2 - centerX * scale,
+        canvasSize.height / 2 - centerY * scale,
+      )
+      .scale(scale);
     select(svg).call(zoomBehavior.transform, fitted);
-  }, [canvasSize.height, canvasSize.width]);
+  }, [canvasSize.height, canvasSize.width, visibleNodes]);
+
+  const showAllNodeTypes = () => {
+    setActiveNodeTypes(new Set(ALL_NODE_TYPES));
+  };
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -356,6 +573,8 @@ export function DailyGraphCanvas({
     }
 
     simulationRef.current?.stop();
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+      ?? false;
 
     const edgeSelection = select(edgeLayer)
       .selectAll<SVGLineElement, ForceGraphEdge>(".force-graph-edge")
@@ -397,6 +616,7 @@ export function DailyGraphCanvas({
     };
 
     const simulation = forceSimulation<ForceGraphNode>(forceGraph.nodes)
+      .alphaDecay(0.04)
       .force(
         "link",
         forceLink<ForceGraphNode, ForceGraphEdge>(forceGraph.edges)
@@ -407,12 +627,25 @@ export function DailyGraphCanvas({
       .force("charge", forceManyBody<ForceGraphNode>().strength(-520))
       .force("collide", forceCollide<ForceGraphNode>().radius((node) => node.radius + 34).iterations(2))
       .force("x", forceX<ForceGraphNode>((node) => nodeAnchor(node, canvasSize.width, canvasSize.height)[0]).strength(0.11))
-      .force("y", forceY<ForceGraphNode>((node) => nodeAnchor(node, canvasSize.width, canvasSize.height)[1]).strength(0.13))
-      .on("tick", ticked);
+      .force("y", forceY<ForceGraphNode>((node) => nodeAnchor(node, canvasSize.width, canvasSize.height)[1]).strength(0.13));
+
+    if (prefersReducedMotion) {
+      simulation.stop();
+      simulation.tick(160);
+      ticked();
+    } else {
+      simulation.on("tick", ticked);
+    }
+    const simulationStopTimer = prefersReducedMotion
+      ? null
+      : window.setTimeout(() => {
+          simulation.alphaTarget(0).stop();
+          ticked();
+        }, SIMULATION_MAX_MS);
 
     const dragBehavior = drag<SVGGElement, ForceGraphNode>()
       .on("start", (event: D3DragEvent<SVGGElement, ForceGraphNode, ForceGraphNode>, node) => {
-        if (!event.active) {
+        if (!prefersReducedMotion && !event.active) {
           simulation.alphaTarget(0.24).restart();
         }
         node.fx = node.x;
@@ -424,7 +657,7 @@ export function DailyGraphCanvas({
         ticked();
       })
       .on("end", (event: D3DragEvent<SVGGElement, ForceGraphNode, ForceGraphNode>, node) => {
-        if (!event.active) {
+        if (!prefersReducedMotion && !event.active) {
           simulation.alphaTarget(0);
         }
         node.fx = null;
@@ -436,25 +669,46 @@ export function DailyGraphCanvas({
     ticked();
 
     return () => {
+      if (simulationStopTimer !== null) {
+        window.clearTimeout(simulationStopTimer);
+      }
       simulation.stop();
       nodeSelection.on(".drag", null);
     };
   }, [canvasSize.height, canvasSize.width, forceGraph.edges, forceGraph.nodes, nodeById]);
 
   return (
-    <section className="workbench-card workbench-graph-card">
+    <section
+      aria-labelledby="context-graph-title"
+      aria-modal={isExpanded || undefined}
+      className={`workbench-card workbench-graph-card ${isExpanded ? "is-expanded" : ""}`}
+      ref={sectionRef}
+      role={isExpanded ? "dialog" : undefined}
+    >
       <div className="workbench-card-header">
         <div>
           <p className="pixel-kicker workbench-module-kicker">
             {t("workbench.graphKicker")}
           </p>
-          <h2>{t("workbench.graphTitle")}</h2>
+          <h2 id="context-graph-title">{t("workbench.graphTitle")}</h2>
           <p className="muted">
             {t("workbench.graphHelp")}
           </p>
         </div>
         <div className="graph-date-controls">
           <span className="tag">{selectedDate}</span>
+          <button
+            aria-expanded={isExpanded}
+            className="button secondary"
+            onClick={() => {
+              setIsExpanded((current) => !current);
+              requestAnimationFrame(resetView);
+            }}
+            ref={expandButtonRef}
+            type="button"
+          >
+            {isExpanded ? t("workbench.exitExpandedGraph") : t("workbench.expandGraph")}
+          </button>
           {selectedNodeId || selectedEdgeId ? (
             <button
               className="button secondary"
@@ -466,10 +720,90 @@ export function DailyGraphCanvas({
           ) : null}
         </div>
       </div>
-      <GraphLegend />
+      <GraphLegend
+        activeNodeTypes={activeNodeTypes}
+        onToggleNodeTypes={toggleNodeTypes}
+      />
+      <div className="graph-relationship-toolbar">
+        <div
+          aria-label={t("workbench.relationshipView")}
+          className="graph-relationship-segments"
+          role="group"
+        >
+          <button
+            aria-pressed={relationshipView === "focused"}
+            className={relationshipView === "focused" ? "is-active" : ""}
+            onClick={() => setRelationshipView("focused")}
+            type="button"
+          >
+            {t("workbench.focusedRelationships")}
+          </button>
+          <button
+            aria-pressed={relationshipView === "all"}
+            className={relationshipView === "all" ? "is-active" : ""}
+            onClick={() => setRelationshipView("all")}
+            type="button"
+          >
+            {t("workbench.allRelationships")}
+          </button>
+        </div>
+        <div aria-live="polite" className="graph-focus-summary">
+          <strong>
+            {selectedNodeForStatus
+              ? `${t("workbench.focusedOn")}: ${displayNodeLabel(selectedNodeForStatus)}`
+              : selectedEdgeId
+                ? `${t("workbench.focusedOn")}: ${t("workbench.selectedRelationship")}`
+                : relationshipView === "focused"
+                  ? t("workbench.focusedRelationshipsHelp")
+                  : t("workbench.allRelationshipsHelp")}
+          </strong>
+          <span>
+            {visibleNodes.length}/{forceGraph.nodes.length} {t("workbench.nodesVisible")} ·{" "}
+            {visibleEdges.length}/{forceGraph.edges.length} {t("workbench.relationshipsVisible")}
+          </span>
+        </div>
+      </div>
       <div className="force-graph-controls">
-        <span className="muted">{t("workbench.zoomPanHint")}</span>
+        <div className="graph-node-navigator">
+          <label htmlFor="graph-node-navigator">{t("workbench.findNode")}</label>
+          <select
+            id="graph-node-navigator"
+            onChange={(event) => selectNodeFromNavigator(event.target.value)}
+            value={selectedNodeId || ""}
+          >
+            <option value="">{t("workbench.chooseNode")}</option>
+            {visibleNodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {displayNodeLabel(node)} ({displayNodeType(node)})
+              </option>
+            ))}
+          </select>
+          <span className="muted">{t("workbench.zoomPanHint")}</span>
+        </div>
         <div className="button-row">
+          <button
+            aria-label={t("workbench.zoomIn")}
+            className="button secondary graph-zoom-button"
+            onClick={() => zoomViewBy(1.25)}
+            title={t("workbench.zoomIn")}
+            type="button"
+          >
+            +
+          </button>
+          <button
+            aria-label={t("workbench.zoomOut")}
+            className="button secondary graph-zoom-button"
+            onClick={() => zoomViewBy(0.8)}
+            title={t("workbench.zoomOut")}
+            type="button"
+          >
+            -
+          </button>
+          {activeNodeTypes.size < ALL_NODE_TYPES.length ? (
+            <button className="button secondary" onClick={showAllNodeTypes} type="button">
+              {t("workbench.showAllNodeTypes")}
+            </button>
+          ) : null}
           <button className="button secondary" onClick={fitView} type="button">
             {t("workbench.fitView")}
           </button>
@@ -485,6 +819,16 @@ export function DailyGraphCanvas({
           ref={svgRef}
           viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
           aria-label={t("workbench.graphAria")}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              if (isExpanded) {
+                setIsExpanded(false);
+              } else {
+                clearSelection();
+              }
+            }
+          }}
         >
           <defs>
             <marker
@@ -508,6 +852,7 @@ export function DailyGraphCanvas({
             <g className="workbench-edges force-graph-edges" ref={edgeLayerRef}>
               {forceGraph.edges.map((edge) => {
                 const keyboardId = `edge:${edge.id}`;
+                const isVisible = visibleEdgeIds.has(edge.id);
                 const source = nodeById.get(edge.sourceId);
                 const target = nodeById.get(edge.targetId);
                 const edgeAccessibleLabel = `${t("workbench.relationship")}: ${
@@ -516,7 +861,11 @@ export function DailyGraphCanvas({
                   target ? displayNodeLabel(target) : edge.targetId
                 }`;
                 return (
-                  <g key={edge.id}>
+                  <g
+                    aria-hidden={!isVisible}
+                    className={`force-graph-edge-group ${isVisible ? "" : "is-filtered"}`}
+                    key={edge.id}
+                  >
                     <line
                       className="force-graph-edge-hit"
                       onClick={(event) => {
@@ -557,7 +906,7 @@ export function DailyGraphCanvas({
                       onMouseLeave={() => setTooltip(null)}
                       onMouseMove={(event) => showEdgeTooltip(event, edge)}
                       role="button"
-                      tabIndex={keyboardFocusId === keyboardId ? 0 : -1}
+                      tabIndex={isVisible && keyboardFocusId === keyboardId ? 0 : -1}
                       x1={source?.initialX || 0}
                       x2={target?.initialX || 0}
                       y1={source?.initialY || 0}
@@ -570,14 +919,16 @@ export function DailyGraphCanvas({
             <g className="workbench-nodes force-graph-nodes" ref={nodeLayerRef}>
               {forceGraph.nodes.map((node) => {
                 const keyboardId = `node:${node.id}`;
+                const isVisible = visibleNodeIds.has(node.id);
                 return (
                 <g
+                  aria-hidden={!isVisible}
                   aria-label={[
                     displayNodeLabel(node),
                     displayNodeSubtitle(node),
                   ].filter(Boolean).join(": ")}
                   aria-pressed={selectedNodeId === node.id}
-                  className={nodeClassName(node, selectedNodeId, selectedEdgeId, highlightedNodeIds)}
+                  className={`${nodeClassName(node, selectedNodeId, selectedEdgeId, highlightedNodeIds)} ${isVisible ? "" : "is-filtered"}`}
                   data-graph-keyboard-id={keyboardId}
                   key={node.id}
                   onClick={(event) => {
@@ -599,7 +950,7 @@ export function DailyGraphCanvas({
                   onMouseLeave={() => setTooltip(null)}
                   onMouseMove={(event) => showNodeTooltip(event, node)}
                   role="button"
-                  tabIndex={keyboardFocusId === keyboardId ? 0 : -1}
+                  tabIndex={isVisible && keyboardFocusId === keyboardId ? 0 : -1}
                   transform={`translate(${node.initialX} ${node.initialY})`}
                 >
                   <circle className="force-node-hit-target" r={Math.max(38, node.radius + 28)} />

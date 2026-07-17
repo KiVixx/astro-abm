@@ -20,11 +20,6 @@ export function SiteHeader() {
       active: pathname === "/worldlines/new",
     },
     {
-      href: "/scenarios",
-      label: t("nav.scenarios"),
-      active: pathname.startsWith("/scenarios"),
-    },
-    {
       href: "/agents",
       label: t("nav.agents"),
       active: pathname.startsWith("/agents"),

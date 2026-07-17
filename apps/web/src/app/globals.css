@@ -2163,6 +2163,62 @@ pre {
   padding: 14px;
 }
 
+.graph-related-details {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.graph-related-details > summary {
+  cursor: pointer;
+  font-family: var(--font-signal);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 0;
+}
+
+.graph-related-list {
+  border-top: 1px solid var(--border);
+  display: grid;
+}
+
+.graph-related-node {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 10px 4px;
+  text-align: left;
+  width: 100%;
+}
+
+.graph-related-node span {
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-family: var(--font-signal);
+  font-size: 11px;
+}
+
+.graph-related-node:hover,
+.graph-related-node:focus-visible {
+  background: var(--surface-muted);
+}
+
+.graph-related-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.graph-related-node:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .worldline-panel {
   border: 1px solid var(--border);
   display: grid;
@@ -2475,6 +2531,38 @@ pre {
   min-width: 0;
 }
 
+.workbench-graph-card.is-expanded {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  inset: 12px;
+  margin: 0;
+  overflow: auto;
+  position: fixed;
+  z-index: 80;
+}
+
+.workbench-graph-card.is-expanded .force-graph-frame {
+  flex: 1 1 300px;
+  height: auto;
+  min-height: 300px;
+}
+
+.workbench-graph-card.is-expanded .force-graph-svg {
+  height: 100%;
+  min-height: 0;
+  min-width: 100%;
+}
+
+.workbench-graph-card.is-expanded .workbench-card-header .muted,
+.workbench-graph-card.is-expanded .workbench-legend > .muted {
+  display: none;
+}
+
+.workbench-graph-card.is-expanded .workbench-legend {
+  padding: 8px 0;
+}
+
 .workbench-panel {
   align-self: start;
   border-top: 4px solid var(--signal-cyan);
@@ -2533,6 +2621,36 @@ pre {
   gap: 6px;
 }
 
+.workbench-legend-filter {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  min-height: 32px;
+  padding: 4px 6px;
+}
+
+.workbench-legend-filter.is-active {
+  background: rgba(237, 243, 244, 0.82);
+  border-color: var(--border);
+}
+
+.workbench-legend-filter:hover,
+.workbench-legend-filter:focus-visible {
+  border-color: var(--border-strong);
+}
+
+.workbench-legend-filter:not(.is-active) {
+  color: var(--muted);
+  opacity: 0.48;
+  text-decoration: line-through;
+}
+
+.workbench-legend-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .legend-dot {
   border-radius: 999px;
   display: inline-block;
@@ -2589,6 +2707,103 @@ pre {
   gap: 12px;
   justify-content: space-between;
   margin: 0 0 10px;
+}
+
+.graph-node-navigator {
+  align-items: center;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: auto minmax(220px, 360px);
+  min-width: 0;
+}
+
+.graph-node-navigator label {
+  font-family: var(--font-signal);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.graph-node-navigator select {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  min-height: 38px;
+  min-width: 0;
+  padding: 7px 30px 7px 9px;
+}
+
+.graph-node-navigator .muted {
+  grid-column: 1 / -1;
+}
+
+.graph-zoom-button {
+  font-size: 20px;
+  min-width: 40px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.graph-relationship-toolbar {
+  align-items: stretch;
+  background: rgba(237, 243, 244, 0.74);
+  border: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  padding: 8px;
+}
+
+.graph-relationship-segments {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.graph-relationship-segments button {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-signal);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 7px 11px;
+}
+
+.graph-relationship-segments button + button {
+  border-left: 0;
+}
+
+.graph-relationship-segments button.is-active {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.graph-relationship-segments button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.graph-focus-summary {
+  align-items: flex-end;
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  min-width: 0;
+  text-align: right;
+}
+
+.graph-focus-summary strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.graph-focus-summary span {
+  color: var(--muted);
+  font-family: var(--font-signal);
+  font-size: 11px;
 }
 
 .graph-date-controls {
@@ -2670,6 +2885,10 @@ pre {
     stroke-width 120ms ease;
 }
 
+.force-graph-edge-group.is-filtered {
+  display: none;
+}
+
 .force-edge-agent_attention {
   stroke-dasharray: 4 5;
 }
@@ -2712,6 +2931,10 @@ pre {
   cursor: grab;
   outline: none;
   transition: opacity 120ms ease;
+}
+
+.force-graph-node.is-filtered {
+  display: none;
 }
 
 .force-graph-node:active {
@@ -2810,6 +3033,16 @@ pre {
 .force-graph-tooltip span {
   color: var(--muted);
   font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .force-graph-edge,
+  .force-graph-node,
+  .force-graph-node circle:not(.force-node-hit-target),
+  .force-graph-node polygon,
+  .force-graph-node rect {
+    transition: none;
+  }
 }
 
 .workbench-node rect {
@@ -3876,6 +4109,140 @@ pre {
   .graph-date-controls {
     align-items: flex-start;
     justify-items: start;
+  }
+
+  .graph-relationship-toolbar {
+    flex-direction: column;
+  }
+
+  .graph-relationship-segments {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .graph-focus-summary {
+    align-items: start;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .workbench-legend-filter {
+    min-height: 40px;
+  }
+
+  .force-graph-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .graph-node-navigator {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-node-navigator .muted {
+    grid-column: 1;
+  }
+
+  .force-graph-controls .button-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .force-graph-frame {
+    min-height: 480px;
+  }
+
+  .force-graph-node .node-label {
+    font-size: 17px;
+  }
+
+  .force-graph-node .node-subtitle {
+    display: none;
+  }
+
+  .force-graph-node.is-selected .node-subtitle {
+    display: block;
+  }
+
+  .workbench-graph-card.is-expanded {
+    inset: 4px;
+    padding: 12px;
+  }
+
+  .workbench-graph-card.is-expanded .workbench-card-header {
+    align-items: flex-start;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .workbench-graph-card.is-expanded .workbench-card-header > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .workbench-graph-card.is-expanded .workbench-card-header h2 {
+    font-size: 24px;
+  }
+
+  .workbench-graph-card.is-expanded .graph-date-controls {
+    align-items: flex-end;
+    justify-items: end;
+  }
+
+  .workbench-graph-card.is-expanded .workbench-legend-item:not(.workbench-legend-filter) {
+    display: none;
+  }
+
+  .workbench-graph-card.is-expanded .graph-relationship-toolbar {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .workbench-graph-card.is-expanded .graph-focus-summary,
+  .workbench-graph-card.is-expanded .graph-node-navigator .muted {
+    display: none;
+  }
+
+  .workbench-graph-card.is-expanded .force-graph-frame {
+    flex-basis: 260px;
+    height: auto;
+    min-height: 260px;
+  }
+
+  .workbench-svg,
+  .force-graph-svg {
+    min-height: 460px;
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .worldline-playback-bar {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 7px;
+    width: calc(100vw - 20px);
+  }
+
+  .worldline-playback-bar > strong {
+    display: none;
+  }
+
+  .worldline-playback-bar .button.secondary {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 7px 10px;
+  }
+
+  .worldline-playback-date {
+    flex: 1 1 auto;
+    font-size: 13px;
+    min-width: 0;
+  }
+
+  .worldline-playback-index {
+    flex: 0 0 auto;
+    min-width: 36px;
   }
 
   .workbench-layout {
