@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -39,6 +40,7 @@ function detectBrowserLanguage(): Language {
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [language, setLanguageState] = useState<Language>("en");
   const [hasLoadedPreference, setHasLoadedPreference] = useState(false);
 
@@ -70,6 +72,26 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [language],
   );
 
+  useEffect(() => {
+    const titleKey = pageTitleKey(pathname);
+    const localizedTitle = titleKey === "home.title"
+      ? t(titleKey)
+      : `${t(titleKey)} | ${t("app.brand")}`;
+    const applyTitle = () => {
+      if (document.title !== localizedTitle) {
+        document.title = localizedTitle;
+      }
+    };
+    applyTitle();
+    const observer = new MutationObserver(applyTitle);
+    observer.observe(document.head, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    return () => observer.disconnect();
+  }, [pathname, t]);
+
   const value = useMemo(
     () => ({
       language,
@@ -80,4 +102,38 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+function pageTitleKey(pathname: string): string {
+  if (pathname === "/") {
+    return "home.title";
+  }
+  if (pathname === "/worldlines/new") {
+    return "worldline.create";
+  }
+  if (pathname.includes("/regenerate")) {
+    return "worldline.regenerateSettingsTitle";
+  }
+  if (/^\/worldlines\/[^/]+/.test(pathname)) {
+    return "worldline.workbench";
+  }
+  if (pathname === "/worldlines") {
+    return "worldline.listTitle";
+  }
+  if (pathname === "/scenarios/new") {
+    return "scenarios.create";
+  }
+  if (pathname.includes("/report")) {
+    return "common.openReport";
+  }
+  if (/^\/scenarios\/[^/]+/.test(pathname)) {
+    return "workbench.productName";
+  }
+  if (pathname === "/scenarios") {
+    return "scenarios.title";
+  }
+  if (pathname === "/agents") {
+    return "agents.title";
+  }
+  return "app.brand";
 }
