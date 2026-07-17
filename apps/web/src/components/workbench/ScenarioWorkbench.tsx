@@ -325,34 +325,32 @@ export function ScenarioWorkbench({
         </div>
       </header>
 
+      <nav className="worldline-playback-bar" aria-label={t("worldline.playback")}>
+        <strong>{t("worldline.playback")}</strong>
+        <button
+          className="button secondary"
+          disabled={!previousSnapshot}
+          onClick={() => previousSnapshot && selectDate(previousSnapshot.date)}
+          type="button"
+        >
+          {t("workbench.previous")}
+        </button>
+        <span className="worldline-playback-date">{selectedSnapshot.date}</span>
+        <span className="worldline-playback-index">
+          {selectedIndex + 1}/{timeline.length}
+        </span>
+        <button
+          className="button secondary"
+          disabled={!nextSnapshot}
+          onClick={() => nextSnapshot && selectDate(nextSnapshot.date)}
+          type="button"
+        >
+          {t("workbench.next")}
+        </button>
+      </nav>
+
       <div className="workbench-layout">
         <div className="workbench-primary-column">
-          {isWorldline ? (
-            <section className="worldline-playback-bar">
-              <strong>{t("worldline.playback")}</strong>
-              <button
-                className="button secondary"
-                disabled={!previousSnapshot}
-                onClick={() => previousSnapshot && selectDate(previousSnapshot.date)}
-                type="button"
-              >
-                {t("workbench.previous")}
-              </button>
-              <span className="worldline-playback-date">{selectedSnapshot.date}</span>
-              <span className="worldline-playback-index">
-                {selectedIndex + 1}/{timeline.length}
-              </span>
-              <button
-                className="button secondary"
-                disabled={!nextSnapshot}
-                onClick={() => nextSnapshot && selectDate(nextSnapshot.date)}
-                type="button"
-              >
-                {t("workbench.next")}
-              </button>
-            </section>
-          ) : null}
-
           <DailyTimelineRail
             assetStressSeries={assetStressSeries}
             onChangeRetrogradeBodies={setSelectedRetrogradeBodies}
@@ -374,11 +372,8 @@ export function ScenarioWorkbench({
 
           <DailyGraphCanvas
             graph={graph}
-            nextDate={nextSnapshot?.date}
-            onSelectDate={selectDate}
             onSelectEdge={setSelectedEdgeId}
             onSelectNode={setSelectedNodeId}
-            previousDate={previousSnapshot?.date}
             selectedDate={selectedSnapshot.date}
             selectedEdgeId={selectedEdgeId}
             selectedNodeId={selectedNodeId}

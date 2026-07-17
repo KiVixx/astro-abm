@@ -2220,8 +2220,16 @@ pre {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  margin: 18px 0;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  box-shadow: 0 10px 34px rgba(8, 16, 20, 0.28);
+  left: 50%;
+  margin: 0;
+  max-width: calc(100vw - 24px);
   padding: 9px;
+  position: fixed;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 60;
 }
 
 .worldline-playback-bar > strong {
@@ -2323,7 +2331,7 @@ pre {
 .workbench-page {
   margin: 0 auto;
   max-width: 1480px;
-  padding: 28px 24px 44px;
+  padding: 28px 24px 116px;
   position: relative;
 }
 
@@ -2445,7 +2453,6 @@ pre {
   width: 100%;
 }
 
-.workbench-primary-column > .worldline-playback-bar,
 .workbench-primary-column > .workbench-rail,
 .workbench-primary-column > .workbench-supporting-data {
   margin: 0;
@@ -3180,6 +3187,11 @@ pre {
   margin: 6px 0 8px;
   min-height: 34px;
   padding: 7px 9px;
+  left: 0;
+  max-width: min(760px, calc(100vw - 72px));
+  position: sticky;
+  width: max-content;
+  z-index: 6;
 }
 
 .retrograde-lanes-tooltip strong {

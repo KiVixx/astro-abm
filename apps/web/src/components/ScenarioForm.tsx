@@ -4,8 +4,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  createScenario,
   createLlmPreset,
   deleteLlmPreset,
+  generateScenarioLlmChunk,
+  generateScenarioWorldlineChunk,
   testLlmConnection,
   testLlmPreset,
   updateLlmPreset,
@@ -27,11 +30,7 @@ import type {
   MarketSeriesProfile,
   ReportLanguage,
   ScenarioCreateRequest,
-  ScenarioLlmChunkRequest,
-  ScenarioLlmChunkResponse,
   ScenarioReport,
-  ScenarioWorldlineChunkRequest,
-  ScenarioWorldlineChunkResponse,
   Visibility,
   WorldlineProvider,
 } from "@/lib/types";
@@ -55,23 +54,11 @@ const DEFAULT_LLM_MAX_OUTPUT_TOKENS = 32000;
 export function ScenarioForm({
   agents,
   marketSeries,
-  createAction,
-  chunkAction,
-  worldlineChunkAction,
   initialLlmPresets = [],
   product = "scenario",
 }: {
   agents: AgentProfile[];
   marketSeries: MarketSeriesProfile[];
-  createAction: (payload: ScenarioCreateRequest) => Promise<ScenarioReport>;
-  chunkAction: (
-    scenarioId: string,
-    payload: ScenarioLlmChunkRequest,
-  ) => Promise<ScenarioLlmChunkResponse>;
-  worldlineChunkAction?: (
-    scenarioId: string,
-    payload: ScenarioWorldlineChunkRequest,
-  ) => Promise<ScenarioWorldlineChunkResponse>;
   initialLlmPresets?: LlmPresetSummary[];
   product?: "scenario" | "worldline";
 }) {
@@ -212,7 +199,7 @@ export function ScenarioForm({
             worldline_provider: "deterministic_mock",
           }
         : payload;
-      const report = await createAction(basePayload);
+      const report = await createScenario(basePayload);
       savedReportPath = `${product === "worldline" ? "/worldlines" : "/scenarios"}/${report.scenario_id}`;
 
       if (!shouldChunkLlm && !shouldChunkWorldline) {
@@ -245,10 +232,7 @@ export function ScenarioForm({
         });
         let networkCallPerformed = false;
         if (shouldChunkWorldline) {
-          if (!worldlineChunkAction) {
-            throw new Error("Worldline chunk action is not configured.");
-          }
-          const response = await worldlineChunkAction(report.scenario_id, {
+          const response = await generateScenarioWorldlineChunk(report.scenario_id, {
             llm_provider: payload.llm_provider,
             llm_preset_id: payload.llm_preset_id,
             llm_real_enabled: payload.llm_real_enabled,
@@ -306,7 +290,7 @@ export function ScenarioForm({
             return;
           }
         } else {
-          const response = await chunkAction(report.scenario_id, {
+          const response = await generateScenarioLlmChunk(report.scenario_id, {
             llm_provider: payload.llm_provider,
             llm_preset_id: payload.llm_preset_id,
             llm_real_enabled: payload.llm_real_enabled,

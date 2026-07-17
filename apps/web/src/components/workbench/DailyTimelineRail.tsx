@@ -119,8 +119,6 @@ export function DailyTimelineRail({
     timeline.findIndex((snapshot) => snapshot.date === selectedDate),
   );
   const selectedSnapshot = timeline[selectedIndex] || timeline[0];
-  const previousSnapshot = timeline[selectedIndex - 1];
-  const nextSnapshot = timeline[selectedIndex + 1];
 
   useEffect(() => {
     setSelectedAssets((currentAssets) => {
@@ -231,22 +229,6 @@ export function DailyTimelineRail({
             type="button"
           >
             {t("workbench.scrollRight")}
-          </button>
-          <button
-            className="button secondary"
-            disabled={!previousSnapshot}
-            onClick={() => previousSnapshot && onSelectDate(previousSnapshot.date)}
-            type="button"
-          >
-            {t("workbench.previous")}
-          </button>
-          <button
-            className="button secondary"
-            disabled={!nextSnapshot}
-            onClick={() => nextSnapshot && onSelectDate(nextSnapshot.date)}
-            type="button"
-          >
-            {t("workbench.next")}
           </button>
         </div>
       </div>
