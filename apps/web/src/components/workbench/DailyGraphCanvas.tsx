@@ -144,6 +144,7 @@ export function DailyGraphCanvas({
   const frameRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const viewportRef = useRef<SVGGElement | null>(null);
+  const expandButtonRef = useRef<HTMLButtonElement | null>(null);
   const edgeLayerRef = useRef<SVGGElement | null>(null);
   const nodeLayerRef = useRef<SVGGElement | null>(null);
   const simulationRef = useRef<Simulation<ForceGraphNode, ForceGraphEdge> | null>(null);
@@ -380,6 +381,7 @@ export function DailyGraphCanvas({
     }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => expandButtonRef.current?.focus());
     const exitExpandedView = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsExpanded(false);
@@ -654,13 +656,18 @@ export function DailyGraphCanvas({
   }, [canvasSize.height, canvasSize.width, forceGraph.edges, forceGraph.nodes, nodeById]);
 
   return (
-    <section className={`workbench-card workbench-graph-card ${isExpanded ? "is-expanded" : ""}`}>
+    <section
+      aria-labelledby="context-graph-title"
+      aria-modal={isExpanded || undefined}
+      className={`workbench-card workbench-graph-card ${isExpanded ? "is-expanded" : ""}`}
+      role={isExpanded ? "dialog" : undefined}
+    >
       <div className="workbench-card-header">
         <div>
           <p className="pixel-kicker workbench-module-kicker">
             {t("workbench.graphKicker")}
           </p>
-          <h2>{t("workbench.graphTitle")}</h2>
+          <h2 id="context-graph-title">{t("workbench.graphTitle")}</h2>
           <p className="muted">
             {t("workbench.graphHelp")}
           </p>
@@ -674,6 +681,7 @@ export function DailyGraphCanvas({
               setIsExpanded((current) => !current);
               requestAnimationFrame(resetView);
             }}
+            ref={expandButtonRef}
             type="button"
           >
             {isExpanded ? t("workbench.exitExpandedGraph") : t("workbench.expandGraph")}
