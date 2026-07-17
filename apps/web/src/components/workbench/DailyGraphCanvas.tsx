@@ -181,6 +181,20 @@ export function DailyGraphCanvas({
   );
   const selectedNodeForStatus = selectedNodeId ? nodeById.get(selectedNodeId) : undefined;
 
+  const displayNodeType = (node: WorkbenchNode) => {
+    const typeKeys: Record<WorkbenchNode["type"], string> = {
+      agent: "legend.agent",
+      astro: "legend.astro",
+      stress: "legend.market",
+      volatility: "legend.market",
+      liquidity: "legend.market",
+      data_quality: "legend.data",
+      asset: "legend.asset",
+      risk: "legend.risk",
+    };
+    return t(typeKeys[node.type]);
+  };
+
   const highlightedNodeIds = useMemo(() => {
     if (selectedNodeId) {
       return connectedNodeIds(forceGraph.edges, selectedNodeId);
@@ -327,6 +341,35 @@ export function DailyGraphCanvas({
     }
     select(svg).call(zoomBehavior.transform, zoomIdentity);
   }, []);
+
+  const focusNodeInView = useCallback((nodeId: string) => {
+    const svg = svgRef.current;
+    const zoomBehavior = zoomBehaviorRef.current;
+    const node = nodeById.get(nodeId);
+    if (!svg || !zoomBehavior || !node) {
+      return;
+    }
+    const scale = Math.max(zoomTransform.k, canvasSize.width <= MIN_CANVAS_WIDTH ? 1.35 : 1.1);
+    const nodeX = node.x ?? node.initialX;
+    const nodeY = node.y ?? node.initialY;
+    const focused = zoomIdentity
+      .translate(
+        canvasSize.width / 2 - nodeX * scale,
+        canvasSize.height / 2 - nodeY * scale,
+      )
+      .scale(scale);
+    select(svg).call(zoomBehavior.transform, focused);
+  }, [canvasSize.height, canvasSize.width, nodeById, zoomTransform.k]);
+
+  const selectNodeFromNavigator = (nodeId: string) => {
+    if (!nodeId) {
+      clearSelection();
+      return;
+    }
+    onSelectNode(nodeId);
+    onSelectEdge(null);
+    focusNodeInView(nodeId);
+  };
 
   const fitView = useCallback(() => {
     const svg = svgRef.current;
@@ -529,7 +572,22 @@ export function DailyGraphCanvas({
         </div>
       </div>
       <div className="force-graph-controls">
-        <span className="muted">{t("workbench.zoomPanHint")}</span>
+        <div className="graph-node-navigator">
+          <label htmlFor="graph-node-navigator">{t("workbench.findNode")}</label>
+          <select
+            id="graph-node-navigator"
+            onChange={(event) => selectNodeFromNavigator(event.target.value)}
+            value={selectedNodeId || ""}
+          >
+            <option value="">{t("workbench.chooseNode")}</option>
+            {forceGraph.nodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {displayNodeLabel(node)} ({displayNodeType(node)})
+              </option>
+            ))}
+          </select>
+          <span className="muted">{t("workbench.zoomPanHint")}</span>
+        </div>
         <div className="button-row">
           <button className="button secondary" onClick={fitView} type="button">
             {t("workbench.fitView")}

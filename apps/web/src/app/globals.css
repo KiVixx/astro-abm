@@ -2591,6 +2591,33 @@ pre {
   margin: 0 0 10px;
 }
 
+.graph-node-navigator {
+  align-items: center;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: auto minmax(220px, 360px);
+  min-width: 0;
+}
+
+.graph-node-navigator label {
+  font-family: var(--font-signal);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.graph-node-navigator select {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  min-height: 38px;
+  min-width: 0;
+  padding: 7px 30px 7px 9px;
+}
+
+.graph-node-navigator .muted {
+  grid-column: 1 / -1;
+}
+
 .graph-relationship-toolbar {
   align-items: stretch;
   background: rgba(237, 243, 244, 0.74);
@@ -3959,6 +3986,24 @@ pre {
     align-items: start;
     justify-items: start;
     text-align: left;
+  }
+
+  .force-graph-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .graph-node-navigator {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-node-navigator .muted {
+    grid-column: 1;
+  }
+
+  .force-graph-controls .button-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .force-graph-frame {
