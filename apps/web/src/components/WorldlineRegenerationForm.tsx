@@ -211,11 +211,21 @@ export function WorldlineRegenerationForm({
         const networkCallPerformed = Boolean(
           response.report.worldline_simulation?.provenance?.network_call_performed,
         );
+        if (halted) {
+          setActive(false);
+          setMessage("");
+          setProgress({
+            currentChunk: current,
+            message: t("worldline.regenerateProgressHalted"),
+            phase: "error",
+            totalChunks: affectedChunks,
+          });
+          return;
+        }
         if (
           chunkIndex < chunks.length - 1
           && callDelaySeconds > 0
           && networkCallPerformed
-          && !halted
         ) {
           setProgress({
             currentChunk: current,
