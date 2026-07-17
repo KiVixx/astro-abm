@@ -18,6 +18,10 @@ import type {
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import { useLeaveWarning } from "@/lib/useLeaveWarning";
+import {
+  LlmConnectionTestResult,
+  type LlmConnectionFeedback,
+} from "./LlmConnectionTestResult";
 
 interface Settings {
   name: string;
@@ -68,6 +72,8 @@ export function WorldlineRegenerationForm({
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [connectionFeedback, setConnectionFeedback] =
+    useState<LlmConnectionFeedback | null>(null);
   const chunkSize = normalizeChunkSize(config?.worldline_chunk_days);
   const chunks = useMemo(
     () => buildChunks((report.daily_timeline || []).map((item) => item.date), chunkSize),
@@ -151,7 +157,7 @@ export function WorldlineRegenerationForm({
 
   async function testConnection() {
     setError("");
-    setMessage(t("worldline.regenerateConnectionTesting"));
+    setConnectionFeedback({ message: "", reachable: false, status: "testing", testing: true });
     try {
       const result = selectedPresetId && !settings.apiKey
         ? await testLlmPreset(selectedPresetId)
@@ -164,9 +170,17 @@ export function WorldlineRegenerationForm({
             timeout_seconds: Number(settings.timeoutSeconds),
             max_output_tokens: Number(settings.maxOutputTokens),
           });
-      setMessage(`${result.status}: ${result.message}`);
+      setConnectionFeedback({
+        message: result.message,
+        reachable: result.reachable,
+        status: result.status,
+      });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("common.unknownError"));
+      setConnectionFeedback({
+        message: caught instanceof Error ? caught.message : t("common.unknownError"),
+        reachable: false,
+        status: "request_failed",
+      });
     }
   }
 
@@ -398,6 +412,7 @@ export function WorldlineRegenerationForm({
       {settings.realEnabled && !selectedPreset?.has_api_key && !settings.apiKey ? (
         <p className="notice warning">{t("worldline.regenerateCredentialWarning")}</p>
       ) : null}
+      <LlmConnectionTestResult feedback={connectionFeedback} />
       {message ? (
         <p aria-live="polite" className="notice" role="status">
           {message}

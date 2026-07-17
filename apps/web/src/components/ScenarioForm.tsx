@@ -12,6 +12,10 @@ import {
 } from "@/lib/api";
 import { AgentSelector } from "./AgentSelector";
 import { AssetSelector } from "./AssetSelector";
+import {
+  LlmConnectionTestResult,
+  type LlmConnectionFeedback,
+} from "./LlmConnectionTestResult";
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import { useLeaveWarning } from "@/lib/useLeaveWarning";
@@ -89,6 +93,8 @@ export function ScenarioForm({
   const [presetName, setPresetName] = useState("Gemini default");
   const [includeApiKeyInPreset, setIncludeApiKeyInPreset] = useState(false);
   const [presetMessage, setPresetMessage] = useState("");
+  const [connectionFeedback, setConnectionFeedback] =
+    useState<LlmConnectionFeedback | null>(null);
   const [llmProvider, setLlmProvider] = useState<LlmProvider>(DEFAULT_LLM_PROVIDER);
   const [worldlineProvider, setWorldlineProvider] =
     useState<WorldlineProvider>("deterministic_mock");
@@ -438,7 +444,7 @@ export function ScenarioForm({
       && (selectedPreset.base_url || "") === baseUrl
       && (selectedPreset.model || "") === model,
     );
-    setPresetMessage(t("worldline.regenerateConnectionTesting"));
+    setConnectionFeedback({ message: "", reachable: false, status: "testing", testing: true });
     try {
       const result = matchesSelectedPreset && selectedPreset
         ? await testLlmPreset(selectedPreset.preset_id)
@@ -451,9 +457,17 @@ export function ScenarioForm({
             timeout_seconds: optionalNumber(getString(formData, "llm_timeout_seconds")),
             max_output_tokens: optionalNumber(getString(formData, "llm_max_output_tokens")),
           });
-      setPresetMessage(`${result.status}: ${result.message}`);
+      setConnectionFeedback({
+        message: result.message,
+        reachable: result.reachable,
+        status: result.status,
+      });
     } catch (error) {
-      setPresetMessage(error instanceof Error ? error.message : t("common.unknownError"));
+      setConnectionFeedback({
+        message: error instanceof Error ? error.message : t("common.unknownError"),
+        reachable: false,
+        status: "request_failed",
+      });
     }
   }
 
@@ -801,6 +815,7 @@ export function ScenarioForm({
               {presetMessage}
             </p>
           ) : null}
+          <LlmConnectionTestResult feedback={connectionFeedback} />
         </section>
         <div className="notice full">
           <p>{t("scenarioCreate.llmApiKeyNote")}</p>
