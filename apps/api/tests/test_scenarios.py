@@ -997,6 +997,27 @@ def test_scenario_uses_local_research_context_when_available(
     assert "local research" in report["markdown_report"]
 
 
+def test_mixed_computed_context_counts_as_local_research_day(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    research_root = tmp_path / "research-output"
+    monkeypatch.setenv("ASTRO_ABM_RESEARCH_OUTPUT_ROOT", str(research_root))
+    _write_minimal_research_context(research_root)
+    (research_root / "parquet/astro_daily_1926_2025/astro_daily_features.parquet").unlink()
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"start_date": "2026-07-01", "end_date": "2026-07-01"})
+
+    response = client.post("/scenarios", json=payload)
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["daily_timeline"][0]["data_coverage"]["source"] == "mixed_computed_research"
+    assert report["coverage_summary"]["local_research_days"] == 1
+    assert report["coverage_summary"]["source_counts"]["mixed_computed_research"] == 1
+
+
 def test_scenario_generation_does_not_call_external_http(
     monkeypatch, tmp_path: Path
 ) -> None:

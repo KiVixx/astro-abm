@@ -470,6 +470,14 @@ def build_coverage_summary(
         values = status_values(snapshot)
         return "available" in values and any(value != "available" for value in values)
 
+    def has_local_research(snapshot: DailyScenarioSnapshot) -> bool:
+        return (
+            snapshot.data_coverage.source
+            in {"local_research_snapshot", "mixed_computed_research"}
+            or snapshot.research_signals.data_quality
+            in {"local_research_available", "partial_local_research_available"}
+        )
+
     component_available_counts = {
         key: sum(getattr(snapshot.data_coverage, key) == "available" for snapshot in daily_timeline)
         for key in component_keys
@@ -483,7 +491,7 @@ def build_coverage_summary(
     notes = coverage_summary_notes(language)
     return ScenarioCoverageSummary(
         total_days=total_days,
-        local_research_days=source_counts.get("local_research_snapshot", 0),
+        local_research_days=sum(has_local_research(snapshot) for snapshot in daily_timeline),
         placeholder_days=sum(is_placeholder(snapshot) for snapshot in daily_timeline),
         future_placeholder_days=sum(is_future_placeholder(snapshot) for snapshot in daily_timeline),
         mixed_context_days=sum(is_mixed(snapshot) for snapshot in daily_timeline),
@@ -585,6 +593,7 @@ def coverage_summary_notes(language: ReportLanguage) -> list[str]:
     if language == "zh-Hant":
         return [
             "local_research_snapshot 表示當天可使用只讀本地研究脈絡。",
+            "mixed_computed_research 表示當天同時使用本地研究脈絡與本機即時計算星曆。",
             "computed_ephemeris 表示當天星曆由本機 Swiss Ephemeris 即時計算，不代表市場觀測資料可用。",
             "future_placeholder 表示未來日期尚無已觀測市場或壓力資料。",
             "coverage summary 只描述資料覆蓋，不代表逐點回測。",
@@ -592,6 +601,7 @@ def coverage_summary_notes(language: ReportLanguage) -> list[str]:
         ]
     return [
         "local_research_snapshot indicates read-only local research context was available for that day.",
+        "mixed_computed_research indicates that local research context and locally computed ephemeris were both used for that day.",
         "computed_ephemeris indicates local Swiss Ephemeris calculations were used for astro context; it does not imply observed market data is available.",
         "future_placeholder indicates no observed market/stress data is available for future dates.",
         "coverage summary is descriptive only and is not a point-in-time backtest.",
