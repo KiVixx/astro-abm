@@ -10,6 +10,7 @@ from pathlib import Path
 
 from astro_abm_api.models.report import ScenarioReport
 from astro_abm_api.models.scenario import ScenarioSummary
+from astro_abm_api.services.simulation_engine import build_coverage_summary
 
 
 SCENARIO_OUTPUT_DIR_ENV = "ASTRO_ABM_SCENARIO_OUTPUT_DIR"
@@ -118,6 +119,18 @@ def report_to_summary(report: ScenarioReport) -> ScenarioSummary:
     )
 
 
+def _refresh_derived_coverage(report: ScenarioReport) -> ScenarioReport:
+    if report.coverage_summary is None or not report.daily_timeline:
+        return report
+    coverage_summary = build_coverage_summary(
+        report.daily_timeline,
+        report.assets,
+        created_at=report.created_at,
+        language=report.language or "en",
+    )
+    return report.model_copy(update={"coverage_summary": coverage_summary})
+
+
 def _summary_fallback_counts(
     provenance: dict[str, object],
     failed_chunk_count: object,
@@ -198,7 +211,7 @@ class ScenarioStore:
             raise ScenarioNotFoundError(scenario_id)
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
-            return ScenarioReport.model_validate(data)
+            return _refresh_derived_coverage(ScenarioReport.model_validate(data))
         except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
             category = _report_read_error_category(error)
             logger.warning(
@@ -225,7 +238,7 @@ class ScenarioStore:
         for json_path in sorted(self.output_dir.glob("*.json")):
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
-                report = ScenarioReport.model_validate(data)
+                report = _refresh_derived_coverage(ScenarioReport.model_validate(data))
             except (json.JSONDecodeError, OSError, UnicodeError, ValueError) as error:
                 logger.warning(
                     "Skipping unreadable scenario report %s (%s)",

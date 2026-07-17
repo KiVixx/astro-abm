@@ -1019,6 +1019,40 @@ def test_mixed_computed_context_counts_as_local_research_day(
     assert report["coverage_summary"]["source_counts"]["mixed_computed_research"] == 1
 
 
+def test_saved_coverage_summary_is_refreshed_from_daily_timeline(
+    monkeypatch, tmp_path: Path
+) -> None:
+    scenario_dir = tmp_path / "scenarios"
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(scenario_dir))
+    research_root = tmp_path / "research-output"
+    monkeypatch.setenv("ASTRO_ABM_RESEARCH_OUTPUT_ROOT", str(research_root))
+    _write_minimal_research_context(research_root)
+    (research_root / "parquet/astro_daily_1926_2025/astro_daily_features.parquet").unlink()
+    client = TestClient(app)
+    payload = scenario_payload()
+    payload.update({"start_date": "2026-07-01", "end_date": "2026-07-01"})
+    created = client.post("/scenarios", json=payload).json()
+    scenario_path = scenario_dir / f"{created['scenario_id']}.json"
+    saved = json.loads(scenario_path.read_text(encoding="utf-8"))
+    saved["coverage_summary"]["local_research_days"] = 0
+    saved["coverage_summary"]["mixed_context_days"] = 0
+    scenario_path.write_text(json.dumps(saved), encoding="utf-8")
+
+    loaded = client.get(f"/scenarios/{created['scenario_id']}")
+    summaries = client.get("/scenarios")
+
+    assert loaded.status_code == 200
+    assert loaded.json()["coverage_summary"]["local_research_days"] == 1
+    assert loaded.json()["coverage_summary"]["mixed_context_days"] == 1
+    summary = next(
+        item for item in summaries.json() if item["scenario_id"] == created["scenario_id"]
+    )
+    assert summary["coverage_local_research_days"] == 1
+    assert json.loads(scenario_path.read_text(encoding="utf-8"))["coverage_summary"][
+        "local_research_days"
+    ] == 0
+
+
 def test_scenario_generation_does_not_call_external_http(
     monkeypatch, tmp_path: Path
 ) -> None:
