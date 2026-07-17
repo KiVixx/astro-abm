@@ -2163,6 +2163,62 @@ pre {
   padding: 14px;
 }
 
+.graph-related-details {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.graph-related-details > summary {
+  cursor: pointer;
+  font-family: var(--font-signal);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 0;
+}
+
+.graph-related-list {
+  border-top: 1px solid var(--border);
+  display: grid;
+}
+
+.graph-related-node {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 10px 4px;
+  text-align: left;
+  width: 100%;
+}
+
+.graph-related-node span {
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-family: var(--font-signal);
+  font-size: 11px;
+}
+
+.graph-related-node:hover,
+.graph-related-node:focus-visible {
+  background: var(--surface-muted);
+}
+
+.graph-related-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.graph-related-node:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .worldline-panel {
   border: 1px solid var(--border);
   display: grid;

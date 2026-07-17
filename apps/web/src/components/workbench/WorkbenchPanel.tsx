@@ -39,6 +39,7 @@ interface WorkbenchPanelProps {
   regenerationMessage?: string;
   regenerationError?: string | null;
   selectedRetrogradeBodies?: RetrogradeBody[];
+  onSelectNode?: (nodeId: string) => void;
 }
 
 function RetrogradeBodyReadout({
@@ -420,9 +421,11 @@ function displayWorkbenchNodeLabel(
 function EdgePanel({
   edge,
   graph,
+  onSelectNode,
 }: {
   edge: WorkbenchEdge;
   graph?: WorkbenchGraph | null;
+  onSelectNode?: (nodeId: string) => void;
 }) {
   const { t } = useI18n();
   const [sourceId, targetId] = edgeEndpointIds(edge);
@@ -435,20 +438,76 @@ function EdgePanel({
         <h2>{t("workbench.selectedRelationship")}</h2>
         <p className="muted">{t("workbench.relationshipNotice")}</p>
       </div>
-      <div className="nested-panel">
+      <button
+        className="graph-related-node"
+        disabled={!source || !onSelectNode}
+        onClick={() => source && onSelectNode?.(source.id)}
+        type="button"
+      >
         <strong>{displayWorkbenchNodeLabel(t, source)}</strong>
-        <p className="muted">{t("workbench.sourceNode")}</p>
-      </div>
-      <div className="nested-panel">
+        <span>{t("workbench.sourceNode")}</span>
+      </button>
+      <button
+        className="graph-related-node"
+        disabled={!target || !onSelectNode}
+        onClick={() => target && onSelectNode?.(target.id)}
+        type="button"
+      >
         <strong>{displayWorkbenchNodeLabel(t, target)}</strong>
-        <p className="muted">{t("workbench.targetNode")}</p>
-      </div>
+        <span>{t("workbench.targetNode")}</span>
+      </button>
       <div className="tag-row">
         <span className="tag">
           {t("workbench.edgeType")}: {formatEnumLabel(t, "edge_type", edge.type)}
         </span>
       </div>
     </div>
+  );
+}
+
+function RelatedNodesPanel({
+  graph,
+  node,
+  onSelectNode,
+}: {
+  graph: WorkbenchGraph;
+  node: WorkbenchNode;
+  onSelectNode: (nodeId: string) => void;
+}) {
+  const { t } = useI18n();
+  const related = graph.edges.flatMap((edge) => {
+    const [sourceId, targetId] = edgeEndpointIds(edge);
+    if (sourceId !== node.id && targetId !== node.id) {
+      return [];
+    }
+    const relatedId = sourceId === node.id ? targetId : sourceId;
+    const relatedNode = graph.nodes.find((candidate) => candidate.id === relatedId);
+    return relatedNode ? [{ edge, node: relatedNode }] : [];
+  });
+
+  if (!related.length) {
+    return null;
+  }
+
+  return (
+    <details className="graph-related-details">
+      <summary>
+        {t("workbench.connectedNodes")} ({related.length})
+      </summary>
+      <div className="graph-related-list">
+        {related.map(({ edge, node: relatedNode }) => (
+          <button
+            className="graph-related-node"
+            key={edge.id}
+            onClick={() => onSelectNode(relatedNode.id)}
+            type="button"
+          >
+            <strong>{displayWorkbenchNodeLabel(t, relatedNode)}</strong>
+            <span>{formatEnumLabel(t, "edge_type", edge.type)}</span>
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -468,6 +527,7 @@ export function WorkbenchPanel({
   regenerationMessage = "",
   regenerationError = null,
   selectedRetrogradeBodies = [],
+  onSelectNode,
 }: WorkbenchPanelProps) {
   const { t } = useI18n();
   const payload = selectedNode?.payload;
@@ -505,7 +565,7 @@ export function WorkbenchPanel({
         />
       ) : null}
       {selectedEdge ? (
-        <EdgePanel edge={selectedEdge} graph={graph} />
+        <EdgePanel edge={selectedEdge} graph={graph} onSelectNode={onSelectNode} />
       ) : payload && hasKind(payload, "agent") ? (
         <AgentNodePanel payload={payload as AgentNodePayload} />
       ) : payload && hasKind(payload, "context") ? (
@@ -517,6 +577,9 @@ export function WorkbenchPanel({
       ) : (
         <OverviewPanel snapshot={snapshot} />
       )}
+      {selectedNode && graph && onSelectNode ? (
+        <RelatedNodesPanel graph={graph} node={selectedNode} onSelectNode={onSelectNode} />
+      ) : null}
       <RetrogradeContextPanel
         selectedBodies={selectedRetrogradeBodies}
         snapshot={snapshot}

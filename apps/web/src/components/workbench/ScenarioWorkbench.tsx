@@ -208,6 +208,13 @@ export function ScenarioWorkbench({
     setSelectedEdgeId(null);
   };
 
+  const selectGraphNode = (nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    if (nodeId) {
+      setSelectedEdgeId(null);
+    }
+  };
+
   const selectedChunkIndex = useMemo(() => {
     if (!selectedSnapshot || selectedIndex < 0) {
       return null;
@@ -373,7 +380,7 @@ export function ScenarioWorkbench({
           <DailyGraphCanvas
             graph={graph}
             onSelectEdge={setSelectedEdgeId}
-            onSelectNode={setSelectedNodeId}
+            onSelectNode={selectGraphNode}
             selectedDate={selectedSnapshot.date}
             selectedEdgeId={selectedEdgeId}
             selectedNodeId={selectedNodeId}
@@ -394,6 +401,7 @@ export function ScenarioWorkbench({
           regenerationMessage=""
           regenerationActive={false}
           selectedRetrogradeBodies={selectedRetrogradeBodies}
+          onSelectNode={(nodeId) => selectGraphNode(nodeId)}
           worldlinePrimary={isWorldline}
         />
       </div>
