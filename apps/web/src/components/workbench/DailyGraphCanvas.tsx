@@ -148,6 +148,7 @@ export function DailyGraphCanvas({
   const nodeLayerRef = useRef<SVGGElement | null>(null);
   const simulationRef = useRef<Simulation<ForceGraphNode, ForceGraphEdge> | null>(null);
   const zoomBehaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const lastAutoFocusedNodeRef = useRef<string | null>(null);
   const [canvasSize, setCanvasSize] = useState<CanvasSize>({
     width: Math.max(MIN_CANVAS_WIDTH, graph.width),
     height: CANVAS_HEIGHT,
@@ -424,6 +425,19 @@ export function DailyGraphCanvas({
     select(svg).call(zoomBehavior.transform, focused);
   }, [canvasSize.height, canvasSize.width, nodeById, zoomTransform.k]);
 
+  useEffect(() => {
+    if (!selectedNodeId) {
+      lastAutoFocusedNodeRef.current = null;
+      return;
+    }
+    if (lastAutoFocusedNodeRef.current === selectedNodeId) {
+      return;
+    }
+    lastAutoFocusedNodeRef.current = selectedNodeId;
+    const animationFrame = requestAnimationFrame(() => focusNodeInView(selectedNodeId));
+    return () => cancelAnimationFrame(animationFrame);
+  }, [focusNodeInView, selectedNodeId]);
+
   const selectNodeFromNavigator = (nodeId: string) => {
     if (!nodeId) {
       clearSelection();
@@ -431,7 +445,6 @@ export function DailyGraphCanvas({
     }
     onSelectNode(nodeId);
     onSelectEdge(null);
-    focusNodeInView(nodeId);
   };
 
   const toggleNodeTypes = (nodeTypes: WorkbenchNodeType[]) => {
