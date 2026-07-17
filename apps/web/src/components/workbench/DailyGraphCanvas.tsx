@@ -217,7 +217,7 @@ export function DailyGraphCanvas({
         detail: [displayNodeSubtitle(node), node.detail].filter(Boolean).join(" - "),
       });
     },
-    [],
+    [t],
   );
 
   const showEdgeTooltip = useCallback(
@@ -449,7 +449,7 @@ export function DailyGraphCanvas({
       <div className="workbench-svg-frame force-graph-frame" ref={frameRef}>
         <svg
           className="workbench-svg force-graph-svg"
-          role="img"
+          role="group"
           ref={svgRef}
           viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
           aria-label={t("workbench.graphAria")}
@@ -477,6 +477,11 @@ export function DailyGraphCanvas({
               {forceGraph.edges.map((edge) => {
                 const source = nodeById.get(edge.sourceId);
                 const target = nodeById.get(edge.targetId);
+                const edgeAccessibleLabel = `${t("workbench.relationship")}: ${
+                  source ? displayNodeLabel(source) : edge.sourceId
+                } ${t("common.to")} ${
+                  target ? displayNodeLabel(target) : edge.targetId
+                }`;
                 return (
                   <g key={edge.id}>
                     <line
@@ -495,6 +500,8 @@ export function DailyGraphCanvas({
                       y2={target?.initialY || 0}
                     />
                     <line
+                      aria-label={edgeAccessibleLabel}
+                      aria-pressed={selectedEdgeId === edge.id}
                       className={edgeClassName(edge, selectedNodeId, selectedEdgeId)}
                       markerEnd="url(#force-graph-arrow)"
                       onClick={(event) => {
@@ -526,6 +533,11 @@ export function DailyGraphCanvas({
             <g className="workbench-nodes force-graph-nodes" ref={nodeLayerRef}>
               {forceGraph.nodes.map((node) => (
                 <g
+                  aria-label={[
+                    displayNodeLabel(node),
+                    displayNodeSubtitle(node),
+                  ].filter(Boolean).join(": ")}
+                  aria-pressed={selectedNodeId === node.id}
                   className={nodeClassName(node, selectedNodeId, selectedEdgeId, highlightedNodeIds)}
                   key={node.id}
                   onClick={(event) => {
