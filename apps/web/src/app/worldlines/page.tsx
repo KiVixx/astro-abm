@@ -32,9 +32,6 @@ export default async function WorldlinesPage({
             <Link className="button" href="/worldlines/new">
               <I18nText tKey="worldline.create" />
             </Link>
-            <Link className="button secondary" href="/scenarios">
-              <I18nText tKey="worldline.openScenarioLibrary" />
-            </Link>
           </div>
         </header>
         <WorldlineSearch

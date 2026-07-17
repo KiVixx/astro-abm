@@ -20,14 +20,8 @@ export default async function ScenarioReportPage({
           <Link className="button" href={`/worldlines/${report.scenario_id}`}>
             <I18nText tKey="worldline.openWorldline" />
           </Link>
-          <Link className="button secondary" href={`/scenarios/${report.scenario_id}`}>
-            <I18nText tKey="common.backToWorkbench" />
-          </Link>
           <Link className="button secondary" href="/worldlines">
             <I18nText tKey="worldline.backToWorldlines" />
-          </Link>
-          <Link className="button secondary" href="/scenarios">
-            <I18nText tKey="common.backToScenarios" />
           </Link>
         </nav>
         <ReportViewer report={report} />
