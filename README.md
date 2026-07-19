@@ -17,6 +17,37 @@ simulated causal links, pressure updates, fallback diagnostics, and path-aware
 regeneration. This is a scenario-rehearsal engine, not a validated market
 prediction model, real-world causal proof, or trading system.
 
+## Open Source And Licensing
+
+Astro ABM source code is licensed under the
+[GNU Affero General Public License v3.0 or later](LICENSE). This includes the
+local API and Web product. A public deployment should expose a source-code link
+for the exact version it runs; configure that link with
+`NEXT_PUBLIC_ASTRO_ABM_SOURCE_URL`.
+
+The software license does **not** grant redistribution rights for market data,
+local CSV inputs, generated research snapshots, or third-party ephemeris data.
+Those materials have separate source-specific terms and remain excluded from
+Git. See:
+
+- [License notes](LICENSE_NOTES.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Data licensing policy](DATA_LICENSE.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Dependency license audit](docs/legal/DEPENDENCY_LICENSE_AUDIT.md)
+
+Swiss Ephemeris is used through its AGPL licensing path. A proprietary or
+closed-source distribution that includes Swiss Ephemeris requires a separate
+licensing review and may require the Swiss Ephemeris Professional License.
+
+Before publishing a release, run the repeatable repository and Git-history
+check:
+
+```bash
+make open-source-audit
+```
+
 The project has three connected layers:
 
 - `src/astro_abm/`: hourly market, derivatives, space-weather, ephemeris, ETL,

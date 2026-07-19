@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a focused product, research, or maintenance improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the workflow or limitation before proposing implementation details.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What would become easier or more reliable?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Suggested scope
+      description: Note any API, data-source, licensing, or backward-compatibility impact.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Project boundaries
+      options:
+        - label: This request does not require committing restricted data or credentials.
+          required: true
+        - label: I understand simulated Worldlines are scenario rehearsals, not causal proof or trading signals.
+          required: true

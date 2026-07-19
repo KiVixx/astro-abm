@@ -1,5 +1,7 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import "./globals.css";
 
@@ -21,6 +23,7 @@ export default function RootLayout({
           <main id="main-content" tabIndex={-1}>
             {children}
           </main>
+          <SiteFooter />
         </I18nProvider>
       </body>
     </html>

@@ -20,6 +20,28 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "language.label": "Language",
     "language.english": "English",
     "language.chinese": "Traditional Chinese",
+    "legal.footerNotice": "Open-source scenario rehearsal software",
+    "legal.footerNavigation": "Source and legal information",
+    "legal.sourceCode": "Source code",
+    "legal.licenseAndData": "License & data",
+    "legal.kicker": "OPEN SOURCE // LICENSE BOUNDARIES",
+    "legal.title": "License and data notices",
+    "legal.lead":
+      "Astro ABM separates the open-source software license from third-party software and data terms.",
+    "legal.softwareTitle": "Software license",
+    "legal.softwareText":
+      "Astro ABM source code is licensed under GNU AGPL version 3 or later. Public operators should link to the corresponding source for the version they run.",
+    "legal.readLicense": "Read the AGPL license",
+    "legal.swissTitle": "Swiss Ephemeris",
+    "legal.swissText":
+      "Swiss Ephemeris is used through its AGPL path and retains its upstream copyright and license terms. Proprietary use requires a separate licensing review.",
+    "legal.swissReference": "Read the Swiss Ephemeris licensing reference",
+    "legal.dataTitle": "Market and research data",
+    "legal.dataText":
+      "The software license does not grant redistribution rights for market data, local CSV inputs, generated snapshots, or third-party ephemeris files.",
+    "legal.readDataPolicy": "Read the data licensing policy",
+    "legal.fredTerms": "Read the FRED API terms",
+    "legal.notLegalAdvice": "These notices are an engineering compliance summary, not legal advice.",
 
     "common.backHome": "Back home",
     "common.retry": "Retry",
@@ -840,6 +862,27 @@ export const dictionaries: Record<Language, Record<string, string>> = {
     "language.label": "語言",
     "language.english": "英文",
     "language.chinese": "繁體中文",
+    "legal.footerNotice": "開源情境推演軟體",
+    "legal.footerNavigation": "原始碼與法律資訊",
+    "legal.sourceCode": "原始碼",
+    "legal.licenseAndData": "授權與資料",
+    "legal.kicker": "開放原始碼 // 授權邊界",
+    "legal.title": "授權與資料聲明",
+    "legal.lead": "Astro ABM 將開源軟體授權、第三方軟體條款與資料使用條款分開說明。",
+    "legal.softwareTitle": "軟體授權",
+    "legal.softwareText":
+      "Astro ABM 原始碼採 GNU AGPL 第 3 版或更新版本授權。公開營運者應連結至其實際運行版本的相應原始碼。",
+    "legal.readLicense": "閱讀 AGPL 授權",
+    "legal.swissTitle": "Swiss Ephemeris",
+    "legal.swissText":
+      "Swiss Ephemeris 目前依 AGPL 路徑使用，並保留其上游著作權及授權條款。專有使用需要另行審查授權。",
+    "legal.swissReference": "閱讀 Swiss Ephemeris 授權說明",
+    "legal.dataTitle": "市場與研究資料",
+    "legal.dataText":
+      "軟體授權不授予市場資料、本機 CSV、生成快照或第三方星曆資料檔的再分發權利。",
+    "legal.readDataPolicy": "閱讀資料授權政策",
+    "legal.fredTerms": "閱讀 FRED API 條款",
+    "legal.notLegalAdvice": "這些聲明是工程合規摘要，不構成法律意見。",
 
     "common.backHome": "返回首頁",
     "common.retry": "重試",
