@@ -135,5 +135,8 @@ function pageTitleKey(pathname: string): string {
   if (pathname === "/agents") {
     return "agents.title";
   }
+  if (pathname === "/legal") {
+    return "legal.title";
+  }
   return "app.brand";
 }

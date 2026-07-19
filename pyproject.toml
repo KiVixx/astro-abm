@@ -7,6 +7,10 @@ name = "astro-abm"
 version = "0.1.0"
 description = "Astro ABM hourly data pipeline"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+authors = [
+  { name = "KeyVix" },
+]
 requires-python = ">=3.11"
 dependencies = [
   "python-binance>=1.0.19",

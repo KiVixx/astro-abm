@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible problem in Astro ABM
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include API keys, `.env` contents, private datasets, or generated reports containing sensitive information.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Problem summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Use non-sensitive sample or demo data.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      placeholder: git rev-parse --short HEAD
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Worldline Web UI
+        - Product API
+        - LLM generation
+        - Daily research layer
+        - Hourly pipeline
+        - Bootstrap / maintenance
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include relevant errors after removing credentials and private paths.
+      render: shell
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, private data, and sensitive generated content.
+          required: true
