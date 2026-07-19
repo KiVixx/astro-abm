@@ -1,4 +1,8 @@
-from astro_abm.analysis.open_source_audit import allowed_tracked_path, secret_categories
+from astro_abm.analysis.open_source_audit import (
+    HISTORY_SECRET_FIXTURE_PATHS,
+    allowed_tracked_path,
+    secret_categories,
+)
 
 
 def test_secret_categories_detect_values_without_returning_them() -> None:
@@ -14,3 +18,7 @@ def test_open_source_audit_allows_only_documented_local_examples() -> None:
     assert allowed_tracked_path("astro_research/data/local/LOCAL_DATA_PROVENANCE.json")
     assert not allowed_tracked_path(".env")
     assert not allowed_tracked_path("astro_research/data/local/equity/spx_daily.csv")
+
+
+def test_history_scan_excludes_only_the_dedicated_secret_fixture() -> None:
+    assert HISTORY_SECRET_FIXTURE_PATHS == frozenset({"tests/test_open_source_audit.py"})

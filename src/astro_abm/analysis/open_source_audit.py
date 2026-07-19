@@ -35,6 +35,7 @@ SECRET_PATTERNS = {
         rb"ASTRO_ABM_LLM_API_KEY\s*=\s*(?:sk-|AQ\.|AIza)[A-Za-z0-9_.-]{20,}"
     ),
 }
+HISTORY_SECRET_FIXTURE_PATHS = frozenset({"tests/test_open_source_audit.py"})
 
 
 def secret_categories(data: bytes) -> list[str]:
@@ -83,7 +84,8 @@ def history_secret_candidates(repo: Path) -> list[tuple[str, str]]:
         if raw_line.startswith(b"diff --git a/"):
             current_path = raw_line.decode("utf-8", errors="replace").split(" b/", 1)[-1].strip()
         elif raw_line[:1] in (b"+", b"-") and not raw_line.startswith((b"+++", b"---")):
-            findings.update((category, current_path) for category in secret_categories(raw_line))
+            if current_path not in HISTORY_SECRET_FIXTURE_PATHS:
+                findings.update((category, current_path) for category in secret_categories(raw_line))
     if process.wait() != 0:
         raise RuntimeError("git history scan failed")
     return sorted(findings)
