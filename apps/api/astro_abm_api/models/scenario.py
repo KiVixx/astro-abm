@@ -18,12 +18,12 @@ WorldlineChunkDays = Literal[1, 2, 3, 5]
 class ScenarioCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str = Field(min_length=1)
-    description: str | None = None
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
     start_date: date
     end_date: date
-    assets: list[str] = Field(min_length=1)
-    agent_ids: list[str] = Field(min_length=1)
+    assets: list[str] = Field(min_length=1, max_length=20)
+    agent_ids: list[str] = Field(min_length=1, max_length=20)
     llm_provider: LLMProvider = "mock"
     llm_preset_id: str | None = None
     llm_real_enabled: bool | None = None

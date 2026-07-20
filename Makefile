@@ -5,7 +5,7 @@ WEB_PORT ?= 3000
 NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL ?= http://$(API_HOST):$(API_PORT)
 export NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL
 
-.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check check-api-port check-web-port api web product-smoke scenario-demo cleanup-guests open-source-audit test
+.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check check-api-port check-web-port api web product-smoke scenario-demo cleanup-guests security-status open-source-audit test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -30,6 +30,7 @@ help:
 	@echo "  make product-smoke    Run API tests and create a mock demo scenario"
 	@echo "  make scenario-demo    Create one deterministic local scenario report"
 	@echo "  make cleanup-guests   Remove expired anonymous workspaces and their reports"
+	@echo "  make security-status  Show local abuse-limit, lease, and scenario capacity status"
 	@echo "  make open-source-audit Check license, Git tracking, ignore rules, and secret patterns"
 	@echo "  make test             Run the full test suite"
 
@@ -99,6 +100,9 @@ scenario-demo:
 
 cleanup-guests:
 	uv run python scripts/cleanup_guest_worldlines.py
+
+security-status:
+	uv run python scripts/abuse_protection_status.py
 
 open-source-audit:
 	uv run python scripts/audit_open_source_readiness.py --history

@@ -31,6 +31,9 @@ ASTRO_ABM_GUEST_SCENARIO_QUOTA=20
 ASTRO_ABM_USER_SCENARIO_QUOTA=200
 ASTRO_ABM_CREATE_RATE_PER_HOUR=60
 ASTRO_ABM_LLM_RATE_PER_HOUR=240
+ASTRO_ABM_IP_CREATE_RATE_PER_HOUR=12
+ASTRO_ABM_IP_CREATE_RATE_PER_DAY=40
+ASTRO_ABM_IP_LLM_RATE_PER_HOUR=120
 ```
 
 Run `make cleanup-guests` periodically to remove expired, unclaimed Guest
@@ -52,6 +55,8 @@ does not prove authorship, market accuracy, causality, or investment value.
 5. Keep LLM keys in backend environment variables where possible. Request keys
    are relayed only for that request and are never written to reports.
 6. Put request/body limits and operational monitoring in front of the API.
+7. Follow the [DDoS and abuse-protection deployment guide](../deployment/ddos_abuse_protection.md),
+   including trusted-proxy configuration and scheduled `make security-status` checks.
 
 The current alpha deliberately has no password recovery and no OAuth provider.
 Do not present it as a production identity service until recovery or external

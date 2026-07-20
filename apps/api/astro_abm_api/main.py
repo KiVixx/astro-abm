@@ -5,8 +5,11 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from astro_abm_api.middleware.request_limits import RequestBodyLimitMiddleware
 from astro_abm_api.routers import agents, assets, auth, health, llm, portability, scenarios
+from astro_abm_api.services.scenario_store import ScenarioCapacityError
 
 
 LOCAL_CORS_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
@@ -29,6 +32,7 @@ def create_app() -> FastAPI:
         description="Local-first scenario simulation API for Astro ABM.",
         version="0.1.0",
     )
+    app.add_middleware(RequestBodyLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -37,6 +41,13 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+    @app.exception_handler(ScenarioCapacityError)
+    async def scenario_capacity_error(_request, error: ScenarioCapacityError):  # type: ignore[no-untyped-def]
+        return JSONResponse(
+            status_code=507,
+            content={"detail": "scenario storage capacity reached", "category": error.category},
+            headers={"Retry-After": "3600"},
+        )
     app.include_router(health.router)
     app.include_router(agents.router)
     app.include_router(assets.router)

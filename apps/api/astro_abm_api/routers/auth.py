@@ -23,19 +23,21 @@ from astro_abm_api.services.auth_store import (
     InvalidCredentialsError,
     UsernameUnavailableError,
 )
+from astro_abm_api.services.usage_limits import enforce_auth_rate
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=AuthSessionResponse, status_code=201)
-def register(request: RegisterRequest, response: Response) -> AuthSessionResponse:
+def register(payload: RegisterRequest, request: Request, response: Response) -> AuthSessionResponse:
     store = AuthStore()
+    enforce_auth_rate(request, store, "register")
     try:
         user = store.register(
-            username=request.username,
-            password=request.password,
-            display_name=request.display_name,
+            username=payload.username,
+            password=payload.password,
+            display_name=payload.display_name,
         )
     except UsernameUnavailableError as error:
         raise HTTPException(status_code=409, detail="account registration unavailable") from error
@@ -45,10 +47,11 @@ def register(request: RegisterRequest, response: Response) -> AuthSessionRespons
 
 
 @router.post("/login", response_model=AuthSessionResponse)
-def login(request: LoginRequest, response: Response) -> AuthSessionResponse:
+def login(payload: LoginRequest, request: Request, response: Response) -> AuthSessionResponse:
     store = AuthStore()
+    enforce_auth_rate(request, store, "login")
     try:
-        user = store.authenticate(username=request.username, password=request.password)
+        user = store.authenticate(username=payload.username, password=payload.password)
     except InvalidCredentialsError as error:
         raise HTTPException(status_code=401, detail="invalid username or password") from error
     credentials = store.create_session(user.user_id)

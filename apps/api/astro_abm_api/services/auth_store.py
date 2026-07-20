@@ -78,13 +78,20 @@ class AuthStore:
             else default_accounts_db_path()
         )
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self, *, timeout_seconds: float = 5.0) -> sqlite3.Connection:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.database_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA journal_mode = WAL")
-        self._ensure_schema(connection)
+        connection = sqlite3.connect(
+            self.database_path,
+            timeout=max(0.01, timeout_seconds),
+        )
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA journal_mode = WAL")
+            self._ensure_schema(connection)
+        except Exception:
+            connection.close()
+            raise
         return connection
 
     @staticmethod
@@ -144,12 +151,22 @@ class AuthStore:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS generation_leases (
+                lease_id TEXT PRIMARY KEY,
+                actor_type TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
             CREATE INDEX IF NOT EXISTS scenario_ownership_owner_idx
                 ON scenario_ownership(owner_type, owner_id);
             CREATE INDEX IF NOT EXISTS operation_events_lookup_idx
                 ON operation_events(actor_type, actor_id, operation, created_at);
+            CREATE INDEX IF NOT EXISTS generation_leases_expiry_idx
+                ON generation_leases(expires_at);
             """
         )
         connection.commit()
@@ -434,22 +451,26 @@ class AuthStore:
     ) -> bool:
         now = _utc_now()
         cutoff = _iso(now - timedelta(seconds=max(1, window_seconds)))
-        with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            connection.execute("DELETE FROM operation_events WHERE created_at < ?", (cutoff,))
-            row = connection.execute(
-                """
-                SELECT COUNT(*) AS count FROM operation_events
-                WHERE actor_type = ? AND actor_id = ? AND operation = ? AND created_at >= ?
-                """,
-                (actor_type, actor_id, operation, cutoff),
-            ).fetchone()
-            if int(row["count"] if row else 0) >= max(1, limit):
+        try:
+            with self._connect(timeout_seconds=_rate_limit_db_timeout()) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    """
+                    SELECT COUNT(*) AS count FROM operation_events
+                    WHERE actor_type = ? AND actor_id = ? AND operation = ? AND created_at >= ?
+                    """,
+                    (actor_type, actor_id, operation, cutoff),
+                ).fetchone()
+                if int(row["count"] if row else 0) >= max(1, limit):
+                    return False
+                connection.execute(
+                    "INSERT INTO operation_events(event_id, actor_type, actor_id, operation, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (str(uuid4()), actor_type, actor_id, operation, _iso(now)),
+                )
+        except sqlite3.OperationalError as exc:
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
                 return False
-            connection.execute(
-                "INSERT INTO operation_events(event_id, actor_type, actor_id, operation, created_at) VALUES (?, ?, ?, ?, ?)",
-                (str(uuid4()), actor_type, actor_id, operation, _iso(now)),
-            )
+            raise
         return True
 
     def expired_guest_scenario_ids(self) -> list[str]:
@@ -467,6 +488,95 @@ class AuthStore:
                 (now,),
             ).fetchall()
         return [str(row["scenario_id"]) for row in rows]
+
+    def try_acquire_generation_lease(
+        self,
+        *,
+        actor_type: str,
+        actor_id: str,
+        global_limit: int,
+        actor_limit: int,
+        lease_seconds: int,
+    ) -> str | None:
+        now = _utc_now()
+        expires_at = now + timedelta(seconds=max(30, lease_seconds))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "DELETE FROM generation_leases WHERE expires_at <= ?",
+                (_iso(now),),
+            )
+            global_count = connection.execute(
+                "SELECT COUNT(*) AS count FROM generation_leases"
+            ).fetchone()["count"]
+            actor_count = connection.execute(
+                """
+                SELECT COUNT(*) AS count FROM generation_leases
+                WHERE actor_type = ? AND actor_id = ?
+                """,
+                (actor_type, actor_id),
+            ).fetchone()["count"]
+            if int(global_count) >= max(1, global_limit) or int(actor_count) >= max(1, actor_limit):
+                return None
+            lease_id = str(uuid4())
+            connection.execute(
+                """
+                INSERT INTO generation_leases(
+                    lease_id, actor_type, actor_id, created_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (lease_id, actor_type, actor_id, _iso(now), _iso(expires_at)),
+            )
+        return lease_id
+
+    def release_generation_lease(self, lease_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM generation_leases WHERE lease_id = ?", (lease_id,))
+
+    def abuse_protection_status(self) -> dict[str, int]:
+        now = _iso(_utc_now())
+        with self._connect() as connection:
+            operation_events = connection.execute(
+                "SELECT COUNT(*) AS count FROM operation_events"
+            ).fetchone()["count"]
+            active_leases = connection.execute(
+                "SELECT COUNT(*) AS count FROM generation_leases WHERE expires_at > ?",
+                (now,),
+            ).fetchone()["count"]
+            active_guests = connection.execute(
+                """
+                SELECT COUNT(*) AS count FROM guest_workspaces
+                WHERE claimed_by_user_id IS NULL AND expires_at > ?
+                """,
+                (now,),
+            ).fetchone()["count"]
+        return {
+            "operation_events": int(operation_events),
+            "active_generation_leases": int(active_leases),
+            "active_guest_workspaces": int(active_guests),
+        }
+
+    def cleanup_operational_state(self, *, max_event_age_seconds: int = 172800) -> dict[str, int]:
+        now = _utc_now()
+        cutoff = _iso(now - timedelta(seconds=max(86400, max_event_age_seconds)))
+        with self._connect() as connection:
+            events = connection.execute(
+                "DELETE FROM operation_events WHERE created_at < ?",
+                (cutoff,),
+            ).rowcount
+            leases = connection.execute(
+                "DELETE FROM generation_leases WHERE expires_at <= ?",
+                (_iso(now),),
+            ).rowcount
+            sessions = connection.execute(
+                "DELETE FROM sessions WHERE expires_at <= ? OR revoked_at IS NOT NULL",
+                (_iso(now),),
+            ).rowcount
+        return {
+            "operation_events": max(0, events),
+            "generation_leases": max(0, leases),
+            "sessions": max(0, sessions),
+        }
 
     def delete_expired_guests(self) -> int:
         now = _iso(_utc_now())
@@ -486,3 +596,11 @@ class AuthStore:
                 (now,),
             )
         return max(0, cursor.rowcount)
+
+
+def _rate_limit_db_timeout() -> float:
+    try:
+        configured = float(os.getenv("ASTRO_ABM_RATE_LIMIT_DB_TIMEOUT_SECONDS", "0.25"))
+    except ValueError:
+        configured = 0.25
+    return max(0.01, min(5.0, configured))

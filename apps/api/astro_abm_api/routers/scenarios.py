@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from astro_abm_api.models.report import (
     ScenarioLlmChunkResponse,
@@ -36,12 +36,15 @@ from astro_abm_api.services.scenario_access import (
 )
 from astro_abm_api.services.usage_limits import (
     enforce_generation_rate,
+    enforce_scenario_complexity,
+    enforce_scenario_create_network_limits,
     enforce_scenario_create_limits,
 )
 from astro_abm_api.services.llm_client import (
     generate_llm_scenario_report_chunk,
     merge_llm_report_chunk,
 )
+from astro_abm_api.services.generation_capacity import generation_capacity
 from astro_abm_api.services.llm_preset_store import (
     LlmPresetNotFoundError,
     LlmPresetStore,
@@ -55,7 +58,10 @@ router = APIRouter()
 
 
 @router.get("/scenarios", response_model=list[ScenarioSummary])
-def list_scenarios(request: Request) -> list[ScenarioSummary]:
+def list_scenarios(
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[ScenarioSummary]:
     store = ScenarioStore()
     auth_store = AuthStore()
     actor = actor_for_request(request)
@@ -76,6 +82,8 @@ def list_scenarios(request: Request) -> list[ScenarioSummary]:
                 }
             )
         )
+        if len(visible) >= limit:
+            break
     return visible
 
 
@@ -114,12 +122,14 @@ def create_scenario(
     response: Response,
 ) -> ScenarioReport:
     payload, _ = _resolve_request_preset(payload)
+    auth_store = AuthStore()
+    enforce_scenario_create_network_limits(request, auth_store)
+    enforce_scenario_complexity(payload)
     actor = actor_for_create(request, response)
     if actor.user is not None:
         require_csrf(request)
     if actor.user is None and payload.visibility != "public":
         payload = payload.model_copy(update={"visibility": "public"})
-    auth_store = AuthStore()
     enforce_scenario_create_limits(actor, auth_store)
     agents, unknown = resolve_agents(payload.agent_ids)
     if unknown:
@@ -145,7 +155,7 @@ def generate_scenario_llm_chunk(
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
     actor = _require_owner(request, report)
-    enforce_generation_rate(actor, AuthStore())
+    enforce_generation_rate(actor, AuthStore(), request)
 
     if payload.chunk_start_date < report.start_date or payload.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -153,7 +163,8 @@ def generate_scenario_llm_chunk(
             detail="chunk date range must stay inside scenario date range",
         )
 
-    chunk_report = generate_llm_scenario_report_chunk(payload, report)
+    with generation_capacity(actor, AuthStore()):
+        chunk_report = generate_llm_scenario_report_chunk(payload, report)
     merged_llm_report = merge_llm_report_chunk(report.llm_report, chunk_report)
     provenance = dict(report.provenance)
     provenance["llm"] = {
@@ -201,7 +212,7 @@ def generate_scenario_worldline_chunk(
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
     actor = _require_owner(request, report)
-    enforce_generation_rate(actor, AuthStore())
+    enforce_generation_rate(actor, AuthStore(), request)
 
     if payload.chunk_start_date < report.start_date or payload.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -209,7 +220,8 @@ def generate_scenario_worldline_chunk(
             detail="chunk date range must stay inside scenario date range",
         )
 
-    worldline_simulation = generate_worldline_chunk(payload, report)
+    with generation_capacity(actor, AuthStore()):
+        worldline_simulation = generate_worldline_chunk(payload, report)
     if preset_record and worldline_simulation.generation_config:
         worldline_simulation = worldline_simulation.model_copy(
             update={
@@ -281,18 +293,19 @@ def regenerate_scenario_worldline_from_chunk(
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
     actor = _require_owner(request, report)
-    enforce_generation_rate(actor, AuthStore())
+    enforce_generation_rate(actor, AuthStore(), request)
 
     try:
-        result = regenerate_worldline_from_chunk(
-            report,
-            start_chunk_index=payload.start_chunk_index,
-            note=payload.note,
-            regeneration_id=payload.regeneration_id,
-            progressive=payload.progressive,
-            preset_id=payload.preset_id,
-            llm_overrides=payload.llm_overrides,
-        )
+        with generation_capacity(actor, AuthStore()):
+            result = regenerate_worldline_from_chunk(
+                report,
+                start_chunk_index=payload.start_chunk_index,
+                note=payload.note,
+                regeneration_id=payload.regeneration_id,
+                progressive=payload.progressive,
+                preset_id=payload.preset_id,
+                llm_overrides=payload.llm_overrides,
+            )
     except LlmPresetNotFoundError as exc:
         raise HTTPException(status_code=404, detail="LLM preset not found") from exc
     except ValueError as exc:

@@ -38,6 +38,12 @@ verified export from the Account page; imports always receive a new server ID.
 See `docs/product/public_alpha_accounts.md` for ACL rules, retention, limits,
 production requirements, and the deferred wallet/IPFS path.
 
+For public deployment, the API also enforces persistent owner/IP rate limits,
+request and report size limits, bounded generation concurrency, and total local
+scenario capacity. Put a CDN/WAF and reverse proxy in front of it; see
+`docs/deployment/ddos_abuse_protection.md` and run `make security-status` for a
+secret-free local status summary.
+
 `GET /scenarios` returns lightweight `ScenarioSummary` records, including
 compact worldline status, generation mode, failed-chunk count, and coverage
 counts. It never returns the full Markdown or daily timeline. Use

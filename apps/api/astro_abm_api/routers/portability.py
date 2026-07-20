@@ -21,7 +21,10 @@ from astro_abm_api.services.scenario_store import (
     ScenarioUnreadableError,
 )
 from astro_abm_api.services.simulation_engine import create_scenario_id, render_markdown
-from astro_abm_api.services.usage_limits import enforce_scenario_create_limits
+from astro_abm_api.services.usage_limits import (
+    enforce_scenario_create_limits,
+    enforce_scenario_create_network_limits,
+)
 
 
 router = APIRouter(tags=["scenario portability"])
@@ -53,10 +56,11 @@ def import_worldline(
         source = validate_export(payload.envelope)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    auth_store = AuthStore()
+    enforce_scenario_create_network_limits(request, auth_store)
     actor = actor_for_create(request, response)
     if actor.user is not None:
         require_csrf(request)
-    auth_store = AuthStore()
     enforce_scenario_create_limits(actor, auth_store)
     visibility = payload.visibility or source.visibility
     if actor.user is None:
