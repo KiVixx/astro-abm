@@ -108,6 +108,9 @@ function pageTitleKey(pathname: string): string {
   if (pathname === "/") {
     return "home.title";
   }
+  if (pathname === "/login") return "auth.login";
+  if (pathname === "/register") return "auth.register";
+  if (pathname === "/account") return "auth.account";
   if (pathname === "/worldlines/new") {
     return "worldline.create";
   }

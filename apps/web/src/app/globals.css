@@ -205,6 +205,56 @@ pre {
   }
 }
 
+.account-link {
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.account-link:hover,
+.account-link:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.auth-page {
+  margin-inline: auto;
+  max-width: 640px;
+}
+
+.auth-form {
+  border: 1px solid var(--border);
+  box-shadow: 8px 8px 0 color-mix(in srgb, var(--border) 38%, transparent);
+  padding: clamp(20px, 4vw, 36px);
+}
+
+.auth-profile {
+  border-block: 1px solid var(--border);
+  margin: 0;
+}
+
+.auth-profile div {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(120px, 0.35fr) 1fr;
+  padding: 12px 0;
+}
+
+.auth-profile div + div {
+  border-top: 1px dashed var(--border);
+}
+
+.auth-profile dt {
+  color: var(--muted);
+}
+
+.auth-profile dd {
+  margin: 0;
+}
+
 .site-header {
   align-items: center;
   background: var(--surface);

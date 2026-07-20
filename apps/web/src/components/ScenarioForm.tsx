@@ -22,6 +22,7 @@ import {
 import { formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import { useLeaveWarning } from "@/lib/useLeaveWarning";
+import { useAuth } from "@/auth/AuthProvider";
 import type {
   AgentProfile,
   LlmProvider,
@@ -64,6 +65,7 @@ export function ScenarioForm({
 }) {
   const router = useRouter();
   const { language: uiLanguage, t } = useI18n();
+  const { loading: authLoading, user } = useAuth();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [defaultDateRange] = useState(() => getDefaultScenarioDateRange());
   const [startDate, setStartDate] = useState(defaultDateRange.startDate);
@@ -86,6 +88,7 @@ export function ScenarioForm({
   const [worldlineProvider, setWorldlineProvider] =
     useState<WorldlineProvider>("deterministic_mock");
   const [realLlmEnabled, setRealLlmEnabled] = useState(true);
+  const [visibility, setVisibility] = useState<Visibility>("public");
   const [progress, setProgress] = useState<GenerationProgress>({
     active: false,
     phase: "idle",
@@ -594,12 +597,20 @@ export function ScenarioForm({
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.visibility")}</span>
-          <select name="visibility" defaultValue="private">
+          <input name="visibility" type="hidden" value={visibility} />
+          <select
+            disabled={authLoading || !user}
+            onChange={(event) => setVisibility(event.target.value as Visibility)}
+            value={visibility}
+          >
             <option value="private">
               {formatEnumLabel(t, "visibility", "private")}
             </option>
             <option value="public">{formatEnumLabel(t, "visibility", "public")}</option>
           </select>
+          <span className="muted">
+            {user ? t("auth.visibilitySignedIn") : t("auth.visibilityGuest")}
+          </span>
         </label>
         <label className="form-field">
           <span>{t("scenarioCreate.reportLanguage")}</span>
@@ -910,7 +921,7 @@ function payloadFromFormData(formData: FormData): ScenarioCreateRequest {
     llm_timeout_seconds: optionalNumber(getString(formData, "llm_timeout_seconds")),
     llm_max_output_tokens: optionalNumber(getString(formData, "llm_max_output_tokens")),
     llm_call_delay_seconds: optionalNumber(getString(formData, "llm_call_delay_seconds")),
-    visibility: (getString(formData, "visibility") || "private") as Visibility,
+    visibility: (getString(formData, "visibility") || "public") as Visibility,
     mode: "daily_association_only",
     language: (getString(formData, "language") || "en") as ReportLanguage,
     worldline_provider: (

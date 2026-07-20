@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LanguageToggle } from "@/i18n/LanguageToggle";
 import { useI18n } from "@/i18n/useI18n";
+import { useAuth } from "@/auth/AuthProvider";
 
 export function SiteHeader() {
   const { t } = useI18n();
   const pathname = usePathname();
+  const { loading, user } = useAuth();
   const links = [
     {
       href: "/worldlines",
@@ -48,6 +50,11 @@ export function SiteHeader() {
               </Link>
             ))}
           </nav>
+          {!loading ? (
+            <Link className="account-link" href={user ? "/account" : "/login"}>
+              {user ? user.display_name || user.username : t("auth.login")}
+            </Link>
+          ) : null}
           <LanguageToggle />
         </div>
       </header>

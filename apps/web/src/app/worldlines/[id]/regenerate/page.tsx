@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { WorldlineRegenerationForm } from "@/components/WorldlineRegenerationForm";
 import { I18nText } from "@/i18n/useI18n";
 import { ApiError, getLlmPresets, getScenario } from "@/lib/api";
+import { serverCookieHeader } from "@/lib/serverAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function RegenerateWorldlinePage({ params, searchParams }: 
   const startChunkIndex = Math.max(0, Number.parseInt(query.start_chunk_index || "0", 10) || 0);
   try {
     const [report, presets] = await Promise.all([
-      getScenario(id, { includeMarkdown: false }),
+      getScenario(id, { cookieHeader: await serverCookieHeader(), includeMarkdown: false }),
       getLlmPresets(),
     ]);
     return (

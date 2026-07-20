@@ -17,6 +17,7 @@ from astro_abm_api.models.scenario import (
 )
 from astro_abm_api.services.agents import resolve_agents
 from astro_abm_api.services.auth_store import AuthStore
+from astro_abm_api.services.auth_session import require_csrf
 from astro_abm_api.services.asset_registry import normalize_asset_ids
 from astro_abm_api.services.daily_context import build_daily_context
 from astro_abm_api.services.scenario_store import (
@@ -109,6 +110,8 @@ def create_scenario(
 ) -> ScenarioReport:
     payload, _ = _resolve_request_preset(payload)
     actor = actor_for_create(request, response)
+    if actor.user is not None:
+        require_csrf(request)
     if actor.user is None and payload.visibility != "public":
         payload = payload.model_copy(update={"visibility": "public"})
     agents, unknown = resolve_agents(payload.agent_ids)
@@ -327,6 +330,8 @@ def _require_owner(request: Request, report: ScenarioReport) -> None:
     ownership = AuthStore().get_scenario_ownership(report.scenario_id)
     if not can_mutate(actor, ownership):
         raise HTTPException(status_code=404, detail="scenario not found")
+    if actor.user is not None:
+        require_csrf(request)
 
 
 def _resolve_request_preset(request):

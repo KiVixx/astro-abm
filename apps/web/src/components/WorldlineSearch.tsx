@@ -179,7 +179,7 @@ export function WorldlineSearch({
               <WorldlineCard
                 isDeleting={deletingId === report.scenario_id}
                 key={report.scenario_id}
-                onDelete={confirmAndDelete}
+                onDelete={report.can_delete ? confirmAndDelete : undefined}
                 report={report}
               />
             ))}

@@ -42,6 +42,10 @@ def _register(client: TestClient, username: str = "alice"):
     )
 
 
+def _csrf_headers(client: TestClient) -> dict[str, str]:
+    return {"X-CSRF-Token": client.cookies.get("astro_abm_csrf") or ""}
+
+
 def test_register_creates_extensible_identity_and_session(monkeypatch, tmp_path) -> None:
     client, database_path = _client(monkeypatch, tmp_path)
 
@@ -186,7 +190,13 @@ def test_authenticated_user_can_create_private_worldline(monkeypatch, tmp_path) 
     observer = TestClient(app)
     assert _register(owner).status_code == 201
 
-    created = owner.post("/scenarios", json=_scenario_payload(visibility="private"))
+    rejected = owner.post("/scenarios", json=_scenario_payload(visibility="private"))
+    assert rejected.status_code == 403
+    created = owner.post(
+        "/scenarios",
+        headers=_csrf_headers(owner),
+        json=_scenario_payload(visibility="private"),
+    )
 
     scenario_id = created.json()["scenario_id"]
     assert created.json()["visibility"] == "private"
@@ -212,7 +222,9 @@ def test_logged_in_user_can_claim_current_guest_worldlines(monkeypatch, tmp_path
     assert before_claim.status_code == 404
     assert claim.status_code == 200
     assert claim.json()["claimed_worldline_count"] == 1
-    assert client.delete(f"/scenarios/{scenario_id}").status_code == 200
+    assert client.delete(
+        f"/scenarios/{scenario_id}", headers=_csrf_headers(client)
+    ).status_code == 200
 
 
 def test_legacy_visibility_is_read_only_and_private_is_hidden(monkeypatch, tmp_path) -> None:
@@ -225,7 +237,11 @@ def test_legacy_visibility_is_read_only_and_private_is_hidden(monkeypatch, tmp_p
 
     user = TestClient(app)
     assert _register(user, "bob").status_code == 201
-    private = user.post("/scenarios", json=_scenario_payload(visibility="private")).json()
+    private = user.post(
+        "/scenarios",
+        headers=_csrf_headers(user),
+        json=_scenario_payload(visibility="private"),
+    ).json()
     AuthStore().delete_scenario_ownership(private["scenario_id"])
 
     assert user.get(f"/scenarios/{private['scenario_id']}").status_code == 404

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ReportViewer } from "@/components/ReportViewer";
 import { I18nText } from "@/i18n/useI18n";
 import { ApiError, getScenario } from "@/lib/api";
+import { serverCookieHeader } from "@/lib/serverAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function ScenarioReportPage({
 }) {
   try {
     const { id } = await params;
-    const report = await getScenario(id);
+    const report = await getScenario(id, { cookieHeader: await serverCookieHeader() });
     return (
       <div className="page stack report-page">
         <nav className="button-row report-action-bar" aria-label="Report navigation">
