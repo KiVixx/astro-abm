@@ -78,13 +78,20 @@ class AuthStore:
             else default_accounts_db_path()
         )
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self, *, timeout_seconds: float = 5.0) -> sqlite3.Connection:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.database_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA journal_mode = WAL")
-        self._ensure_schema(connection)
+        connection = sqlite3.connect(
+            self.database_path,
+            timeout=max(0.01, timeout_seconds),
+        )
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA journal_mode = WAL")
+            self._ensure_schema(connection)
+        except Exception:
+            connection.close()
+            raise
         return connection
 
     @staticmethod
@@ -444,21 +451,26 @@ class AuthStore:
     ) -> bool:
         now = _utc_now()
         cutoff = _iso(now - timedelta(seconds=max(1, window_seconds)))
-        with self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                """
-                SELECT COUNT(*) AS count FROM operation_events
-                WHERE actor_type = ? AND actor_id = ? AND operation = ? AND created_at >= ?
-                """,
-                (actor_type, actor_id, operation, cutoff),
-            ).fetchone()
-            if int(row["count"] if row else 0) >= max(1, limit):
+        try:
+            with self._connect(timeout_seconds=_rate_limit_db_timeout()) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    """
+                    SELECT COUNT(*) AS count FROM operation_events
+                    WHERE actor_type = ? AND actor_id = ? AND operation = ? AND created_at >= ?
+                    """,
+                    (actor_type, actor_id, operation, cutoff),
+                ).fetchone()
+                if int(row["count"] if row else 0) >= max(1, limit):
+                    return False
+                connection.execute(
+                    "INSERT INTO operation_events(event_id, actor_type, actor_id, operation, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (str(uuid4()), actor_type, actor_id, operation, _iso(now)),
+                )
+        except sqlite3.OperationalError as exc:
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
                 return False
-            connection.execute(
-                "INSERT INTO operation_events(event_id, actor_type, actor_id, operation, created_at) VALUES (?, ?, ?, ?, ?)",
-                (str(uuid4()), actor_type, actor_id, operation, _iso(now)),
-            )
+            raise
         return True
 
     def expired_guest_scenario_ids(self) -> list[str]:
@@ -584,3 +596,11 @@ class AuthStore:
                 (now,),
             )
         return max(0, cursor.rowcount)
+
+
+def _rate_limit_db_timeout() -> float:
+    try:
+        configured = float(os.getenv("ASTRO_ABM_RATE_LIMIT_DB_TIMEOUT_SECONDS", "0.25"))
+    except ValueError:
+        configured = 0.25
+    return max(0.01, min(5.0, configured))

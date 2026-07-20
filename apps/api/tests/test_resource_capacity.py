@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
@@ -206,3 +207,27 @@ def test_operational_cleanup_removes_only_expired_state() -> None:
     status = store.abuse_protection_status()
     assert status["operation_events"] == 1
     assert status["active_generation_leases"] == 1
+
+
+def test_rate_limiter_fails_closed_quickly_when_database_is_locked(monkeypatch) -> None:
+    store = AuthStore()
+    store.abuse_protection_status()
+    monkeypatch.setenv("ASTRO_ABM_RATE_LIMIT_DB_TIMEOUT_SECONDS", "0.05")
+    locker = sqlite3.connect(store.database_path)
+    locker.execute("BEGIN IMMEDIATE")
+    try:
+        started = time.perf_counter()
+        allowed = store.record_operation_if_allowed(
+            actor_type="network",
+            actor_id="ip_sha256:locked",
+            operation="scenario_create_hour",
+            limit=10,
+            window_seconds=3600,
+        )
+        elapsed = time.perf_counter() - started
+    finally:
+        locker.rollback()
+        locker.close()
+
+    assert allowed is False
+    assert elapsed < 0.5
