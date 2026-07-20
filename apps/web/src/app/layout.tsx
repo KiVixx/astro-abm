@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { I18nProvider } from "@/i18n/I18nProvider";
+import { AuthProvider } from "@/auth/AuthProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,11 +20,13 @@ export default function RootLayout({
     <html lang="en" data-theme="light" suppressHydrationWarning>
       <body>
         <I18nProvider>
-          <SiteHeader />
-          <main id="main-content" tabIndex={-1}>
-            {children}
-          </main>
-          <SiteFooter />
+          <AuthProvider>
+            <SiteHeader />
+            <main id="main-content" tabIndex={-1}>
+              {children}
+            </main>
+            <SiteFooter />
+          </AuthProvider>
         </I18nProvider>
       </body>
     </html>

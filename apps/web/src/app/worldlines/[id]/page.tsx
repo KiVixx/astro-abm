@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { ScenarioWorkbench } from "@/components/workbench/ScenarioWorkbench";
 import { I18nText } from "@/i18n/useI18n";
 import { ApiError, getScenario } from "@/lib/api";
+import { serverCookieHeader } from "@/lib/serverAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,10 @@ export default async function WorldlineDetailPage({
   const { date } = await searchParams;
 
   try {
-    const report = await getScenario(id, { includeMarkdown: false });
+    const report = await getScenario(id, {
+      cookieHeader: await serverCookieHeader(),
+      includeMarkdown: false,
+    });
     return <ScenarioWorkbench initialDate={date} product="worldline" report={report} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {

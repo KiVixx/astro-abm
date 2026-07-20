@@ -1,12 +1,16 @@
 import type {
   AgentProfile,
+  AuthSessionResponse,
   LlmPresetSaveRequest,
   LlmPresetSummary,
   LlmPresetTestResponse,
   LlmTestRequest,
   LlmTestResponse,
+  LoginRequest,
   MarketSeriesProfile,
+  RegisterRequest,
   ScenarioCreateRequest,
+  ScenarioExportEnvelope,
   ScenarioLlmChunkRequest,
   ScenarioLlmChunkResponse,
   ScenarioReport,
@@ -17,7 +21,7 @@ import type {
   ScenarioWorldlineRegenerateFromResponse,
 } from "./types";
 
-const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
 export class ApiError extends Error {
   constructor(
@@ -36,13 +40,19 @@ export function getApiBaseUrl(): string {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const csrfToken = typeof document === "undefined" ? null : readCookie("astro_abm_csrf");
+  const method = (init?.method || "GET").toUpperCase();
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(csrfToken && !["GET", "HEAD", "OPTIONS"].includes(method)
+        ? { "X-CSRF-Token": csrfToken }
+        : {}),
       ...(init?.headers || {}),
     },
     cache: "no-store",
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -57,6 +67,60 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+function readCookie(name: string): string | null {
+  const prefix = `${encodeURIComponent(name)}=`;
+  const match = document.cookie.split("; ").find((item) => item.startsWith(prefix));
+  return match ? decodeURIComponent(match.slice(prefix.length)) : null;
+}
+
+export async function getAuthSession(): Promise<AuthSessionResponse> {
+  return apiFetch<AuthSessionResponse>("/auth/me");
+}
+
+export async function registerAccount(payload: RegisterRequest): Promise<AuthSessionResponse> {
+  return apiFetch<AuthSessionResponse>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function loginAccount(payload: LoginRequest): Promise<AuthSessionResponse> {
+  return apiFetch<AuthSessionResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function logoutAccount(): Promise<{ logged_out: boolean }> {
+  return apiFetch<{ logged_out: boolean }>("/auth/logout", {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function claimGuestWorldlines(): Promise<{ claimed_worldline_count: number }> {
+  return apiFetch<{ claimed_worldline_count: number }>("/auth/claim-guest-worldlines", {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function exportScenario(scenarioId: string): Promise<ScenarioExportEnvelope> {
+  return apiFetch<ScenarioExportEnvelope>(
+    `/scenarios/${encodeURIComponent(scenarioId)}/export`,
+  );
+}
+
+export async function importScenario(
+  envelope: ScenarioExportEnvelope,
+  visibility: "public" | "private",
+): Promise<ScenarioReport> {
+  return apiFetch<ScenarioReport>("/scenarios/import", {
+    method: "POST",
+    body: JSON.stringify({ envelope, visibility }),
+  });
 }
 
 export async function getAgents(): Promise<AgentProfile[]> {
@@ -110,17 +174,20 @@ export async function testLlmConnection(payload: LlmTestRequest): Promise<LlmTes
   });
 }
 
-export async function getScenarios(): Promise<ScenarioSummary[]> {
-  return apiFetch<ScenarioSummary[]>("/scenarios");
+export async function getScenarios(cookieHeader?: string): Promise<ScenarioSummary[]> {
+  return apiFetch<ScenarioSummary[]>("/scenarios", {
+    headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+  });
 }
 
 export async function getScenario(
   scenarioId: string,
-  options: { includeMarkdown?: boolean } = {},
+  options: { includeMarkdown?: boolean; cookieHeader?: string } = {},
 ): Promise<ScenarioReport> {
   const query = options.includeMarkdown === false ? "?include_markdown=false" : "";
   return apiFetch<ScenarioReport>(
     `/scenarios/${encodeURIComponent(scenarioId)}${query}`,
+    { headers: options.cookieHeader ? { Cookie: options.cookieHeader } : undefined },
   );
 }
 

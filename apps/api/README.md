@@ -26,6 +26,18 @@ Scenario reports are saved as JSON and Markdown under:
 astro_research/output/scenarios/
 ```
 
+## Accounts and ownership
+
+Anonymous visitors can create public Worldlines in a temporary Guest workspace.
+Local accounts can create private Worldlines, and ownership controls deletion,
+chunk generation, and regeneration. Account/session state is stored in the
+ignored SQLite file `.local/astro_abm_accounts.sqlite3` by default.
+
+Worldline cards support canonical JSON export. Logged-in users can import a
+verified export from the Account page; imports always receive a new server ID.
+See `docs/product/public_alpha_accounts.md` for ACL rules, retention, limits,
+production requirements, and the deferred wallet/IPFS path.
+
 `GET /scenarios` returns lightweight `ScenarioSummary` records, including
 compact worldline status, generation mode, failed-chunk count, and coverage
 counts. It never returns the full Markdown or daily timeline. Use

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { WorldlineSearch } from "@/components/WorldlineSearch";
 import { I18nText } from "@/i18n/useI18n";
 import { getScenarios } from "@/lib/api";
+import { serverCookieHeader } from "@/lib/serverAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export default async function WorldlinesPage({
 }) {
   try {
     const { q, sort, status } = await searchParams;
-    const summaries = await getScenarios();
+    const summaries = await getScenarios(await serverCookieHeader());
 
     return (
       <div className="page stack worldline-index-page">

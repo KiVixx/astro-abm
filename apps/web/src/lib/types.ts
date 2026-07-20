@@ -508,6 +508,44 @@ export interface ScenarioSummary {
   coverage_total_days?: number | null;
   coverage_local_research_days?: number | null;
   coverage_future_placeholder_days?: number | null;
+  is_owner?: boolean;
+  can_edit?: boolean;
+  can_delete?: boolean;
+  can_regenerate?: boolean;
+}
+
+export interface CurrentUser {
+  user_id: string;
+  username: string;
+  display_name?: string | null;
+  created_at: string;
+  identity_providers: string[];
+}
+
+export interface AuthSessionResponse {
+  authenticated: boolean;
+  user?: CurrentUser | null;
+  csrf_token?: string | null;
+  password_recovery_available: boolean;
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  display_name?: string | null;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface ScenarioExportEnvelope {
+  schema_version: string;
+  exported_at: string;
+  content_hash: string;
+  report: Record<string, unknown>;
+  notes: string[];
 }
 
 export interface ScenarioReport {

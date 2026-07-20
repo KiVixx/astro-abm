@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { WorldlineCard } from "./WorldlineCard";
-import { deleteScenario } from "@/lib/api";
+import { deleteScenario, exportScenario } from "@/lib/api";
 import type { ScenarioSummary } from "@/lib/types";
 import { useI18n } from "@/i18n/useI18n";
 
@@ -126,6 +126,21 @@ export function WorldlineSearch({
     }
   };
 
+  const downloadExport = async (report: ScenarioSummary) => {
+    try {
+      const envelope = await exportScenario(report.scenario_id);
+      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${report.scenario_id}.astro-abm.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      window.alert(`${t("portability.exportFailed")}: ${error instanceof Error ? error.message : t("common.unknownError")}`);
+    }
+  };
+
   return (
     <section className="worldline-archive">
       <div className="worldline-search-console">
@@ -179,7 +194,8 @@ export function WorldlineSearch({
               <WorldlineCard
                 isDeleting={deletingId === report.scenario_id}
                 key={report.scenario_id}
-                onDelete={confirmAndDelete}
+                onDelete={report.can_delete ? confirmAndDelete : undefined}
+                onExport={downloadExport}
                 report={report}
               />
             ))}
