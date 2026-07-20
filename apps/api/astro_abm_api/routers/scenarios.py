@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from astro_abm_api.models.report import (
     ScenarioLlmChunkResponse,
@@ -36,6 +36,7 @@ from astro_abm_api.services.scenario_access import (
 )
 from astro_abm_api.services.usage_limits import (
     enforce_generation_rate,
+    enforce_scenario_complexity,
     enforce_scenario_create_network_limits,
     enforce_scenario_create_limits,
 )
@@ -57,7 +58,10 @@ router = APIRouter()
 
 
 @router.get("/scenarios", response_model=list[ScenarioSummary])
-def list_scenarios(request: Request) -> list[ScenarioSummary]:
+def list_scenarios(
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[ScenarioSummary]:
     store = ScenarioStore()
     auth_store = AuthStore()
     actor = actor_for_request(request)
@@ -78,6 +82,8 @@ def list_scenarios(request: Request) -> list[ScenarioSummary]:
                 }
             )
         )
+        if len(visible) >= limit:
+            break
     return visible
 
 
@@ -118,6 +124,7 @@ def create_scenario(
     payload, _ = _resolve_request_preset(payload)
     auth_store = AuthStore()
     enforce_scenario_create_network_limits(request, auth_store)
+    enforce_scenario_complexity(payload)
     actor = actor_for_create(request, response)
     if actor.user is not None:
         require_csrf(request)

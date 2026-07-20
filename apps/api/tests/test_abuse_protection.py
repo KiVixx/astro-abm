@@ -94,3 +94,30 @@ def test_registration_rate_limit_precedes_password_hash(monkeypatch) -> None:
 
     assert rejected.status_code == 429
     assert "network rate limit" in rejected.json()["detail"]
+
+
+def test_scenario_horizon_limit_rejects_before_guest_creation(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_MAX_DAYS", "2")
+    client = TestClient(app, client=("203.0.113.30", 50000))
+    payload = _payload("Too long")
+    payload["end_date"] = "2026-07-03"
+
+    rejected = client.post("/scenarios", json=payload)
+
+    assert rejected.status_code == 422
+    assert "maximum of 2 days" in rejected.json()["detail"]
+    with sqlite3.connect(AuthStore().database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM guest_workspaces").fetchone()[0] == 0
+
+
+def test_worldline_list_has_bounded_response(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
+    client = TestClient(app, client=("203.0.113.31", 50000))
+    assert client.post("/scenarios", json=_payload("First")).status_code == 200
+    assert client.post("/scenarios", json=_payload("Second")).status_code == 200
+
+    response = client.get("/scenarios?limit=1")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1

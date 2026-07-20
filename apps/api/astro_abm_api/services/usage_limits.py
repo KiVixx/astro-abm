@@ -4,6 +4,7 @@ import os
 
 from fastapi import HTTPException, Request
 
+from astro_abm_api.models.scenario import ScenarioCreateRequest
 from astro_abm_api.services.auth_store import AuthStore
 from astro_abm_api.services.client_identity import client_rate_key
 from astro_abm_api.services.scenario_access import ScenarioActor
@@ -51,6 +52,16 @@ def enforce_scenario_create_network_limits(request: Request, store: AuthStore) -
         default=40,
         window_seconds=86400,
     )
+
+
+def enforce_scenario_complexity(payload: ScenarioCreateRequest) -> None:
+    horizon_days = (payload.end_date - payload.start_date).days + 1
+    maximum_days = _bounded_env("ASTRO_ABM_SCENARIO_MAX_DAYS", 366, 1, 3660)
+    if horizon_days > maximum_days:
+        raise HTTPException(
+            status_code=422,
+            detail=f"scenario date range exceeds maximum of {maximum_days} days",
+        )
 
 
 def enforce_generation_rate(actor: ScenarioActor, store: AuthStore, request: Request) -> None:

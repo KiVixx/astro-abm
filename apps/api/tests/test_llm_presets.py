@@ -351,3 +351,19 @@ def test_worldline_regeneration_missing_original_preset_falls_back_safely(
     worldline = response.json()["report"]["worldline_simulation"]
     assert worldline["generation_config"]["credential_status"] == "unavailable"
     assert "Original local LLM preset was unavailable" in " ".join(worldline["caveats"])
+
+
+def test_production_disables_global_preset_management_by_default(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ASTRO_ABM_ENV", "production")
+    monkeypatch.delenv("ASTRO_ABM_ALLOW_REMOTE_PRESET_MANAGEMENT", raising=False)
+    monkeypatch.setenv("ASTRO_ABM_LOCAL_CONFIG_DIR", str(tmp_path / "config"))
+    client = TestClient(app)
+
+    assert client.get("/llm/presets").json() == []
+    rejected = client.post("/llm/presets", json=preset_payload())
+
+    assert rejected.status_code == 403
+    assert rejected.json()["detail"] == "remote LLM preset management is disabled"
+    assert not (tmp_path / "config" / "llm_presets.json").exists()

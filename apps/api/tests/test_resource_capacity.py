@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
 
@@ -120,3 +123,86 @@ def test_generation_capacity_returns_fast_retryable_503(monkeypatch) -> None:
         assert error.headers == {"Retry-After": "5"}
     finally:
         store.release_generation_lease(held)
+
+
+def test_short_rate_window_does_not_delete_daily_limit_history() -> None:
+    store = AuthStore()
+    now = datetime.now(UTC)
+    with store._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO operation_events (actor_type, actor_id, operation, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "network",
+                "ip_sha256:test",
+                "scenario_create_ip_daily",
+                (now - timedelta(hours=2)).isoformat(),
+            ),
+        )
+
+    assert store.record_operation_if_allowed(
+        actor_type="network",
+        actor_id="ip_sha256:test",
+        operation="scenario_create_ip_hourly",
+        limit=10,
+        window_seconds=3600,
+    )
+
+    with sqlite3.connect(store.database_path) as connection:
+        daily_events = connection.execute(
+            """
+            SELECT COUNT(*) FROM operation_events
+            WHERE actor_id = ? AND operation = ?
+            """,
+            ("ip_sha256:test", "scenario_create_ip_daily"),
+        ).fetchone()[0]
+    assert daily_events == 1
+
+
+def test_operational_cleanup_removes_only_expired_state() -> None:
+    store = AuthStore()
+    now = datetime.now(UTC)
+    with store._connect() as connection:
+        connection.executemany(
+            """
+            INSERT INTO operation_events (actor_type, actor_id, operation, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("network", "old", "test", (now - timedelta(days=3)).isoformat()),
+                ("network", "recent", "test", now.isoformat()),
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO generation_leases (
+                lease_id, actor_type, actor_id, created_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "expired",
+                    "guest",
+                    "one",
+                    (now - timedelta(minutes=2)).isoformat(),
+                    (now - timedelta(minutes=1)).isoformat(),
+                ),
+                (
+                    "active",
+                    "guest",
+                    "two",
+                    now.isoformat(),
+                    (now + timedelta(minutes=5)).isoformat(),
+                ),
+            ],
+        )
+
+    removed = store.cleanup_operational_state(max_event_age_seconds=172800)
+
+    assert removed["operation_events"] == 1
+    assert removed["generation_leases"] == 1
+    status = store.abuse_protection_status()
+    assert status["operation_events"] == 1
+    assert status["active_generation_leases"] == 1

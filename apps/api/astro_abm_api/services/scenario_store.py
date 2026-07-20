@@ -224,6 +224,16 @@ class ScenarioStore:
     def ensure_output_dir(self) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def storage_usage(self) -> dict[str, int]:
+        if not self.output_dir.exists():
+            return {"report_count": 0, "stored_bytes": 0}
+        json_files = list(self.output_dir.glob("*.json"))
+        data_files = [*json_files, *self.output_dir.glob("*.md")]
+        return {
+            "report_count": len(json_files),
+            "stored_bytes": sum(path.stat().st_size for path in data_files if path.is_file()),
+        }
+
     def _path_for(self, scenario_id: str, suffix: str) -> Path:
         validate_scenario_id(scenario_id)
         if suffix not in {".json", ".md"}:
@@ -323,12 +333,18 @@ class ScenarioStore:
         if markdown_path.exists():
             markdown_path.unlink()
 
-    def list_summaries(self) -> list[ScenarioSummary]:
+    def list_summaries(self, limit: int | None = None) -> list[ScenarioSummary]:
         if not self.output_dir.exists():
             return []
 
         summaries: list[ScenarioSummary] = []
-        for json_path in sorted(self.output_dir.glob("*.json")):
+        scan_limit = _capacity_env("ASTRO_ABM_SCENARIO_LIST_SCAN_LIMIT", 1000, 1)
+        json_paths = sorted(
+            self.output_dir.glob("*.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )[:scan_limit]
+        for json_path in json_paths:
             try:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
                 report = _refresh_derived_coverage(ScenarioReport.model_validate(data))
@@ -340,7 +356,8 @@ class ScenarioStore:
                 )
                 continue
             summaries.append(report_to_summary(report))
-        return sorted(summaries, key=lambda item: item.created_at, reverse=True)
+        ordered = sorted(summaries, key=lambda item: item.created_at, reverse=True)
+        return ordered[:limit] if limit is not None else ordered
 
 
 def _capacity_env(name: str, default: int, minimum: int) -> int:

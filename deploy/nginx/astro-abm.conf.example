@@ -1,0 +1,71 @@
+# Copy the `limit_*_zone` directives into the nginx `http {}` block.
+limit_req_zone $binary_remote_addr zone=astro_general:10m rate=10r/s;
+map $request_method $astro_create_key {
+    default "";
+    POST $binary_remote_addr;
+}
+
+limit_req_zone $astro_create_key zone=astro_create:10m rate=2r/m;
+limit_req_zone $binary_remote_addr zone=astro_expensive:10m rate=6r/m;
+limit_req_zone $binary_remote_addr zone=astro_auth:10m rate=10r/m;
+limit_conn_zone $binary_remote_addr zone=astro_per_ip:10m;
+
+upstream astro_abm_api {
+    server 127.0.0.1:8000;
+    keepalive 16;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    # Configure ssl_certificate / ssl_certificate_key for the deployment.
+    client_max_body_size 4m;
+    client_body_timeout 10s;
+    client_header_timeout 10s;
+    send_timeout 30s;
+    limit_req_status 429;
+    limit_conn_status 429;
+    limit_conn astro_per_ip 12;
+
+    location = /scenarios {
+        # The empty map key means GET list requests are not charged to the
+        # low create rate; the general server limit still applies.
+        limit_req zone=astro_create burst=4 nodelay;
+        include proxy_params;
+        proxy_pass http://astro_abm_api;
+    }
+
+    location ~ ^/scenarios/[^/]+/(llm-chunks|worldline-chunks|worldline/regenerate-from)$ {
+        limit_req zone=astro_expensive burst=2 nodelay;
+        limit_conn astro_per_ip 2;
+        include proxy_params;
+        proxy_read_timeout 660s;
+        proxy_send_timeout 30s;
+        proxy_request_buffering on;
+        proxy_pass http://astro_abm_api;
+    }
+
+    location ~ ^/auth/(register|login)$ {
+        limit_req zone=astro_auth burst=5 nodelay;
+        include proxy_params;
+        proxy_pass http://astro_abm_api;
+    }
+
+    location / {
+        limit_req zone=astro_general burst=30 nodelay;
+        include proxy_params;
+        proxy_read_timeout 30s;
+        proxy_pass http://astro_abm_api;
+    }
+}
+
+# `/etc/nginx/proxy_params` (or equivalent) must overwrite forwarded headers:
+# proxy_set_header Host $host;
+# proxy_set_header X-Real-IP $remote_addr;
+# proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+# proxy_set_header X-Forwarded-Proto $scheme;
+#
+# Bind Uvicorn to 127.0.0.1 so clients cannot bypass nginx. If a CDN is placed
+# in front, configure nginx real_ip directives with only that CDN's published
+# address ranges before using $binary_remote_addr for rate limiting.

@@ -14,4 +14,6 @@ def cleanup_expired_guest_worldlines() -> tuple[int, int]:
             removed_reports += 1
         except ScenarioNotFoundError:
             pass
-    return removed_reports, auth_store.delete_expired_guests()
+    removed_guests = auth_store.delete_expired_guests()
+    auth_store.cleanup_operational_state()
+    return removed_reports, removed_guests

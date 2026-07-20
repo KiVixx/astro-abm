@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, HTTPException, Request
 
 from astro_abm_api.models.llm import LLMTestRequest, LLMTestResponse
@@ -23,6 +25,19 @@ from astro_abm_api.services.llm_preset_store import (
 router = APIRouter()
 
 
+def _preset_management_enabled() -> bool:
+    production = os.getenv("ASTRO_ABM_ENV", "development").strip().lower() == "production"
+    configured = os.getenv("ASTRO_ABM_ALLOW_REMOTE_PRESET_MANAGEMENT")
+    if configured is None:
+        return not production
+    return configured.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _require_preset_management() -> None:
+    if not _preset_management_enabled():
+        raise HTTPException(status_code=403, detail="remote LLM preset management is disabled")
+
+
 @router.post("/llm/test", response_model=LLMTestResponse)
 def test_llm(payload: LLMTestRequest, request: Request) -> LLMTestResponse:
     actor = ScenarioActor("network", client_rate_key(request), None)
@@ -34,11 +49,14 @@ def test_llm(payload: LLMTestRequest, request: Request) -> LLMTestResponse:
 
 @router.get("/llm/presets", response_model=list[LlmPresetSummary])
 def list_llm_presets() -> list[LlmPresetSummary]:
+    if not _preset_management_enabled():
+        return []
     return LlmPresetStore().list()
 
 
 @router.post("/llm/presets", response_model=LlmPresetSummary)
 def create_llm_preset(request: LlmPresetSaveRequest) -> LlmPresetSummary:
+    _require_preset_management()
     return LlmPresetStore().create(request)
 
 
@@ -46,6 +64,7 @@ def create_llm_preset(request: LlmPresetSaveRequest) -> LlmPresetSummary:
 def update_llm_preset(
     preset_id: str, request: LlmPresetSaveRequest
 ) -> LlmPresetSummary:
+    _require_preset_management()
     try:
         return LlmPresetStore().update(preset_id, request)
     except ValueError as exc:
@@ -56,6 +75,7 @@ def update_llm_preset(
 
 @router.delete("/llm/presets/{preset_id}")
 def delete_llm_preset(preset_id: str) -> dict[str, object]:
+    _require_preset_management()
     try:
         LlmPresetStore().delete(preset_id)
     except ValueError as exc:
@@ -67,6 +87,7 @@ def delete_llm_preset(preset_id: str) -> dict[str, object]:
 
 @router.post("/llm/presets/{preset_id}/test", response_model=LlmPresetTestResponse)
 def test_llm_preset(preset_id: str, request: Request) -> LlmPresetTestResponse:
+    _require_preset_management()
     try:
         record = LlmPresetStore().get_record(preset_id)
     except ValueError as exc:

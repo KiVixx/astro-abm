@@ -446,7 +446,6 @@ class AuthStore:
         cutoff = _iso(now - timedelta(seconds=max(1, window_seconds)))
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            connection.execute("DELETE FROM operation_events WHERE created_at < ?", (cutoff,))
             row = connection.execute(
                 """
                 SELECT COUNT(*) AS count FROM operation_events
@@ -521,6 +520,51 @@ class AuthStore:
     def release_generation_lease(self, lease_id: str) -> None:
         with self._connect() as connection:
             connection.execute("DELETE FROM generation_leases WHERE lease_id = ?", (lease_id,))
+
+    def abuse_protection_status(self) -> dict[str, int]:
+        now = _iso(_utc_now())
+        with self._connect() as connection:
+            operation_events = connection.execute(
+                "SELECT COUNT(*) AS count FROM operation_events"
+            ).fetchone()["count"]
+            active_leases = connection.execute(
+                "SELECT COUNT(*) AS count FROM generation_leases WHERE expires_at > ?",
+                (now,),
+            ).fetchone()["count"]
+            active_guests = connection.execute(
+                """
+                SELECT COUNT(*) AS count FROM guest_workspaces
+                WHERE claimed_by_user_id IS NULL AND expires_at > ?
+                """,
+                (now,),
+            ).fetchone()["count"]
+        return {
+            "operation_events": int(operation_events),
+            "active_generation_leases": int(active_leases),
+            "active_guest_workspaces": int(active_guests),
+        }
+
+    def cleanup_operational_state(self, *, max_event_age_seconds: int = 172800) -> dict[str, int]:
+        now = _utc_now()
+        cutoff = _iso(now - timedelta(seconds=max(86400, max_event_age_seconds)))
+        with self._connect() as connection:
+            events = connection.execute(
+                "DELETE FROM operation_events WHERE created_at < ?",
+                (cutoff,),
+            ).rowcount
+            leases = connection.execute(
+                "DELETE FROM generation_leases WHERE expires_at <= ?",
+                (_iso(now),),
+            ).rowcount
+            sessions = connection.execute(
+                "DELETE FROM sessions WHERE expires_at <= ? OR revoked_at IS NOT NULL",
+                (_iso(now),),
+            ).rowcount
+        return {
+            "operation_events": max(0, events),
+            "generation_leases": max(0, leases),
+            "sessions": max(0, sessions),
+        }
 
     def delete_expired_guests(self) -> int:
         now = _iso(_utc_now())

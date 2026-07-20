@@ -100,6 +100,7 @@ make api
 make web
 make scenario-demo
 make product-smoke
+make security-status
 ```
 
 Defaults:
@@ -130,6 +131,11 @@ optional web UI under `apps/web/` calls the API through
 `http://localhost:8000`; it never reads generated scenario files directly.
 Reports are association only, scenario rehearsal only, not financial advice, and
 not a trading signal.
+
+Public deployments must add network-edge protection in addition to the API's
+persistent IP/account rate limits, request/storage caps, and generation
+concurrency controls. See the bilingual-maintainer-oriented
+[DDoS and resource-abuse deployment guide](docs/deployment/ddos_abuse_protection.md).
 
 OpenAI-compatible LLM report generation can be configured per scenario in the
 web create form:
