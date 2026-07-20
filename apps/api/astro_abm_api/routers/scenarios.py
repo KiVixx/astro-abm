@@ -26,12 +26,17 @@ from astro_abm_api.services.scenario_store import (
     ScenarioUnreadableError,
 )
 from astro_abm_api.services.scenario_access import (
+    ScenarioActor,
     actor_for_create,
     actor_for_request,
     can_mutate,
     can_read,
     is_owner,
     save_new_ownership,
+)
+from astro_abm_api.services.usage_limits import (
+    enforce_generation_rate,
+    enforce_scenario_create_limits,
 )
 from astro_abm_api.services.llm_client import (
     generate_llm_scenario_report_chunk,
@@ -114,6 +119,8 @@ def create_scenario(
         require_csrf(request)
     if actor.user is None and payload.visibility != "public":
         payload = payload.model_copy(update={"visibility": "public"})
+    auth_store = AuthStore()
+    enforce_scenario_create_limits(actor, auth_store)
     agents, unknown = resolve_agents(payload.agent_ids)
     if unknown:
         raise HTTPException(
@@ -124,7 +131,7 @@ def create_scenario(
     daily_context = build_daily_context(payload)
     report = generate_scenario_report(payload, agents, daily_context)
     saved = ScenarioStore().save(report)
-    save_new_ownership(report=saved, actor=actor, auth_store=AuthStore())
+    save_new_ownership(report=saved, actor=actor, auth_store=auth_store)
     return saved
 
 
@@ -137,7 +144,8 @@ def generate_scenario_llm_chunk(
     payload, _ = _resolve_request_preset(payload)
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
-    _require_owner(request, report)
+    actor = _require_owner(request, report)
+    enforce_generation_rate(actor, AuthStore())
 
     if payload.chunk_start_date < report.start_date or payload.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -192,7 +200,8 @@ def generate_scenario_worldline_chunk(
     payload, preset_record = _resolve_request_preset(payload)
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
-    _require_owner(request, report)
+    actor = _require_owner(request, report)
+    enforce_generation_rate(actor, AuthStore())
 
     if payload.chunk_start_date < report.start_date or payload.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -271,7 +280,8 @@ def regenerate_scenario_worldline_from_chunk(
 ) -> ScenarioWorldlineRegenerateFromResponse:
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
-    _require_owner(request, report)
+    actor = _require_owner(request, report)
+    enforce_generation_rate(actor, AuthStore())
 
     try:
         result = regenerate_worldline_from_chunk(
@@ -325,13 +335,14 @@ def _require_read_access(request: Request, report: ScenarioReport) -> None:
         raise HTTPException(status_code=404, detail="scenario not found")
 
 
-def _require_owner(request: Request, report: ScenarioReport) -> None:
+def _require_owner(request: Request, report: ScenarioReport) -> ScenarioActor:
     actor = actor_for_request(request)
     ownership = AuthStore().get_scenario_ownership(report.scenario_id)
     if not can_mutate(actor, ownership):
         raise HTTPException(status_code=404, detail="scenario not found")
     if actor.user is not None:
         require_csrf(request)
+    return actor
 
 
 def _resolve_request_preset(request):

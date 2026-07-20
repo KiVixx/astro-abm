@@ -136,10 +136,20 @@ class AuthStore:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS operation_events (
+                event_id TEXT PRIMARY KEY,
+                actor_type TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
             CREATE INDEX IF NOT EXISTS scenario_ownership_owner_idx
                 ON scenario_ownership(owner_type, owner_id);
+            CREATE INDEX IF NOT EXISTS operation_events_lookup_idx
+                ON operation_events(actor_type, actor_id, operation, created_at);
             """
         )
         connection.commit()
@@ -402,5 +412,77 @@ class AuthStore:
             connection.execute(
                 "UPDATE guest_workspaces SET claimed_by_user_id = ? WHERE guest_id = ?",
                 (user_id, guest_id),
+            )
+        return max(0, cursor.rowcount)
+
+    def count_owned_scenarios(self, *, owner_type: str, owner_id: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM scenario_ownership WHERE owner_type = ? AND owner_id = ?",
+                (owner_type, owner_id),
+            ).fetchone()
+        return int(row["count"] if row else 0)
+
+    def record_operation_if_allowed(
+        self,
+        *,
+        actor_type: str,
+        actor_id: str,
+        operation: str,
+        limit: int,
+        window_seconds: int,
+    ) -> bool:
+        now = _utc_now()
+        cutoff = _iso(now - timedelta(seconds=max(1, window_seconds)))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("DELETE FROM operation_events WHERE created_at < ?", (cutoff,))
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS count FROM operation_events
+                WHERE actor_type = ? AND actor_id = ? AND operation = ? AND created_at >= ?
+                """,
+                (actor_type, actor_id, operation, cutoff),
+            ).fetchone()
+            if int(row["count"] if row else 0) >= max(1, limit):
+                return False
+            connection.execute(
+                "INSERT INTO operation_events(event_id, actor_type, actor_id, operation, created_at) VALUES (?, ?, ?, ?, ?)",
+                (str(uuid4()), actor_type, actor_id, operation, _iso(now)),
+            )
+        return True
+
+    def expired_guest_scenario_ids(self) -> list[str]:
+        now = _iso(_utc_now())
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT ownership.scenario_id
+                FROM scenario_ownership ownership
+                JOIN guest_workspaces guest ON guest.guest_id = ownership.owner_id
+                WHERE ownership.owner_type = 'guest'
+                  AND guest.claimed_by_user_id IS NULL
+                  AND guest.expires_at <= ?
+                """,
+                (now,),
+            ).fetchall()
+        return [str(row["scenario_id"]) for row in rows]
+
+    def delete_expired_guests(self) -> int:
+        now = _iso(_utc_now())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                DELETE FROM scenario_ownership
+                WHERE owner_type = 'guest' AND owner_id IN (
+                    SELECT guest_id FROM guest_workspaces
+                    WHERE claimed_by_user_id IS NULL AND expires_at <= ?
+                )
+                """,
+                (now,),
+            )
+            cursor = connection.execute(
+                "DELETE FROM guest_workspaces WHERE claimed_by_user_id IS NULL AND expires_at <= ?",
+                (now,),
             )
         return max(0, cursor.rowcount)
