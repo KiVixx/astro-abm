@@ -540,6 +540,14 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface ScenarioExportEnvelope {
+  schema_version: string;
+  exported_at: string;
+  content_hash: string;
+  report: Record<string, unknown>;
+  notes: string[];
+}
+
 export interface ScenarioReport {
   scenario_id: string;
   title: string;

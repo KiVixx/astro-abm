@@ -255,6 +255,15 @@ pre {
   margin: 0;
 }
 
+.auth-import {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.auth-import .button {
+  width: fit-content;
+}
+
 .site-header {
   align-items: center;
   background: var(--surface);

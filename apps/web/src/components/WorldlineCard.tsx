@@ -8,10 +8,12 @@ import { useI18n } from "@/i18n/useI18n";
 export function WorldlineCard({
   isDeleting = false,
   onDelete,
+  onExport,
   report,
 }: {
   isDeleting?: boolean;
   onDelete?: (report: ScenarioSummary) => void;
+  onExport?: (report: ScenarioSummary) => void;
   report: ScenarioSummary;
 }) {
   const { t } = useI18n();
@@ -124,6 +126,11 @@ export function WorldlineCard({
           <Link className="button secondary" href={`/scenarios/${report.scenario_id}/report`}>
             {t("worldline.openReport")}
           </Link>
+          {onExport ? (
+            <button className="button secondary" onClick={() => onExport(report)} type="button">
+              {t("portability.export")}
+            </button>
+          ) : null}
           {onDelete ? (
             <button
               className="button danger"

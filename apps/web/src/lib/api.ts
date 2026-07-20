@@ -10,6 +10,7 @@ import type {
   MarketSeriesProfile,
   RegisterRequest,
   ScenarioCreateRequest,
+  ScenarioExportEnvelope,
   ScenarioLlmChunkRequest,
   ScenarioLlmChunkResponse,
   ScenarioReport,
@@ -103,6 +104,22 @@ export async function claimGuestWorldlines(): Promise<{ claimed_worldline_count:
   return apiFetch<{ claimed_worldline_count: number }>("/auth/claim-guest-worldlines", {
     method: "POST",
     body: "{}",
+  });
+}
+
+export async function exportScenario(scenarioId: string): Promise<ScenarioExportEnvelope> {
+  return apiFetch<ScenarioExportEnvelope>(
+    `/scenarios/${encodeURIComponent(scenarioId)}/export`,
+  );
+}
+
+export async function importScenario(
+  envelope: ScenarioExportEnvelope,
+  visibility: "public" | "private",
+): Promise<ScenarioReport> {
+  return apiFetch<ScenarioReport>("/scenarios/import", {
+    method: "POST",
+    body: JSON.stringify({ envelope, visibility }),
   });
 }
 

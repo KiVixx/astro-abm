@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from astro_abm_api.routers import agents, assets, auth, health, llm, scenarios
+from astro_abm_api.routers import agents, assets, auth, health, llm, portability, scenarios
 
 
 LOCAL_CORS_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(agents.router)
     app.include_router(assets.router)
     app.include_router(auth.router)
+    app.include_router(portability.router)
     app.include_router(scenarios.router)
     app.include_router(llm.router)
     return app
