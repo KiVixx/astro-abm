@@ -171,6 +171,10 @@ Worldline product experience:
 - Explore saved worldlines at `/worldlines`.
 - Open the main Worldline Workbench at `/worldlines/{scenario_id}`, for example
   `/worldlines/demo_2026q3_btc_eth` after `make scenario-demo`.
+- Visitors may create public Worldlines without an account. A local account adds
+  private visibility and owner-only mutation. Canonical JSON export/import with
+  SHA-256 verification provides a portable artifact format; see
+  [`docs/product/public_alpha_accounts.md`](docs/product/public_alpha_accounts.md).
 - Selecting "Regenerate from here to end" opens
   `/worldlines/{scenario_id}/regenerate`, where only LLM call settings can be
   changed. Scenario dates, assets, agents, language, and chunk boundaries stay
