@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from astro_abm_api.models.llm import LLMTestRequest, LLMTestResponse
 from astro_abm_api.models.llm_preset import (
@@ -9,6 +9,11 @@ from astro_abm_api.models.llm_preset import (
     LlmPresetTestResponse,
 )
 from astro_abm_api.services.llm_client import test_llm_connection
+from astro_abm_api.services.auth_store import AuthStore
+from astro_abm_api.services.client_identity import client_rate_key
+from astro_abm_api.services.generation_capacity import generation_capacity
+from astro_abm_api.services.scenario_access import ScenarioActor
+from astro_abm_api.services.usage_limits import enforce_generation_rate
 from astro_abm_api.services.llm_preset_store import (
     LlmPresetNotFoundError,
     LlmPresetStore,
@@ -19,8 +24,12 @@ router = APIRouter()
 
 
 @router.post("/llm/test", response_model=LLMTestResponse)
-def test_llm(request: LLMTestRequest) -> LLMTestResponse:
-    return test_llm_connection(request)
+def test_llm(payload: LLMTestRequest, request: Request) -> LLMTestResponse:
+    actor = ScenarioActor("network", client_rate_key(request), None)
+    store = AuthStore()
+    enforce_generation_rate(actor, store, request)
+    with generation_capacity(actor, store):
+        return test_llm_connection(payload)
 
 
 @router.get("/llm/presets", response_model=list[LlmPresetSummary])
@@ -57,24 +66,28 @@ def delete_llm_preset(preset_id: str) -> dict[str, object]:
 
 
 @router.post("/llm/presets/{preset_id}/test", response_model=LlmPresetTestResponse)
-def test_llm_preset(preset_id: str) -> LlmPresetTestResponse:
+def test_llm_preset(preset_id: str, request: Request) -> LlmPresetTestResponse:
     try:
         record = LlmPresetStore().get_record(preset_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LlmPresetNotFoundError as exc:
         raise HTTPException(status_code=404, detail="LLM preset not found") from exc
-    response = test_llm_connection(
-        LLMTestRequest(
-            provider=record.get("provider", "openai_compatible"),
-            real_enabled=record.get("real_enabled"),
-            base_url=record.get("base_url"),
-            model=record.get("model"),
-            api_key=record.get("api_key"),
-            timeout_seconds=record.get("timeout_seconds"),
-            max_output_tokens=record.get("max_output_tokens"),
+    actor = ScenarioActor("network", client_rate_key(request), None)
+    store = AuthStore()
+    enforce_generation_rate(actor, store, request)
+    with generation_capacity(actor, store):
+        response = test_llm_connection(
+            LLMTestRequest(
+                provider=record.get("provider", "openai_compatible"),
+                real_enabled=record.get("real_enabled"),
+                base_url=record.get("base_url"),
+                model=record.get("model"),
+                api_key=record.get("api_key"),
+                timeout_seconds=record.get("timeout_seconds"),
+                max_output_tokens=record.get("max_output_tokens"),
+            )
         )
-    )
     return LlmPresetTestResponse(
         preset_id=preset_id,
         reachable=response.reachable,

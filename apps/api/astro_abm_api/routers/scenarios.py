@@ -43,6 +43,7 @@ from astro_abm_api.services.llm_client import (
     generate_llm_scenario_report_chunk,
     merge_llm_report_chunk,
 )
+from astro_abm_api.services.generation_capacity import generation_capacity
 from astro_abm_api.services.llm_preset_store import (
     LlmPresetNotFoundError,
     LlmPresetStore,
@@ -155,7 +156,8 @@ def generate_scenario_llm_chunk(
             detail="chunk date range must stay inside scenario date range",
         )
 
-    chunk_report = generate_llm_scenario_report_chunk(payload, report)
+    with generation_capacity(actor, AuthStore()):
+        chunk_report = generate_llm_scenario_report_chunk(payload, report)
     merged_llm_report = merge_llm_report_chunk(report.llm_report, chunk_report)
     provenance = dict(report.provenance)
     provenance["llm"] = {
@@ -211,7 +213,8 @@ def generate_scenario_worldline_chunk(
             detail="chunk date range must stay inside scenario date range",
         )
 
-    worldline_simulation = generate_worldline_chunk(payload, report)
+    with generation_capacity(actor, AuthStore()):
+        worldline_simulation = generate_worldline_chunk(payload, report)
     if preset_record and worldline_simulation.generation_config:
         worldline_simulation = worldline_simulation.model_copy(
             update={
@@ -286,15 +289,16 @@ def regenerate_scenario_worldline_from_chunk(
     enforce_generation_rate(actor, AuthStore(), request)
 
     try:
-        result = regenerate_worldline_from_chunk(
-            report,
-            start_chunk_index=payload.start_chunk_index,
-            note=payload.note,
-            regeneration_id=payload.regeneration_id,
-            progressive=payload.progressive,
-            preset_id=payload.preset_id,
-            llm_overrides=payload.llm_overrides,
-        )
+        with generation_capacity(actor, AuthStore()):
+            result = regenerate_worldline_from_chunk(
+                report,
+                start_chunk_index=payload.start_chunk_index,
+                note=payload.note,
+                regeneration_id=payload.regeneration_id,
+                progressive=payload.progressive,
+                preset_id=payload.preset_id,
+                llm_overrides=payload.llm_overrides,
+            )
     except LlmPresetNotFoundError as exc:
         raise HTTPException(status_code=404, detail="LLM preset not found") from exc
     except ValueError as exc:

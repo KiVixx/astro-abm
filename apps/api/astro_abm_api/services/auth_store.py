@@ -144,12 +144,22 @@ class AuthStore:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS generation_leases (
+                lease_id TEXT PRIMARY KEY,
+                actor_type TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
             CREATE INDEX IF NOT EXISTS scenario_ownership_owner_idx
                 ON scenario_ownership(owner_type, owner_id);
             CREATE INDEX IF NOT EXISTS operation_events_lookup_idx
                 ON operation_events(actor_type, actor_id, operation, created_at);
+            CREATE INDEX IF NOT EXISTS generation_leases_expiry_idx
+                ON generation_leases(expires_at);
             """
         )
         connection.commit()
@@ -467,6 +477,50 @@ class AuthStore:
                 (now,),
             ).fetchall()
         return [str(row["scenario_id"]) for row in rows]
+
+    def try_acquire_generation_lease(
+        self,
+        *,
+        actor_type: str,
+        actor_id: str,
+        global_limit: int,
+        actor_limit: int,
+        lease_seconds: int,
+    ) -> str | None:
+        now = _utc_now()
+        expires_at = now + timedelta(seconds=max(30, lease_seconds))
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "DELETE FROM generation_leases WHERE expires_at <= ?",
+                (_iso(now),),
+            )
+            global_count = connection.execute(
+                "SELECT COUNT(*) AS count FROM generation_leases"
+            ).fetchone()["count"]
+            actor_count = connection.execute(
+                """
+                SELECT COUNT(*) AS count FROM generation_leases
+                WHERE actor_type = ? AND actor_id = ?
+                """,
+                (actor_type, actor_id),
+            ).fetchone()["count"]
+            if int(global_count) >= max(1, global_limit) or int(actor_count) >= max(1, actor_limit):
+                return None
+            lease_id = str(uuid4())
+            connection.execute(
+                """
+                INSERT INTO generation_leases(
+                    lease_id, actor_type, actor_id, created_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (lease_id, actor_type, actor_id, _iso(now), _iso(expires_at)),
+            )
+        return lease_id
+
+    def release_generation_lease(self, lease_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM generation_leases WHERE lease_id = ?", (lease_id,))
 
     def delete_expired_guests(self) -> int:
         now = _iso(_utc_now())

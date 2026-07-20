@@ -6,6 +6,7 @@ import os
 import re
 import stat
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from astro_abm_api.models.report import ScenarioReport, WorldlineSimulation
@@ -16,6 +17,12 @@ from astro_abm_api.services.simulation_engine import build_coverage_summary
 SCENARIO_OUTPUT_DIR_ENV = "ASTRO_ABM_SCENARIO_OUTPUT_DIR"
 SCENARIO_ID_PATTERN = re.compile(r"^[a-z0-9_-]+$")
 logger = logging.getLogger(__name__)
+
+
+class ScenarioCapacityError(RuntimeError):
+    def __init__(self, category: str) -> None:
+        self.category = category
+        super().__init__(f"scenario capacity unavailable ({category})")
 
 
 class ScenarioNotFoundError(FileNotFoundError):
@@ -230,9 +237,66 @@ class ScenarioStore:
         self.ensure_output_dir()
         json_path = self._path_for(report.scenario_id, ".json")
         markdown_path = self._path_for(report.scenario_id, ".md")
-        _atomic_write_text(json_path, report.model_dump_json(indent=2))
-        _atomic_write_text(markdown_path, report.markdown_report)
+        json_content = report.model_dump_json(indent=2)
+        markdown_content = report.markdown_report
+        with self._capacity_lock():
+            self._enforce_capacity(
+                json_path=json_path,
+                markdown_path=markdown_path,
+                json_bytes=len(json_content.encode("utf-8")),
+                markdown_bytes=len(markdown_content.encode("utf-8")),
+            )
+            _atomic_write_text(json_path, json_content)
+            _atomic_write_text(markdown_path, markdown_content)
         return report
+
+    @contextmanager
+    def _capacity_lock(self):  # type: ignore[no-untyped-def]
+        lock_path = self.output_dir / ".scenario-capacity.lock"
+        with lock_path.open("a+", encoding="utf-8") as handle:
+            try:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                yield
+            finally:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                except (ImportError, NameError):
+                    pass
+
+    def _enforce_capacity(
+        self,
+        *,
+        json_path: Path,
+        markdown_path: Path,
+        json_bytes: int,
+        markdown_bytes: int,
+    ) -> None:
+        single_report_bytes = json_bytes + markdown_bytes
+        if single_report_bytes > _capacity_env(
+            "ASTRO_ABM_SCENARIO_MAX_REPORT_BYTES", 16 * 1024 * 1024, 64 * 1024
+        ):
+            raise ScenarioCapacityError("single_report_bytes")
+
+        json_files = list(self.output_dir.glob("*.json"))
+        is_new = not json_path.exists()
+        if is_new and len(json_files) >= _capacity_env(
+            "ASTRO_ABM_SCENARIO_STORE_MAX_REPORTS", 5000, 1
+        ):
+            raise ScenarioCapacityError("report_count")
+
+        data_files = [*json_files, *self.output_dir.glob("*.md")]
+        current_bytes = sum(path.stat().st_size for path in data_files if path.is_file())
+        replaced_bytes = sum(
+            path.stat().st_size for path in (json_path, markdown_path) if path.exists()
+        )
+        projected_bytes = current_bytes - replaced_bytes + single_report_bytes
+        maximum_bytes = _capacity_env(
+            "ASTRO_ABM_SCENARIO_STORE_MAX_BYTES", 2 * 1024 * 1024 * 1024, 1024 * 1024
+        )
+        if projected_bytes > maximum_bytes and projected_bytes > current_bytes:
+            raise ScenarioCapacityError("store_bytes")
 
     def load(self, scenario_id: str) -> ScenarioReport:
         json_path = self._path_for(scenario_id, ".json")
@@ -277,3 +341,11 @@ class ScenarioStore:
                 continue
             summaries.append(report_to_summary(report))
         return sorted(summaries, key=lambda item: item.created_at, reverse=True)
+
+
+def _capacity_env(name: str, default: int, minimum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        value = default
+    return max(minimum, value)
