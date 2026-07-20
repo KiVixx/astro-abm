@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from astro_abm_api.services.auth_store import AuthStore
+from astro_abm_api.services.client_identity import client_rate_key
 from astro_abm_api.services.scenario_access import ScenarioActor
 
 
@@ -16,7 +17,10 @@ def _bounded_env(name: str, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
 
 
-def enforce_scenario_create_limits(actor: ScenarioActor, store: AuthStore) -> None:
+def enforce_scenario_create_limits(
+    actor: ScenarioActor,
+    store: AuthStore,
+) -> None:
     if not actor.owner_type or not actor.owner_id:
         raise HTTPException(status_code=403, detail="scenario owner is unavailable")
     quota = _bounded_env(
@@ -30,8 +34,51 @@ def enforce_scenario_create_limits(actor: ScenarioActor, store: AuthStore) -> No
     _enforce_rate(actor, store, "scenario_create", "ASTRO_ABM_CREATE_RATE_PER_HOUR", 60)
 
 
-def enforce_generation_rate(actor: ScenarioActor, store: AuthStore) -> None:
+def enforce_scenario_create_network_limits(request: Request, store: AuthStore) -> None:
+    _enforce_ip_rate(
+        request,
+        store,
+        operation="scenario_create_hour",
+        env_name="ASTRO_ABM_IP_CREATE_RATE_PER_HOUR",
+        default=12,
+        window_seconds=3600,
+    )
+    _enforce_ip_rate(
+        request,
+        store,
+        operation="scenario_create_day",
+        env_name="ASTRO_ABM_IP_CREATE_RATE_PER_DAY",
+        default=40,
+        window_seconds=86400,
+    )
+
+
+def enforce_generation_rate(actor: ScenarioActor, store: AuthStore, request: Request) -> None:
     _enforce_rate(actor, store, "llm_generation", "ASTRO_ABM_LLM_RATE_PER_HOUR", 240)
+    _enforce_ip_rate(
+        request,
+        store,
+        operation="llm_generation_hour",
+        env_name="ASTRO_ABM_IP_LLM_RATE_PER_HOUR",
+        default=120,
+        window_seconds=3600,
+    )
+
+
+def enforce_auth_rate(request: Request, store: AuthStore, operation: str) -> None:
+    defaults = {
+        "register": ("ASTRO_ABM_IP_REGISTER_RATE_PER_HOUR", 5, 3600),
+        "login": ("ASTRO_ABM_IP_LOGIN_RATE_PER_15_MINUTES", 20, 900),
+    }
+    env_name, default, window_seconds = defaults[operation]
+    _enforce_ip_rate(
+        request,
+        store,
+        operation=f"auth_{operation}",
+        env_name=env_name,
+        default=default,
+        window_seconds=window_seconds,
+    )
 
 
 def _enforce_rate(
@@ -51,4 +98,32 @@ def _enforce_rate(
         window_seconds=3600,
     )
     if not allowed:
-        raise HTTPException(status_code=429, detail="operation rate limit reached; retry later")
+        raise HTTPException(
+            status_code=429,
+            detail="operation rate limit reached; retry later",
+            headers={"Retry-After": "3600"},
+        )
+
+
+def _enforce_ip_rate(
+    request: Request,
+    store: AuthStore,
+    *,
+    operation: str,
+    env_name: str,
+    default: int,
+    window_seconds: int,
+) -> None:
+    allowed = store.record_operation_if_allowed(
+        actor_type="network",
+        actor_id=client_rate_key(request),
+        operation=operation,
+        limit=_bounded_env(env_name, default, 1, 100000),
+        window_seconds=window_seconds,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="network rate limit reached; retry later",
+            headers={"Retry-After": str(window_seconds)},
+        )

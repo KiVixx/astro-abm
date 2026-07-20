@@ -36,6 +36,7 @@ from astro_abm_api.services.scenario_access import (
 )
 from astro_abm_api.services.usage_limits import (
     enforce_generation_rate,
+    enforce_scenario_create_network_limits,
     enforce_scenario_create_limits,
 )
 from astro_abm_api.services.llm_client import (
@@ -114,12 +115,13 @@ def create_scenario(
     response: Response,
 ) -> ScenarioReport:
     payload, _ = _resolve_request_preset(payload)
+    auth_store = AuthStore()
+    enforce_scenario_create_network_limits(request, auth_store)
     actor = actor_for_create(request, response)
     if actor.user is not None:
         require_csrf(request)
     if actor.user is None and payload.visibility != "public":
         payload = payload.model_copy(update={"visibility": "public"})
-    auth_store = AuthStore()
     enforce_scenario_create_limits(actor, auth_store)
     agents, unknown = resolve_agents(payload.agent_ids)
     if unknown:
@@ -145,7 +147,7 @@ def generate_scenario_llm_chunk(
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
     actor = _require_owner(request, report)
-    enforce_generation_rate(actor, AuthStore())
+    enforce_generation_rate(actor, AuthStore(), request)
 
     if payload.chunk_start_date < report.start_date or payload.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -201,7 +203,7 @@ def generate_scenario_worldline_chunk(
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
     actor = _require_owner(request, report)
-    enforce_generation_rate(actor, AuthStore())
+    enforce_generation_rate(actor, AuthStore(), request)
 
     if payload.chunk_start_date < report.start_date or payload.chunk_end_date > report.end_date:
         raise HTTPException(
@@ -281,7 +283,7 @@ def regenerate_scenario_worldline_from_chunk(
     store = ScenarioStore()
     report = _load_scenario(store, scenario_id)
     actor = _require_owner(request, report)
-    enforce_generation_rate(actor, AuthStore())
+    enforce_generation_rate(actor, AuthStore(), request)
 
     try:
         result = regenerate_worldline_from_chunk(
