@@ -4,12 +4,14 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from astro_abm_api.models.auth import (
     AuthSessionResponse,
+    ClaimGuestResponse,
     ChangePasswordRequest,
     LoginRequest,
     LogoutResponse,
     RegisterRequest,
 )
 from astro_abm_api.services.auth_session import (
+    GUEST_COOKIE,
     clear_auth_cookies,
     current_user,
     require_csrf,
@@ -82,3 +84,14 @@ def change_password(request: Request, payload: ChangePasswordRequest, response: 
         raise HTTPException(status_code=401, detail="invalid username or password") from error
     clear_auth_cookies(response)
     return LogoutResponse(logged_out=True)
+
+
+@router.post("/claim-guest-worldlines", response_model=ClaimGuestResponse)
+def claim_guest_worldlines(request: Request) -> ClaimGuestResponse:
+    user = require_current_user(request)
+    require_csrf(request)
+    count = AuthStore().claim_guest_scenarios(
+        guest_token=request.cookies.get(GUEST_COOKIE),
+        user_id=user.user_id,
+    )
+    return ClaimGuestResponse(claimed_worldline_count=count)

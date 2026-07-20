@@ -63,3 +63,9 @@ class LogoutResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     logged_out: bool
+
+
+class ClaimGuestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claimed_worldline_count: int

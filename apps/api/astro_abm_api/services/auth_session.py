@@ -5,11 +5,12 @@ import os
 from fastapi import HTTPException, Request, Response
 
 from astro_abm_api.models.auth import CurrentUser
-from astro_abm_api.services.auth_store import AuthStore, SessionCredentials
+from astro_abm_api.services.auth_store import AuthStore, GuestCredentials, SessionCredentials
 
 
 SESSION_COOKIE = "astro_abm_session"
 CSRF_COOKIE = "astro_abm_csrf"
+GUEST_COOKIE = "astro_abm_guest"
 
 
 def _production() -> bool:
@@ -41,6 +42,31 @@ def set_auth_cookies(response: Response, credentials: SessionCredentials) -> Non
 def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE, path="/")
     response.delete_cookie(CSRF_COOKIE, path="/")
+
+
+def set_guest_cookie(response: Response, credentials: GuestCredentials) -> None:
+    response.set_cookie(
+        GUEST_COOKIE,
+        credentials.guest_token,
+        httponly=True,
+        secure=_production(),
+        samesite="lax",
+        path="/",
+        expires=credentials.expires_at,
+    )
+
+
+def guest_id(request: Request) -> str | None:
+    return AuthStore().guest_id_for_token(request.cookies.get(GUEST_COOKIE))
+
+
+def ensure_guest(request: Request, response: Response) -> str:
+    existing = guest_id(request)
+    if existing:
+        return existing
+    credentials = AuthStore().create_guest()
+    set_guest_cookie(response, credentials)
+    return credentials.guest_id
 
 
 def current_user(request: Request) -> CurrentUser | None:

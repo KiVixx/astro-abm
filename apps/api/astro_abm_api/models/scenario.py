@@ -97,6 +97,10 @@ class ScenarioSummary(BaseModel):
     coverage_total_days: int | None = None
     coverage_local_research_days: int | None = None
     coverage_future_placeholder_days: int | None = None
+    is_owner: bool = False
+    can_edit: bool = False
+    can_delete: bool = False
+    can_regenerate: bool = False
 
 
 class ScenarioLlmChunkRequest(BaseModel):

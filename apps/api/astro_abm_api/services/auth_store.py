@@ -17,6 +17,7 @@ from astro_abm_api.services.scenario_store import repo_root
 
 ACCOUNTS_DB_PATH_ENV = "ASTRO_ABM_ACCOUNTS_DB_PATH"
 SESSION_TTL_HOURS_ENV = "ASTRO_ABM_SESSION_TTL_HOURS"
+GUEST_TTL_DAYS_ENV = "ASTRO_ABM_GUEST_TTL_DAYS"
 PASSWORD_HASH = PasswordHash.recommended()
 
 
@@ -33,6 +34,21 @@ class SessionCredentials:
     session_token: str
     csrf_token: str
     expires_at: datetime
+
+
+@dataclass(frozen=True)
+class GuestCredentials:
+    guest_id: str
+    guest_token: str
+    expires_at: datetime
+
+
+@dataclass(frozen=True)
+class ScenarioOwnership:
+    scenario_id: str
+    owner_type: str
+    owner_id: str
+    visibility: str
 
 
 def default_accounts_db_path() -> Path:
@@ -103,8 +119,27 @@ class AuthStore:
                 revoked_at TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS guest_workspaces (
+                guest_id TEXT PRIMARY KEY,
+                token_hash TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                claimed_by_user_id TEXT REFERENCES users(user_id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS scenario_ownership (
+                scenario_id TEXT PRIMARY KEY,
+                owner_type TEXT NOT NULL CHECK(owner_type IN ('guest', 'user', 'legacy')),
+                owner_id TEXT NOT NULL,
+                visibility TEXT NOT NULL CHECK(visibility IN ('public', 'private')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
+            CREATE INDEX IF NOT EXISTS scenario_ownership_owner_idx
+                ON scenario_ownership(owner_type, owner_id);
             """
         )
         connection.commit()
@@ -275,3 +310,97 @@ class AuthStore:
                 "UPDATE sessions SET revoked_at = ? WHERE user_id = ?",
                 (now, user_id),
             )
+
+    def create_guest(self) -> GuestCredentials:
+        now = _utc_now()
+        try:
+            ttl_days = max(1, min(365, int(os.getenv(GUEST_TTL_DAYS_ENV, "30"))))
+        except ValueError:
+            ttl_days = 30
+        expires_at = now + timedelta(days=ttl_days)
+        guest_id = str(uuid4())
+        guest_token = secrets.token_urlsafe(48)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO guest_workspaces(guest_id, token_hash, created_at, expires_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (guest_id, _digest(guest_token), _iso(now), _iso(expires_at)),
+            )
+        return GuestCredentials(guest_id, guest_token, expires_at)
+
+    def guest_id_for_token(self, guest_token: str | None) -> str | None:
+        if not guest_token:
+            return None
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT guest_id FROM guest_workspaces
+                WHERE token_hash = ? AND claimed_by_user_id IS NULL AND expires_at > ?
+                """,
+                (_digest(guest_token), _iso(_utc_now())),
+            ).fetchone()
+        return row["guest_id"] if row else None
+
+    def set_scenario_ownership(
+        self,
+        *,
+        scenario_id: str,
+        owner_type: str,
+        owner_id: str,
+        visibility: str,
+    ) -> None:
+        now = _iso(_utc_now())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO scenario_ownership(
+                    scenario_id, owner_type, owner_id, visibility, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(scenario_id) DO UPDATE SET
+                    owner_type = excluded.owner_type,
+                    owner_id = excluded.owner_id,
+                    visibility = excluded.visibility,
+                    updated_at = excluded.updated_at
+                """,
+                (scenario_id, owner_type, owner_id, visibility, now, now),
+            )
+
+    def get_scenario_ownership(self, scenario_id: str) -> ScenarioOwnership | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT scenario_id, owner_type, owner_id, visibility
+                FROM scenario_ownership WHERE scenario_id = ?
+                """,
+                (scenario_id,),
+            ).fetchone()
+        return ScenarioOwnership(**dict(row)) if row else None
+
+    def delete_scenario_ownership(self, scenario_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM scenario_ownership WHERE scenario_id = ?",
+                (scenario_id,),
+            )
+
+    def claim_guest_scenarios(self, *, guest_token: str | None, user_id: str) -> int:
+        guest_id = self.guest_id_for_token(guest_token)
+        if guest_id is None:
+            return 0
+        now = _iso(_utc_now())
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE scenario_ownership
+                SET owner_type = 'user', owner_id = ?, updated_at = ?
+                WHERE owner_type = 'guest' AND owner_id = ?
+                """,
+                (user_id, now, guest_id),
+            )
+            connection.execute(
+                "UPDATE guest_workspaces SET claimed_by_user_id = ? WHERE guest_id = ?",
+                (user_id, guest_id),
+            )
+        return max(0, cursor.rowcount)
