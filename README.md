@@ -1411,6 +1411,39 @@ It also warns when timing-sensitive daily research tables lack `available_ts`
 or `observed_ts`; those warnings mean the current output should be interpreted
 as historical association/event-study context, not as a point-in-time backtest.
 
+Run the focused Mercury station-out / TSLA study:
+
+```bash
+uv run python scripts/run_mercury_station_tsla_study.py \
+  --refresh-tsla \
+  --config astro_research/configs/mercury_station_tsla.yaml \
+  --output astro_research/output/reports/mercury_station_tsla_v1
+```
+
+The command calculates exact Mercury retrograde-to-direct stations locally
+with Swiss Ephemeris, uses the full available TSLA adjusted-close history,
+compares directional post-station windows with non-event, month-matched, and
+prior-volatility-matched baselines, and applies Benjamini-Hochberg FDR. The
+ignored TSLA CSV and generated CSV/Parquet reports remain local. Yahoo-derived
+data is research-local and needs licensing review before redistribution.
+Results describe historical association only, not causality, prediction,
+financial advice, or a trading signal.
+
+Run the conditional TSLA trend-reversal study:
+
+```bash
+uv run python scripts/run_mercury_station_tsla_reversal_study.py \
+  --config astro_research/configs/mercury_station_tsla_reversal.yaml \
+  --output astro_research/output/reports/mercury_station_tsla_reversal_0_3_v3
+```
+
+This second study first classifies the TSLA-minus-SPX trend using only the
+10/20 trading sessions before the first complete TSLA market session after each
+exact Mercury station-out timestamp. The primary comparison tests the
+station-to-day-3 response against a prior-volatility-matched placebo baseline.
+The station-to-day-8 and later +8 to +14 calendar-day windows remain
+sensitivity checks, with separate FDR correction.
+
 Selectable research preparation:
 
 ```bash

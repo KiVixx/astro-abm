@@ -21,6 +21,7 @@ from astro_abm_api.services.llm_client import (
 )
 from astro_abm_api.services.llm_context import build_llm_context
 from astro_abm_api.services.llm_prompts import build_messages
+from astro_abm_api.services.daily_context import regime_label, stress_risk_theme
 from astro_abm_api.services.daily_research_context import DailyResearchContextProvider
 from astro_abm_api.services.scenario_store import report_to_summary
 from astro_abm_api.services.worldline_llm_prompts import (
@@ -46,6 +47,16 @@ def inclusive_day_count(start_date: str, end_date: str) -> int:
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
     return (end - start).days + 1
+
+
+def test_insufficient_stress_coverage_has_readable_traditional_chinese_label() -> None:
+    assert (
+        regime_label("insufficient_coverage", language="zh-Hant")
+        == "跨資產壓力資料不足"
+    )
+    assert stress_risk_theme("insufficient_coverage", language="zh-Hant") == (
+        "壓力狀態檢視：跨資產壓力資料不足"
+    )
 
 
 def test_product_llm_defaults_are_consistent() -> None:
@@ -1350,7 +1361,7 @@ def test_openai_compatible_mocked_network_parses_valid_json(
         report["llm_report"]["asset_stress_indicators"][0]["sentiment_stress_support"]
         == 62.5
     )
-    assert "Asset stress support indicators" in report["markdown_report"]
+    assert "Asset sentiment indicators" in report["markdown_report"]
 
 
 def test_llm_chunk_endpoint_merges_and_saves_report(

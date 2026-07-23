@@ -18,7 +18,12 @@ import {
   type WorkbenchNode,
 } from "@/lib/workbenchGraph";
 import { edgeEndpointIds } from "@/lib/workbenchForceGraph";
-import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
+import {
+  formatAgentName,
+  formatEnumLabel,
+  formatLegacyCoverageText,
+  formatRiskTheme,
+} from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import type { RetrogradeBody } from "@/lib/retrograde";
 import { retrogradeBodyLabel } from "./RetrogradeBodySelector";
@@ -231,7 +236,7 @@ function OverviewPanel({ snapshot }: { snapshot: DailyScenarioSnapshot }) {
     <div className="stack">
       <div>
         <h2>{snapshot.date}</h2>
-        <p>{snapshot.daily_summary}</p>
+        <p>{formatLegacyCoverageText(snapshot.daily_summary)}</p>
       </div>
       <div>
         <h3>{t("report.researchSignals")}</h3>
@@ -248,7 +253,7 @@ function OverviewPanel({ snapshot }: { snapshot: DailyScenarioSnapshot }) {
           {snapshot.agent_states.map((state) => (
             <div className="nested-panel" key={state.agent_id}>
               <strong>{formatAgentName(t, state.agent_id, state.agent_name)}</strong>
-              <p>{state.likely_reaction}</p>
+              <p>{formatLegacyCoverageText(state.likely_reaction)}</p>
               <div className="tag-row">
                 <span className="tag">
                   {t("common.mood")}: {formatEnumLabel(t, "agent_mood", state.mood)}
@@ -267,7 +272,7 @@ function OverviewPanel({ snapshot }: { snapshot: DailyScenarioSnapshot }) {
       </div>
       <div>
         <h3>{t("report.riskThemes")}</h3>
-        <BulletList items={snapshot.daily_risk_themes} />
+        <BulletList items={snapshot.daily_risk_themes.map((theme) => formatRiskTheme(t, theme))} />
       </div>
       <div>
         <h3>{t("report.caveats")}</h3>
@@ -296,7 +301,7 @@ function AgentNodePanel({ payload }: { payload: AgentNodePayload }) {
       </div>
       <div>
         <h3>{t("workbench.likelyReaction")}</h3>
-        <p>{state.likely_reaction}</p>
+        <p>{formatLegacyCoverageText(state.likely_reaction)}</p>
       </div>
       <div>
         <h3>{t("workbench.attentionTriggers")}</h3>
@@ -334,7 +339,7 @@ function ContextNodePanel({ payload }: { payload: ContextNodePayload }) {
           {formatEnumLabel(t, valueGroupMap[payload.title] || "", payload.value)}
         </p>
       </div>
-      <p>{payload.detail}</p>
+      <p>{formatLegacyCoverageText(payload.detail)}</p>
       <div>
         <h3>{t("workbench.notes")}</h3>
         <BulletList items={payload.notes} />
@@ -377,7 +382,7 @@ function RiskNodePanel({ payload }: { payload: RiskNodePayload }) {
   return (
     <div className="stack">
       <div>
-        <h2>{payload.theme.replaceAll("_", " ")}</h2>
+        <h2>{formatRiskTheme(t, payload.theme)}</h2>
         <p className="muted">{t("workbench.riskThemeFor")} {payload.date}</p>
       </div>
       <div>
@@ -414,6 +419,9 @@ function displayWorkbenchNodeLabel(
       agentPayload.state.agent_id,
       agentPayload.state.agent_name,
     );
+  }
+  if (payload && hasKind(payload, "risk")) {
+    return formatRiskTheme(t, (payload as RiskNodePayload).theme);
   }
   return node.label;
 }

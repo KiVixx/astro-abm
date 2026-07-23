@@ -1,0 +1,59 @@
+study:
+  study_id: "mercury_station_out_tsla_v1"
+  title: "Mercury retrograde-to-direct station 對 TSLA 的歷史關聯"
+  target_start: "2010-06-29"
+  target_end: "2026-07-23"
+  interpretation: "historical_association_only"
+
+inputs:
+  tsla_path: "astro_research/data/local/equity/tsla_daily.csv"
+  spx_path: "astro_research/data/local/equity/spx_daily.csv"
+  tsla_symbol: "TSLA"
+  tsla_source: "Yahoo Finance chart endpoint, local research only"
+  spx_source: "Yahoo Finance chart endpoint, local research only"
+
+station:
+  scan_start: "2009-01-01"
+  scan_end: "2026-08-15"
+  step_hours: 6
+  tolerance_seconds: 60
+
+windows:
+  station_session:
+    mode: "station_session"
+    start: 1
+    end: 1
+  post_early_calendar_1_7:
+    mode: "calendar"
+    start: 1
+    end: 7
+  post_late_calendar_8_14:
+    mode: "calendar"
+    start: 8
+    end: 14
+  post_full_calendar_1_14:
+    mode: "calendar"
+    start: 1
+    end: 14
+  post_early_trading_1_5:
+    mode: "trading"
+    start: 1
+    end: 5
+  post_late_trading_6_10:
+    mode: "trading"
+    start: 6
+    end: 10
+
+baselines: "non_event,month_matched,volatility_regime_matched"
+metrics: "cumulative_return,cumulative_excess_return_vs_spx,realized_volatility,max_drawdown,extreme_move_frequency,positive_day_frequency,negative_day_frequency,positive_window_frequency"
+
+statistics:
+  random_seed: 42
+  bootstrap_samples: 1000
+  permutation_samples: 1000
+  baseline_samples_per_event: 50
+  inference_baseline_cap: 500
+  event_exclusion_days: 30
+  fdr_method: "benjamini_hochberg"
+  robust_q_threshold: 0.10
+  minimum_events: 20

@@ -270,6 +270,31 @@ export function formatEnumLabel(
   return key ? t(key, value) : value.replaceAll("_", " ");
 }
 
+export function formatRiskTheme(
+  t: (key: string, fallback?: string) => string,
+  value: string,
+): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replaceAll("：", ":")
+    .replaceAll(" ", "_");
+  if (normalized.includes("insufficient_coverage")) {
+    return t("value.dataQuality.insufficientCoverage", value);
+  }
+  return value.replaceAll("_", " ");
+}
+
+export function formatLegacyCoverageText(value: string): string {
+  if (!/insufficient[_ ]coverage/i.test(value)) {
+    return value;
+  }
+  const replacement = /[\u3400-\u9fff]/.test(value)
+    ? "跨資產壓力資料不足"
+    : "insufficient cross-asset stress coverage";
+  return value.replace(/insufficient[_ ]coverage/gi, replacement);
+}
+
 export function formatAgentName(
   t: (key: string, fallback?: string) => string,
   agentId: string,
