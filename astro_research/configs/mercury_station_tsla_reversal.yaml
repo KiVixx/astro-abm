@@ -1,0 +1,71 @@
+study:
+  study_id: "mercury_station_out_tsla_reversal_0_3_v3"
+  title: "Mercury 轉順 station 第 0～+3 日的 TSLA 趨勢反轉跡象"
+  target_start: "2010-06-29"
+  target_end: "2026-07-23"
+  interpretation: "historical_association_only"
+
+inputs:
+  tsla_path: "astro_research/data/local/equity/tsla_daily.csv"
+  spx_path: "astro_research/data/local/equity/spx_daily.csv"
+
+station:
+  scan_start: "2009-01-01"
+  scan_end: "2026-08-15"
+  step_hours: 6
+  tolerance_seconds: 60
+
+trend_horizons: "10,20"
+
+windows:
+  station_to_day3_calendar_0_3:
+    mode: "anchored_calendar"
+    start: 0
+    end: 3
+  station_to_day8_calendar_0_8:
+    mode: "anchored_calendar"
+    start: 0
+    end: 8
+  station_session:
+    mode: "station_session"
+    start: 1
+    end: 1
+  post_early_calendar_1_7:
+    mode: "calendar"
+    start: 1
+    end: 7
+  post_late_calendar_8_14:
+    mode: "calendar"
+    start: 8
+    end: 14
+  post_full_calendar_1_14:
+    mode: "calendar"
+    start: 1
+    end: 14
+  post_early_trading_1_5:
+    mode: "trading"
+    start: 1
+    end: 5
+  post_late_trading_6_10:
+    mode: "trading"
+    start: 6
+    end: 10
+
+baselines: "non_event,month_matched,volatility_regime_matched"
+metrics: "reversal_frequency,strong_trend_reversal_frequency,normalized_reversal_strength,reversal_signed_return,downtrend_rebound_frequency,uptrend_fade_frequency,post_excess_after_downtrend,post_excess_after_uptrend"
+
+primary_hypothesis:
+  trend_horizon_sessions: 20
+  window_name: "station_to_day3_calendar_0_3"
+  baseline_method: "volatility_regime_matched"
+  metrics: "reversal_frequency,normalized_reversal_strength,downtrend_rebound_frequency,uptrend_fade_frequency"
+
+statistics:
+  random_seed: 42
+  bootstrap_samples: 1000
+  permutation_samples: 1000
+  baseline_samples_per_event: 40
+  inference_baseline_cap: 500
+  event_exclusion_days: 30
+  strong_trend_z_threshold: 0.50
+  fdr_method: "benjamini_hochberg_by_test_family"
