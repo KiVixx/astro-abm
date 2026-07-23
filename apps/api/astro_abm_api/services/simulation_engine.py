@@ -705,6 +705,14 @@ def render_daily_asset_contexts(
     )
 
 
+def asset_sentiment_label(value: float, *, language: ReportLanguage) -> str:
+    if value <= 35:
+        return "不樂觀" if language == "zh-Hant" else "less optimistic"
+    if value >= 66:
+        return "樂觀" if language == "zh-Hant" else "optimistic"
+    return "中性" if language == "zh-Hant" else "neutral"
+
+
 def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLanguage) -> str:
     llm_report = report.llm_report
     if llm_report is None:
@@ -744,7 +752,8 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
         indicator_lines = "\n".join(
             (
                 f"- {item.date.isoformat()} {item.asset}: "
-                f"{item.sentiment_stress_support:.1f} ({item.label}) — "
+                f"{item.sentiment_stress_support:.1f} "
+                f"({asset_sentiment_label(item.sentiment_stress_support, language=language)}) — "
                 f"{item.rationale}"
             )
             for item in llm_report.asset_stress_indicators
@@ -768,7 +777,7 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
 ### 代理解讀
 {agent_lines or '無'}
 
-### 資產情緒壓力支撐指標
+### 資產情緒指標
 {indicator_lines or '無'}
 
 ### 風險主題
@@ -812,7 +821,8 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
     indicator_lines = "\n".join(
         (
             f"- {item.date.isoformat()} {item.asset}: "
-            f"{item.sentiment_stress_support:.1f} ({item.label}) — "
+            f"{item.sentiment_stress_support:.1f} "
+            f"({asset_sentiment_label(item.sentiment_stress_support, language=language)}) — "
             f"{item.rationale}"
         )
         for item in llm_report.asset_stress_indicators
@@ -836,7 +846,7 @@ def render_llm_report_markdown(report: ScenarioReport, *, language: ReportLangua
 ### Agent interpretations
 {agent_lines or 'none'}
 
-### Asset stress support indicators
+### Asset sentiment indicators
 {indicator_lines or '- none'}
 
 ### Risk themes

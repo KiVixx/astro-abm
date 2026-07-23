@@ -8,7 +8,11 @@ import type {
   WorldlineState,
 } from "@/lib/types";
 import { worldlineGenerationMode } from "@/lib/worldline";
-import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
+import {
+  formatAgentName,
+  formatEnumLabel,
+  formatLegacyCoverageText,
+} from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 import {
   worldlineDisplayStatus,
@@ -76,7 +80,7 @@ export function WorldlinePanel({
 
       <section>
         <h3>{t("worldline.whatHappenedToday")}</h3>
-        <p>{worldlineDay.input_context_summary}</p>
+        <p>{formatLegacyCoverageText(worldlineDay.input_context_summary)}</p>
       </section>
 
       <section>

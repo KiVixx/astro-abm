@@ -121,22 +121,22 @@ function hashString(value: string): number {
   return hash;
 }
 
-function regimeBase(snapshot: DailyScenarioSnapshot): number {
+function sentimentBase(snapshot: DailyScenarioSnapshot): number {
   const stressRegime = snapshot.market_context.stress_regime;
   const volatilityRegime = snapshot.market_context.volatility_regime;
   const stressBase =
     stressRegime === "stress"
-      ? 78
+      ? 22
       : stressRegime === "elevated"
-        ? 66
+        ? 34
         : stressRegime === "watchful"
           ? 50
-          : 34;
+          : 68;
   const volatilityAdjustment =
     volatilityRegime === "expanded"
-      ? 10
+      ? -10
       : volatilityRegime === "compressed"
-        ? -7
+        ? 7
         : 0;
   return stressBase + volatilityAdjustment;
 }
@@ -149,7 +149,7 @@ function mockStressValue(
   const hash = hashString(`${asset}:${snapshot.date}`);
   const wave = Math.sin((snapshot.day_index + assetIndex * 3) / 4) * 9;
   const texture = (hash % 17) - 8;
-  return clampStressValue(Math.round((regimeBase(snapshot) + wave + texture) * 10) / 10);
+  return clampStressValue(Math.round((sentimentBase(snapshot) + wave + texture) * 10) / 10);
 }
 
 export function assetStressPointForSnapshot(

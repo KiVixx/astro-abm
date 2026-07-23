@@ -4,6 +4,16 @@ import type { LlmScenarioReport } from "@/lib/types";
 import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
+function sentimentLabelKey(value: number): string {
+  if (value <= 35) {
+    return "workbench.assetStressLow";
+  }
+  if (value >= 66) {
+    return "workbench.assetStressHigh";
+  }
+  return "workbench.assetStressMid";
+}
+
 function BulletList({ items }: { items: string[] }) {
   const { t } = useI18n();
   if (!items.length) {
@@ -164,7 +174,9 @@ export function LlmScenarioReportCard({
                       </strong>
                       <p>{indicator.rationale}</p>
                       <div className="tag-row">
-                        <span className="tag">{indicator.label}</span>
+                        <span className="tag">
+                          {t(sentimentLabelKey(indicator.sentiment_stress_support))}
+                        </span>
                         <span className="tag">{t("workbench.llmMetric")}</span>
                       </div>
                     </div>

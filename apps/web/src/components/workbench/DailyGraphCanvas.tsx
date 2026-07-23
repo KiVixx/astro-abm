@@ -28,7 +28,7 @@ import {
   type ForceGraphEdge,
   type ForceGraphNode,
 } from "@/lib/workbenchForceGraph";
-import { formatAgentName, formatEnumLabel } from "@/i18n/labels";
+import { formatAgentName, formatEnumLabel, formatRiskTheme } from "@/i18n/labels";
 import { useI18n } from "@/i18n/useI18n";
 
 interface DailyGraphCanvasProps {
@@ -290,6 +290,9 @@ export function DailyGraphCanvas({
     if (node.type === "agent") {
       const agentId = node.id.replace(/^agent_/, "");
       return formatAgentName(t, agentId, node.label);
+    }
+    if (node.type === "risk") {
+      return formatRiskTheme(t, node.label);
     }
     const labelKey = contextKeys[node.type];
     return labelKey ? t(labelKey) : node.label;

@@ -301,9 +301,9 @@ def _initial_state(
         stress_pressure=stress,
         notes=[
             (
-                "初始狀態由每日研究訊號與資產支撐脈絡建立。"
+                "初始狀態由每日研究訊號與資產情緒脈絡建立。"
                 if language == "zh-Hant"
-                else "Initial state seeded from daily research signals and asset support context."
+                else "Initial state seeded from daily research signals and asset sentiment context."
             )
         ],
     )
@@ -342,9 +342,9 @@ def _build_agent_event(
     }
     if language == "zh-Hant":
         support_note = (
-            "當日有可用的 LLM 資產支撐指標。"
+            "當日有可用的 LLM 資產情緒指標。"
             if asset_support is not None
-            else "當日沒有可用的 LLM 資產支撐指標。"
+            else "當日沒有可用的 LLM 資產情緒指標。"
         )
         what_happened = (
             f"{agent_name} 在模擬路徑中回應了"
@@ -360,9 +360,9 @@ def _build_agent_event(
         caveats = ["確定性 mock 群體事件，不是已觀測的市場行動。", "僅為模擬因果鏈，不是真實因果。"]
     else:
         support_note = (
-            "LLM asset support metric is available for this day."
+            "An LLM asset sentiment metric is available for this day."
             if asset_support is not None
-            else "No LLM asset support metric is available for this day."
+            else "No LLM asset sentiment metric is available for this day."
         )
         what_happened = (
             f"{agent_name} reacted to {snapshot.research_signals.stress_regime} stress, "

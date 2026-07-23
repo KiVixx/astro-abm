@@ -76,6 +76,7 @@ def regime_label(value: str, *, language: str) -> str:
         "local_research_available": "本地研究資料可用",
         "partial_local_research_available": "部分本地研究資料可用",
         "computed_ephemeris_available": "可計算星曆資料可用",
+        "insufficient_coverage": "跨資產壓力資料不足",
     }
     return labels.get(value, value)
 

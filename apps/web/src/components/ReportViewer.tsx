@@ -10,7 +10,13 @@ import type {
   DailyScenarioSnapshot,
   ScenarioReport,
 } from "@/lib/types";
-import { formatAgentName, formatAgentProfileName, formatEnumLabel } from "@/i18n/labels";
+import {
+  formatAgentName,
+  formatAgentProfileName,
+  formatEnumLabel,
+  formatLegacyCoverageText,
+  formatRiskTheme,
+} from "@/i18n/labels";
 import { interpolate, useI18n } from "@/i18n/useI18n";
 
 const LONG_TIMELINE_WARNING_DAYS = 120;
@@ -111,7 +117,7 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
 
   return (
     <div className="timeline-detail-body">
-      <p>{snapshot.daily_summary}</p>
+      <p>{formatLegacyCoverageText(snapshot.daily_summary)}</p>
       <div className="grid">
         <div>
           <h3>{t("report.astroContext")}</h3>
@@ -126,7 +132,7 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
         </div>
         <div>
           <h3>{t("report.marketContext")}</h3>
-          <p>{snapshot.market_context.summary}</p>
+          <p>{formatLegacyCoverageText(snapshot.market_context.summary)}</p>
           <div className="tag-row">
             <span className="tag">
               {t("common.stress")}:{" "}
@@ -156,7 +162,7 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
         {snapshot.agent_states.map((state) => (
           <div className="nested-panel" key={state.agent_id}>
             <strong>{formatAgentName(t, state.agent_id, state.agent_name)}</strong>
-            <p>{state.likely_reaction}</p>
+            <p>{formatLegacyCoverageText(state.likely_reaction)}</p>
             <div className="tag-row">
               <span className="tag">{state.mood}</span>
               <span className="tag">{state.risk_appetite}</span>
@@ -232,7 +238,7 @@ function DailySnapshotDetail({ snapshot }: { snapshot: DailyScenarioSnapshot }) 
           <h3>{t("report.dailyRiskThemes")}</h3>
           <ul>
             {snapshot.daily_risk_themes.map((theme) => (
-              <li key={theme}>{theme}</li>
+              <li key={theme}>{formatRiskTheme(t, theme)}</li>
             ))}
           </ul>
         </div>
@@ -611,7 +617,10 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
                                 )}
                               </span>
                               <span>
-                                {snapshot.daily_risk_themes.slice(0, 2).join(", ")}
+                                {snapshot.daily_risk_themes
+                                  .slice(0, 2)
+                                  .map((theme) => formatRiskTheme(t, theme))
+                                  .join(", ")}
                               </span>
                               <span>
                                 {formatEnumLabel(
@@ -682,7 +691,7 @@ export function ReportViewer({ report }: { report: ScenarioReport }) {
             <div key={output.agent_id}>
               <h3>{formatAgentName(t, output.agent_id, output.agent_name)}</h3>
               <p>{output.behavior_summary}</p>
-              <p>{output.likely_reaction}</p>
+              <p>{formatLegacyCoverageText(output.likely_reaction)}</p>
               <div className="tag-row">
                 <span className="tag">{output.role}</span>
                 <span className="tag">{output.risk_appetite}</span>
