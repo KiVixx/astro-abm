@@ -92,6 +92,43 @@ def enforce_auth_rate(request: Request, store: AuthStore, operation: str) -> Non
     )
 
 
+def enforce_market_series_operation(
+    request: Request,
+    store: AuthStore,
+    *,
+    user_id: str,
+    operation: str,
+) -> None:
+    defaults = {
+        "register": (
+            "ASTRO_ABM_MARKET_SERIES_REGISTER_RATE_PER_HOUR",
+            "ASTRO_ABM_IP_MARKET_SERIES_REGISTER_RATE_PER_HOUR",
+            10,
+        ),
+        "validate": (
+            "ASTRO_ABM_MARKET_SERIES_REFRESH_RATE_PER_HOUR",
+            "ASTRO_ABM_IP_MARKET_SERIES_REFRESH_RATE_PER_HOUR",
+            12,
+        ),
+        "refresh": (
+            "ASTRO_ABM_MARKET_SERIES_REFRESH_RATE_PER_HOUR",
+            "ASTRO_ABM_IP_MARKET_SERIES_REFRESH_RATE_PER_HOUR",
+            12,
+        ),
+    }
+    env_name, ip_env_name, default = defaults[operation]
+    actor = ScenarioActor(owner_type="user", owner_id=user_id, user=None)
+    _enforce_rate(actor, store, f"market_series_{operation}", env_name, default)
+    _enforce_ip_rate(
+        request,
+        store,
+        operation=f"market_series_{operation}_hour",
+        env_name=ip_env_name,
+        default=max(default, 20),
+        window_seconds=3600,
+    )
+
+
 def _enforce_rate(
     actor: ScenarioActor,
     store: AuthStore,

@@ -315,10 +315,18 @@ export function DailyGraphCanvas({
       return formatEnumLabel(t, "data_quality", node.subtitle);
     }
     if (node.type === "astro") {
-      return formatEnumLabel(t, "astro_intensity", node.subtitle);
+      return `${t("workbench.astroActivityPrefix")}${formatEnumLabel(
+        t,
+        "astro_intensity",
+        node.subtitle,
+      )}`;
     }
     if (node.type === "agent") {
-      return formatEnumLabel(t, "agent_level", node.subtitle);
+      return `${t("workbench.agentRiskAppetitePrefix")}${formatEnumLabel(
+        t,
+        "agent_level",
+        node.subtitle,
+      )}`;
     }
     if (node.type === "risk") {
       return t("legend.risk");

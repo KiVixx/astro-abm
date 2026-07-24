@@ -40,6 +40,8 @@ services:
       ASTRO_ABM_PRODUCT_SNAPSHOT_INGEST: ${ASTRO_ABM_PRODUCT_SNAPSHOT_INGEST:-0}
       ASTRO_ABM_REFRESH_LOCAL_DATA: ${ASTRO_ABM_REFRESH_LOCAL_DATA:-0}
       ASTRO_ABM_ACCEPT_RESEARCH_LOCAL_TERMS: ${ASTRO_ABM_ACCEPT_RESEARCH_LOCAL_TERMS:-0}
+      ASTRO_ABM_MARKET_SERIES_DB_PATH: /app/astro_research/data/local/market_series/registry.sqlite3
+      ASTRO_ABM_MARKET_SERIES_DATA_ROOT: /app/astro_research/data/local
       FRED_API_KEY: ${FRED_API_KEY:-}
     command:
       - astro-abm-maintenance-daemon

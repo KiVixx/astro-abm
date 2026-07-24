@@ -22,6 +22,11 @@ export function SiteHeader() {
       active: pathname === "/worldlines/new",
     },
     {
+      href: "/market-series",
+      label: t("nav.marketSeries"),
+      active: pathname.startsWith("/market-series"),
+    },
+    {
       href: "/agents",
       label: t("nav.agents"),
       active: pathname.startsWith("/agents"),

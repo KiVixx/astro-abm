@@ -27,6 +27,15 @@ class ProductSnapshotTaskSummary:
     report_json_path: str = ""
 
 
+@dataclass(frozen=True)
+class CustomMarketSeriesTaskSummary:
+    written: int = 0
+    skipped_existing: int = 0
+    errors: tuple[str, ...] = ()
+    fetched: int = 0
+    mode: str = "custom-market-series"
+
+
 def run_product_snapshot_maintenance(
     *,
     run_ts: datetime | None = None,
@@ -52,6 +61,12 @@ def run_product_snapshot_maintenance(
     tasks = []
     if fetch_local_data:
         tasks.append(("product_local_data_refresh", lambda: _fetch_local_data(root_path, start=start, end=end, accept_terms=accept_research_local_terms)))
+    tasks.append(
+        (
+            "custom_market_series_refresh",
+            lambda: _refresh_custom_market_series(end=end),
+        )
+    )
     tasks.append(("product_research_prepare", lambda: _research_prepare(root_path, mode=mode, start=start, end=end, ingest=ingest)))
 
     from astro_abm.etl.maintenance import run_maintenance_tasks
@@ -109,6 +124,24 @@ def _research_prepare(root: Path, *, mode: str, start: str, end: str, ingest: bo
         steps_seen=len(result.steps),
         warnings_seen=len(result.warnings),
         report_json_path=str(result.report_json_path),
+    )
+
+
+def _refresh_custom_market_series(*, end: str) -> CustomMarketSeriesTaskSummary:
+    from astro_abm.market_series import run_custom_market_series_maintenance
+
+    results = run_custom_market_series_maintenance(end=date.fromisoformat(end))
+    errors = tuple(
+        f"{result.series_id}: {error}"
+        for result in results
+        if result.status != "active"
+        for error in result.errors
+    )
+    return CustomMarketSeriesTaskSummary(
+        written=sum(result.rows_written for result in results if result.status == "active"),
+        skipped_existing=sum(1 for result in results if result.fetched_rows == 0),
+        errors=errors,
+        fetched=sum(result.fetched_rows for result in results),
     )
 
 

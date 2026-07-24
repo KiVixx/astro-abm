@@ -2,14 +2,16 @@ import Link from "next/link";
 import { ScenarioForm } from "@/components/ScenarioForm";
 import { I18nText } from "@/i18n/useI18n";
 import { getAgents, getAssets, getLlmPresets } from "@/lib/api";
+import { serverCookieHeader } from "@/lib/serverAuth";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewWorldlinePage() {
   try {
+    const cookieHeader = await serverCookieHeader();
     const [agents, marketSeries, llmPresets] = await Promise.all([
       getAgents(),
-      getAssets(),
+      getAssets(cookieHeader),
       getLlmPresets(),
     ]);
     return (

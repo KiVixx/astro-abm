@@ -7,7 +7,12 @@ import type {
   LlmTestRequest,
   LlmTestResponse,
   LoginRequest,
+  CustomMarketSeriesCreateRequest,
+  CustomMarketSeriesRecord,
+  CustomMarketSeriesUpdateRequest,
   MarketSeriesProfile,
+  MarketSeriesListResponse,
+  MarketSeriesRefreshResponse,
   RegisterRequest,
   ScenarioCreateRequest,
   ScenarioExportEnvelope,
@@ -127,8 +132,66 @@ export async function getAgents(): Promise<AgentProfile[]> {
   return apiFetch<AgentProfile[]>("/agents");
 }
 
-export async function getAssets(): Promise<MarketSeriesProfile[]> {
-  return apiFetch<MarketSeriesProfile[]>("/assets");
+export async function getAssets(cookieHeader?: string): Promise<MarketSeriesProfile[]> {
+  return apiFetch<MarketSeriesProfile[]>("/assets", {
+    headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+  });
+}
+
+export async function getMarketSeries(
+  cookieHeader?: string,
+): Promise<MarketSeriesListResponse> {
+  return apiFetch<MarketSeriesListResponse>("/market-series", {
+    headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+  });
+}
+
+export async function createMarketSeries(
+  payload: CustomMarketSeriesCreateRequest,
+): Promise<CustomMarketSeriesRecord> {
+  return apiFetch<CustomMarketSeriesRecord>("/market-series", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateMarketSeries(
+  seriesId: string,
+  payload: CustomMarketSeriesUpdateRequest,
+): Promise<CustomMarketSeriesRecord> {
+  return apiFetch<CustomMarketSeriesRecord>(
+    `/market-series/${encodeURIComponent(seriesId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function deleteMarketSeries(
+  seriesId: string,
+): Promise<{ series_id: string; deleted: boolean; price_history_retained: boolean }> {
+  return apiFetch(`/market-series/${encodeURIComponent(seriesId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function validateMarketSeries(
+  seriesId: string,
+): Promise<MarketSeriesRefreshResponse> {
+  return apiFetch<MarketSeriesRefreshResponse>(
+    `/market-series/${encodeURIComponent(seriesId)}/validate`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export async function refreshMarketSeries(
+  seriesId: string,
+): Promise<MarketSeriesRefreshResponse> {
+  return apiFetch<MarketSeriesRefreshResponse>(
+    `/market-series/${encodeURIComponent(seriesId)}/refresh`,
+    { method: "POST", body: "{}" },
+  );
 }
 
 export async function getLlmPresets(): Promise<LlmPresetSummary[]> {

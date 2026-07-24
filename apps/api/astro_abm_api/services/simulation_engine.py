@@ -341,12 +341,14 @@ def build_daily_asset_contexts(
 ) -> list[DailyAssetContext]:
     data_coverage = snapshot_context["data_coverage"]
     research_signals = snapshot_context["research_signals"]
+    asset_market_status = snapshot_context.get("asset_market_status", {})
+    asset_market_source = snapshot_context.get("asset_market_source", {})
     contexts: list[DailyAssetContext] = []
     for asset in assets:
         profile = profile_for_asset(asset)
         if profile.supported:
-            market_daily = data_coverage.market_daily
-            data_source = data_coverage.source
+            market_daily = asset_market_status.get(asset, data_coverage.market_daily)
+            data_source = asset_market_source.get(asset, data_coverage.source)
             notes = supported_asset_notes(market_daily, language=language)
         else:
             market_daily = "custom_missing"

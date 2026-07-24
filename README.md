@@ -205,6 +205,25 @@ Worldline product experience:
 - Simulated causal links are internal to the scenario rehearsal. They are not
   real-world causal proof, not forecasts, and not trading signals.
 
+Custom daily market series:
+
+- Signed-in users can open `/market-series` and register an equity, ETF, or
+  equity-index symbol such as `TSLA`. Version 1 uses the controlled Yahoo chart
+  provider; clients cannot submit arbitrary URLs or filesystem paths.
+- A validated active series appears in the Create Worldline market-series
+  selector. Its daily coverage is read into asset-level context as
+  `available`, `missing`, or `future_placeholder`.
+- Registry metadata is stored in the ignored SQLite file configured by
+  `ASTRO_ABM_MARKET_SERIES_DB_PATH`. Price CSV files are stored below
+  `ASTRO_ABM_MARKET_SERIES_DATA_ROOT` and remain ignored by Git.
+- `make market-series-maintain` performs an incremental refresh immediately.
+  The Docker product-snapshot maintenance pass runs the same refresh before
+  rebuilding research snapshots. Three consecutive maintenance failures pause
+  that series so one broken symbol cannot block the remaining jobs.
+- Existing `astro_research/data/local/equity/tsla_daily.csv` history is adopted
+  when TSLA is registered, avoiding a second copy. Yahoo-derived files are for
+  local research use and require licensing review before redistribution.
+
 `make bootstrap` creates a local `.env` from `.env.example` when needed, starts
 QuestDB plus the maintenance daemon, applies the hourly and daily research
 schemas, ensures the 1926-2025 core daily astro dataset is built and ingested,
