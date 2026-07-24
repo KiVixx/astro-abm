@@ -8,7 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from astro_abm_api.middleware.request_limits import RequestBodyLimitMiddleware
-from astro_abm_api.routers import agents, assets, auth, health, llm, portability, scenarios
+from astro_abm_api.routers import (
+    agents,
+    assets,
+    auth,
+    health,
+    llm,
+    market_series,
+    portability,
+    scenarios,
+)
 from astro_abm_api.services.scenario_store import ScenarioCapacityError
 
 
@@ -38,7 +47,7 @@ def create_app() -> FastAPI:
         allow_origins=allowed_origins,
         allow_origin_regex=allowed_origin_regex,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
     @app.exception_handler(ScenarioCapacityError)
@@ -51,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(agents.router)
     app.include_router(assets.router)
+    app.include_router(market_series.router)
     app.include_router(auth.router)
     app.include_router(portability.router)
     app.include_router(scenarios.router)

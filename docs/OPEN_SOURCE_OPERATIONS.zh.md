@@ -147,6 +147,34 @@ ASTRO_ABM_ACCEPT_RESEARCH_LOCAL_TERMS=1
 這個設計是刻意的：資料檔不進 git，且 Yahoo / LBMA / credit proxy
 等來源需要授權與再分發檢查，所以自動拉取必須由維護者明確開啟。
 
+## 使用者自訂市場序列
+
+登入使用者可在 `/market-series` 登記股票、ETF 或股票指數，例如
+`TSLA`。第一版只允許受控的 Yahoo symbol，不接受任意網址或任意本機
+路徑。完成驗證後，序列會出現在「建立世界線」的市場序列選單，逐日
+脈絡會標記該資產為 `available`、`missing` 或
+`future_placeholder`。
+
+註冊表與價格資料都只存本機並由 Git 忽略：
+
+```text
+astro_research/data/local/market_series/registry.sqlite3
+astro_research/data/local/market_series/yahoo/*_daily.csv
+```
+
+可手動執行增量更新：
+
+```bash
+make market-series-maintain
+```
+
+Docker 的 product snapshot（日線產品快照）維護會先更新所有已啟用
+的自訂序列，再重建產品快照。單一序列連續失敗三次後會暫停自動維護，
+避免壞 symbol 阻塞其他資料；使用者可在市場序列頁重新驗證及恢復維護。
+如果本機已有 `astro_research/data/local/equity/tsla_daily.csv`，登記
+TSLA 時會直接接管該檔，不建立第二份資料。Yahoo 衍生資料只供本地
+研究使用，任何再分發都需要另行審查授權。
+
 可選模式：
 
 ```bash

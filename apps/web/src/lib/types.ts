@@ -105,6 +105,69 @@ export interface MarketSeriesProfile {
   notes: string[];
 }
 
+export interface CustomMarketSeriesRecord {
+  series_id: string;
+  symbol: string;
+  label: string;
+  asset_type: string;
+  provider: string;
+  provider_symbol: string;
+  currency: string;
+  market_timezone: string;
+  frequency: string;
+  status: string;
+  coverage_start?: string | null;
+  coverage_end?: string | null;
+  latest_observation_date?: string | null;
+  last_attempt_at?: string | null;
+  last_success_at?: string | null;
+  consecutive_failures: number;
+  row_count: number;
+  source_note: string;
+  license_note: string;
+  redistribution_allowed: boolean;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+  visibility: Visibility;
+  enabled: boolean;
+  maintenance_enabled: boolean;
+  is_owner: boolean;
+}
+
+export interface MarketSeriesListResponse {
+  built_in: MarketSeriesProfile[];
+  custom: CustomMarketSeriesRecord[];
+}
+
+export interface CustomMarketSeriesCreateRequest {
+  symbol: string;
+  label: string;
+  asset_type: "equity" | "etf" | "equity_index";
+  provider: "yahoo";
+  provider_symbol?: string | null;
+  currency: string;
+  market_timezone: string;
+  visibility: Visibility;
+  maintenance_enabled: boolean;
+}
+
+export interface CustomMarketSeriesUpdateRequest {
+  enabled?: boolean;
+  maintenance_enabled?: boolean;
+  visibility?: Visibility;
+}
+
+export interface MarketSeriesRefreshResponse {
+  series: CustomMarketSeriesRecord;
+  status: string;
+  fetched_rows: number;
+  rows_written: number;
+  attempts: number;
+  adopted_existing: boolean;
+  errors: string[];
+}
+
 export interface DailyAstroContext {
   summary: string;
   event_tags: string[];

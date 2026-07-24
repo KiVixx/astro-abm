@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+import math
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from astro_abm.market_series import MarketSeriesStore
 from astro_abm_api.models.report import (
     DailyDataCoverage,
     DailyResearchSignals,
@@ -52,6 +54,8 @@ class DailyResearchContext:
     coverage: DailyDataCoverage
     signals: DailyResearchSignals
     retrograde_context: DailyRetrogradeContext
+    asset_market_status: dict[str, str]
+    asset_market_source: dict[str, str]
 
 
 def repo_root() -> Path:
@@ -101,6 +105,38 @@ class DailyResearchContextProvider:
             for row in self._rows_for_day("market_daily", current_date)
             if str(row.get("asset")) in set(assets)
         ]
+        market_by_asset = {
+            str(row.get("asset")).upper(): row
+            for row in market
+            if row.get("asset")
+        }
+        custom_rows, custom_statuses = self._custom_market_context(
+            current_date,
+            assets=assets,
+        )
+        for row in custom_rows:
+            key = str(row.get("asset", "")).upper()
+            if key and key not in market_by_asset:
+                market.append(row)
+                market_by_asset[key] = row
+        asset_market_status: dict[str, str] = {}
+        asset_market_source: dict[str, str] = {}
+        for asset in assets:
+            key = asset.upper()
+            if key in market_by_asset:
+                asset_market_status[asset] = "available"
+                asset_market_source[asset] = str(
+                    market_by_asset[key].get("_data_source", "local_research_snapshot")
+                )
+            elif key in custom_statuses:
+                asset_market_status[asset] = custom_statuses[key]
+                asset_market_source[asset] = "custom_market_series"
+            else:
+                asset_market_status[asset] = self._asset_table_status(
+                    current_date,
+                    asset=asset,
+                )
+                asset_market_source[asset] = "market_daily_snapshot"
         macro = self._rows_for_day("macro_daily", current_date)
 
         coverage = DailyDataCoverage(
@@ -176,7 +212,103 @@ class DailyResearchContextProvider:
                 data_quality=data_quality,
             ),
             retrograde_context=self._retrograde_context_for_date(current_date, astro),
+            asset_market_status=asset_market_status,
+            asset_market_source=asset_market_source,
         )
+
+    def _custom_market_context(
+        self,
+        current_date: date,
+        *,
+        assets: list[str],
+    ) -> tuple[list[dict[str, Any]], dict[str, str]]:
+        wanted = {asset.upper() for asset in assets}
+        rows: list[dict[str, Any]] = []
+        statuses: dict[str, str] = {}
+        try:
+            store = MarketSeriesStore()
+            records = [
+                record
+                for record in store.list_all_active()
+                if record.symbol.upper() in wanted
+            ]
+        except Exception:
+            return rows, statuses
+        for record in records:
+            key = f"custom_market:{record.series_id}"
+            frame = self._tables.get(key)
+            if key not in self._tables:
+                try:
+                    import pandas as pd
+
+                    path = store.data_path(record)
+                    loaded = pd.read_csv(path)
+                    date_column = "date" if "date" in loaded.columns else "ts"
+                    price_column = (
+                        "adj_close"
+                        if "adj_close" in loaded.columns
+                        else "close"
+                    )
+                    loaded = loaded.copy()
+                    loaded["date_key"] = pd.to_datetime(
+                        loaded[date_column],
+                        utc=True,
+                        errors="coerce",
+                    ).dt.date.astype(str)
+                    prices = pd.to_numeric(loaded[price_column], errors="coerce")
+                    loaded["log_ret_1d"] = (prices / prices.shift(1)).map(
+                        lambda value: float("nan")
+                        if value is None or value != value or value <= 0
+                        else math.log(value)
+                    )
+                    loaded["realized_vol_20d"] = (
+                        loaded["log_ret_1d"].rolling(20, min_periods=5).std()
+                        * (252**0.5)
+                    )
+                    self._tables[key] = loaded
+                    frame = loaded
+                except Exception:
+                    self._tables[key] = None
+                    frame = None
+            if frame is None or frame.empty:
+                statuses[record.symbol.upper()] = "missing"
+                continue
+            selected = frame[frame["date_key"] == current_date.isoformat()]
+            if not selected.empty:
+                row = selected.iloc[-1].to_dict()
+                row.update(
+                    {
+                        "asset": record.symbol,
+                        "_data_source": "custom_market_series",
+                    }
+                )
+                rows.append(row)
+                statuses[record.symbol.upper()] = "available"
+            elif (
+                record.latest_observation_date
+                and current_date.isoformat() > record.latest_observation_date
+            ):
+                statuses[record.symbol.upper()] = "future_placeholder"
+            else:
+                statuses[record.symbol.upper()] = "missing"
+        return rows, statuses
+
+    def _asset_table_status(self, current_date: date, *, asset: str) -> str:
+        frame = self._load_table("market_daily")
+        if frame is None or frame.empty:
+            return self._table_status.get("market_daily", "missing")
+        selected_asset = frame[
+            frame.get("asset", "").astype(str).str.upper() == asset.upper()
+        ] if "asset" in frame.columns else frame.iloc[0:0]
+        if selected_asset.empty:
+            return "missing"
+        max_date = str(selected_asset["date_key"].max())
+        min_date = str(selected_asset["date_key"].min())
+        if current_date.isoformat() > max_date:
+            return "future_placeholder"
+        if current_date.isoformat() < min_date:
+            return "missing"
+        return "missing"
 
     def _retrograde_context_for_date(
         self,

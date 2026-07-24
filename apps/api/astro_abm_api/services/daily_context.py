@@ -289,6 +289,8 @@ def build_placeholder_daily_contexts(
                 "data_coverage": coverage,
                 "research_signals": research_context.signals,
                 "retrograde_context": research_context.retrograde_context,
+                "asset_market_status": research_context.asset_market_status,
+                "asset_market_source": research_context.asset_market_source,
             }
         )
     return contexts

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from astro_abm.market_series import MarketSeriesRecord, MarketSeriesStore
 from astro_abm_api.models.asset import MarketSeriesProfile
 
 
@@ -91,6 +92,21 @@ def list_supported_market_series() -> list[MarketSeriesProfile]:
     return list(SUPPORTED_MARKET_SERIES)
 
 
+def list_available_market_series(owner_id: str | None) -> list[MarketSeriesProfile]:
+    profiles = list_supported_market_series()
+    existing = {alias_key(profile.asset) for profile in profiles}
+    try:
+        records = MarketSeriesStore().list_active(owner_id)
+    except Exception:
+        records = []
+    for record in records:
+        if alias_key(record.symbol) in existing:
+            continue
+        profiles.append(_profile_from_record(record))
+        existing.add(alias_key(record.symbol))
+    return profiles
+
+
 def normalize_asset_id(asset: str) -> str:
     stripped = asset.strip()
     canonical = ALIAS_TO_ASSET.get(alias_key(stripped))
@@ -116,6 +132,15 @@ def profile_for_asset(asset: str) -> MarketSeriesProfile:
     canonical = ALIAS_TO_ASSET.get(alias_key(asset))
     if canonical:
         return PROFILE_BY_ASSET[canonical]
+    try:
+        for record in MarketSeriesStore().list_all_active():
+            if alias_key(asset) in {
+                alias_key(record.symbol),
+                alias_key(record.provider_symbol),
+            }:
+                return _profile_from_record(record)
+    except Exception:
+        pass
     clean_asset = asset.strip()
     return MarketSeriesProfile(
         asset=clean_asset,
@@ -130,3 +155,18 @@ def profile_for_asset(asset: str) -> MarketSeriesProfile:
 
 def profiles_for_assets(assets: list[str]) -> list[MarketSeriesProfile]:
     return [profile_for_asset(asset) for asset in assets]
+
+
+def _profile_from_record(record: MarketSeriesRecord) -> MarketSeriesProfile:
+    return MarketSeriesProfile(
+        asset=record.symbol,
+        label=record.label,
+        series_type=record.asset_type,
+        aliases=sorted({record.symbol, record.provider_symbol}),
+        market_daily_supported=True,
+        supported=record.status == "active" and record.enabled,
+        notes=[
+            "User-registered daily market series backed by ignored local data.",
+            record.license_note,
+        ],
+    )

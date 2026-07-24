@@ -236,3 +236,32 @@ def test_product_snapshot_command_runner_translates_uv_python(monkeypatch, tmp_p
     assert "python" in calls[0][0][0]
     assert calls[0][0][1:] == ["scripts/example.py", "--flag"]
     assert calls[0][1] == tmp_path
+
+
+def test_product_snapshot_custom_market_series_task_reports_refresh(monkeypatch):
+    from astro_abm.etl import maintain_product_snapshots
+    from astro_abm.market_series import MarketSeriesRefreshResult
+
+    result = MarketSeriesRefreshResult(
+        series_id="market_yahoo_tsla",
+        status="active",
+        fetched_rows=2,
+        rows_written=100,
+        coverage_start="2020-01-01",
+        coverage_end="2026-07-22",
+        latest_observation_date="2026-07-22",
+        data_path="/ignored/tsla_daily.csv",
+        attempts=1,
+    )
+    monkeypatch.setattr(
+        "astro_abm.market_series.run_custom_market_series_maintenance",
+        lambda **_kwargs: (result,),
+    )
+
+    summary = maintain_product_snapshots._refresh_custom_market_series(
+        end="2026-07-22",
+    )
+
+    assert summary.fetched == 2
+    assert summary.written == 100
+    assert summary.errors == ()

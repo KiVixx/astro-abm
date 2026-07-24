@@ -5,7 +5,7 @@ WEB_PORT ?= 3000
 NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL ?= http://$(API_HOST):$(API_PORT)
 export NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL
 
-.PHONY: help status bootstrap up db-up down migrate maintain-now astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check check-api-port check-web-port api web product-smoke scenario-demo cleanup-guests security-status open-source-audit test
+.PHONY: help status bootstrap up db-up down migrate maintain-now market-series-maintain astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check check-api-port check-web-port api web product-smoke scenario-demo cleanup-guests security-status open-source-audit test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -17,6 +17,7 @@ help:
 	@echo "  make down             Stop Docker services without deleting volumes"
 	@echo "  make migrate          Apply hourly and daily QuestDB schemas"
 	@echo "  make maintain-now     Run one local hourly+daily maintenance pass"
+	@echo "  make market-series-maintain Refresh registered custom daily market series"
 	@echo "  make astro-daily      Ensure 100-year core daily astro data exists"
 	@echo "  make research-store   Build ignored DuckDB full-history research store"
 	@echo "  make research-prepare Run selectable public/local/formal research preparation"
@@ -54,6 +55,9 @@ migrate:
 
 maintain-now:
 	uv run python scripts/astro_abm_ops.py maintain-now --allow-partial
+
+market-series-maintain:
+	uv run python scripts/maintain_custom_market_series.py
 
 astro-daily:
 	uv run python scripts/astro_abm_ops.py astro-daily
