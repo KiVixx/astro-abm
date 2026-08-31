@@ -16,9 +16,15 @@ ASTRO_ABM_ENV=production
 ASTRO_ABM_ALLOWED_ORIGINS=https://example.com,https://www.example.com
 ASTRO_ABM_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128
 ASTRO_ABM_RATE_LIMIT_SALT=<long-random-value>
-NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL=https://api.example.com
+ASTRO_ABM_INTERNAL_API_ORIGIN=http://127.0.0.1:8000
+NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL=/api
 NEXT_PUBLIC_ASTRO_ABM_SOURCE_URL=https://github.com/KiVixx/astro-abm
 ```
+
+The browser uses the same-origin `/api` path, which Next.js forwards to the
+localhost API. This keeps session and CSRF cookies on the Web origin. The
+separate `api.example.com` hostname remains useful for health checks and direct
+API access.
 
 Also configure explicit absolute paths for mutable local state, including the
 scenario directory, account database, research output root, preset directory,
