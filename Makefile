@@ -5,7 +5,7 @@ WEB_PORT ?= 3000
 NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL ?= http://$(API_HOST):$(API_PORT)
 export NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL
 
-.PHONY: help status bootstrap up db-up down migrate maintain-now market-series-maintain astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check check-api-port check-web-port api web product-smoke scenario-demo cleanup-guests security-status open-source-audit test
+.PHONY: help status bootstrap up db-up down migrate maintain-now market-series-maintain astro-daily research-store research-prepare product-snapshots fetch-local-data smoke checkpoint checkpoint-check check-api-port check-web-port api web api-production web-build web-production product-smoke scenario-demo cleanup-guests security-status open-source-audit test
 
 help:
 	@echo "Astro ABM one-command operations"
@@ -28,6 +28,9 @@ help:
 	@echo "  make checkpoint-check Validate existing checkpoint outputs only"
 	@echo "  make api              Run the local Astro ABM product API on API_HOST:API_PORT"
 	@echo "  make web              Run the local Astro ABM product web UI on WEB_HOST:WEB_PORT"
+	@echo "  make api-production   Run the API without reload for a local production proxy"
+	@echo "  make web-build        Build the production Web bundle"
+	@echo "  make web-production   Serve the production Web bundle"
 	@echo "  make product-smoke    Run API tests and create a mock demo scenario"
 	@echo "  make scenario-demo    Create one deterministic local scenario report"
 	@echo "  make cleanup-guests   Remove expired anonymous workspaces and their reports"
@@ -94,6 +97,15 @@ api: check-api-port
 
 web: check-web-port
 	cd apps/web && npm run dev -- --hostname $(WEB_HOST) --port $(WEB_PORT)
+
+api-production:
+	uv run uvicorn astro_abm_api.main:app --app-dir apps/api --host $(API_HOST) --port $(API_PORT) --workers 1
+
+web-build:
+	cd apps/web && npm run build
+
+web-production:
+	cd apps/web && npm run start -- --hostname $(WEB_HOST) --port $(WEB_PORT)
 
 product-smoke:
 	uv run --extra dev pytest apps/api/tests
