@@ -38,6 +38,12 @@ export class ApiError extends Error {
 }
 
 export function getApiBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return (
+      process.env.ASTRO_ABM_INTERNAL_API_ORIGIN?.replace(/\/$/, "") ||
+      DEFAULT_API_BASE_URL
+    );
+  }
   return (
     process.env.NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL?.replace(/\/$/, "") ||
     DEFAULT_API_BASE_URL
