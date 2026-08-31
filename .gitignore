@@ -15,6 +15,7 @@ apps/web/tsconfig.tsbuildinfo
 
 # Local env/config
 .env
+.env.*.local
 .local/
 
 # Build artifacts
