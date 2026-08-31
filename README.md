@@ -4,6 +4,8 @@
 
 **A local-first AI market Worldline simulation platform.**
 
+**Live website:** [qooqlo.com](https://qooqlo.com)
+
 Astro ABM combines astronomical cycles, daily market data, macro and financial-stress context, and multiple AI agent groups to generate a market Worldline that can be inspected one day at a time.
 
 It lets you explore:
