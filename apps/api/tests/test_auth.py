@@ -74,6 +74,24 @@ def test_register_creates_extensible_identity_and_session(monkeypatch, tmp_path)
     assert len(session_hash) == 64
 
 
+def test_email_can_register_and_login_case_insensitively(monkeypatch, tmp_path) -> None:
+    client, _ = _client(monkeypatch, tmp_path)
+
+    registered = _register(client, "KingY20240412@Gmail.com")
+
+    assert registered.status_code == 201
+    assert registered.json()["user"]["username"] == "kingy20240412@gmail.com"
+    csrf_token = client.cookies.get("astro_abm_csrf")
+    assert client.post("/auth/logout", headers={"X-CSRF-Token": csrf_token}).status_code == 200
+
+    logged_in = client.post(
+        "/auth/login",
+        json={"username": "KINGY20240412@GMAIL.COM", "password": PASSWORD},
+    )
+    assert logged_in.status_code == 200
+    assert logged_in.json()["user"]["username"] == "kingy20240412@gmail.com"
+
+
 def test_login_failure_is_generic_and_success_restores_session(monkeypatch, tmp_path) -> None:
     client, _ = _client(monkeypatch, tmp_path)
     assert _register(client).status_code == 201
@@ -164,6 +182,20 @@ def test_registration_validation_rejects_weak_credentials(monkeypatch, tmp_path)
     )
 
     assert response.status_code == 422
+
+
+def test_registration_rejects_invalid_username_or_email(monkeypatch, tmp_path) -> None:
+    client, _ = _client(monkeypatch, tmp_path)
+
+    response = client.post(
+        "/auth/register",
+        json={"username": "not-an-email@", "password": PASSWORD},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["msg"] == (
+        "Value error, enter a valid username or email address"
+    )
 
 
 def test_registration_emergency_switch_stops_new_accounts(monkeypatch, tmp_path) -> None:
