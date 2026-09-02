@@ -18,6 +18,24 @@ def _bounded_env(name: str, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
 
 
+def registration_enabled() -> bool:
+    return os.getenv("ASTRO_ABM_REGISTRATION_ENABLED", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def global_registration_limit_per_hour() -> int:
+    return _bounded_env(
+        "ASTRO_ABM_GLOBAL_REGISTRATION_RATE_PER_HOUR",
+        40,
+        1,
+        10000,
+    )
+
+
 def enforce_scenario_create_limits(
     actor: ScenarioActor,
     store: AuthStore,
