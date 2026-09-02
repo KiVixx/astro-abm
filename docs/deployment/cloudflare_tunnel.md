@@ -16,6 +16,8 @@ ASTRO_ABM_ENV=production
 ASTRO_ABM_ALLOWED_ORIGINS=https://example.com,https://www.example.com
 ASTRO_ABM_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128
 ASTRO_ABM_RATE_LIMIT_SALT=<long-random-value>
+ASTRO_ABM_REGISTRATION_ENABLED=1
+ASTRO_ABM_GLOBAL_REGISTRATION_RATE_PER_HOUR=40
 ASTRO_ABM_INTERNAL_API_ORIGIN=http://127.0.0.1:8000
 NEXT_PUBLIC_ASTRO_ABM_API_BASE_URL=/api
 NEXT_PUBLIC_ASTRO_ABM_SOURCE_URL=https://github.com/KiVixx/astro-abm
@@ -29,6 +31,8 @@ API access.
 Also configure explicit absolute paths for mutable local state, including the
 scenario directory, account database, research output root, preset directory,
 and custom market-series storage. Never place API keys or Tunnel tokens in Git.
+Set `ASTRO_ABM_REGISTRATION_ENABLED=0` to stop new account creation immediately
+without interrupting login or existing accounts.
 
 ## Build And Run
 

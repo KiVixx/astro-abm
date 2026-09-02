@@ -25,6 +25,10 @@ class UsernameUnavailableError(ValueError):
     pass
 
 
+class RegistrationRateLimitError(ValueError):
+    pass
+
+
 class InvalidCredentialsError(ValueError):
     pass
 
@@ -177,11 +181,24 @@ class AuthStore:
         username: str,
         password: str,
         display_name: str | None,
+        hourly_limit: int | None = None,
     ) -> CurrentUser:
         now = _utc_now()
         user_id = str(uuid4())
         try:
             with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                if hourly_limit is not None:
+                    cutoff = _iso(now - timedelta(hours=1))
+                    row = connection.execute(
+                        "SELECT COUNT(*) AS count FROM users WHERE created_at >= ?",
+                        (cutoff,),
+                    ).fetchone()
+                    if int(row["count"] if row else 0) >= max(1, hourly_limit):
+                        raise RegistrationRateLimitError(
+                            "global account registration rate limit reached"
+                        )
+                credential_hash = PASSWORD_HASH.hash(password)
                 connection.execute(
                     "INSERT INTO users(user_id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
                     (user_id, display_name, _iso(now), _iso(now)),
@@ -196,7 +213,7 @@ class AuthStore:
                         str(uuid4()),
                         user_id,
                         username.lower(),
-                        PASSWORD_HASH.hash(password),
+                        credential_hash,
                         _iso(now),
                         _iso(now),
                     ),

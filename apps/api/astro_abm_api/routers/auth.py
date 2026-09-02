@@ -21,9 +21,14 @@ from astro_abm_api.services.auth_session import (
 from astro_abm_api.services.auth_store import (
     AuthStore,
     InvalidCredentialsError,
+    RegistrationRateLimitError,
     UsernameUnavailableError,
 )
-from astro_abm_api.services.usage_limits import enforce_auth_rate
+from astro_abm_api.services.usage_limits import (
+    enforce_auth_rate,
+    global_registration_limit_per_hour,
+    registration_enabled,
+)
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -31,6 +36,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=AuthSessionResponse, status_code=201)
 def register(payload: RegisterRequest, request: Request, response: Response) -> AuthSessionResponse:
+    if not registration_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="account registration is temporarily unavailable",
+            headers={"Retry-After": "3600"},
+        )
     store = AuthStore()
     enforce_auth_rate(request, store, "register")
     try:
@@ -38,7 +49,14 @@ def register(payload: RegisterRequest, request: Request, response: Response) -> 
             username=payload.username,
             password=payload.password,
             display_name=payload.display_name,
+            hourly_limit=global_registration_limit_per_hour(),
         )
+    except RegistrationRateLimitError as error:
+        raise HTTPException(
+            status_code=429,
+            detail="global account registration rate limit reached",
+            headers={"Retry-After": "3600"},
+        ) from error
     except UsernameUnavailableError as error:
         raise HTTPException(status_code=409, detail="account registration unavailable") from error
     credentials = store.create_session(user.user_id)

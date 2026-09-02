@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -28,6 +29,8 @@ def _client(monkeypatch, tmp_path) -> tuple[TestClient, str]:
     monkeypatch.setenv("ASTRO_ABM_ACCOUNTS_DB_PATH", str(database_path))
     monkeypatch.setenv("ASTRO_ABM_SCENARIO_OUTPUT_DIR", str(tmp_path / "scenarios"))
     monkeypatch.setenv("ASTRO_ABM_ENV", "development")
+    monkeypatch.setenv("ASTRO_ABM_REGISTRATION_ENABLED", "1")
+    monkeypatch.setenv("ASTRO_ABM_GLOBAL_REGISTRATION_RATE_PER_HOUR", "40")
     return TestClient(app), str(database_path)
 
 
@@ -161,6 +164,34 @@ def test_registration_validation_rejects_weak_credentials(monkeypatch, tmp_path)
     )
 
     assert response.status_code == 422
+
+
+def test_registration_emergency_switch_stops_new_accounts(monkeypatch, tmp_path) -> None:
+    client, database_path = _client(monkeypatch, tmp_path)
+    monkeypatch.setenv("ASTRO_ABM_REGISTRATION_ENABLED", "0")
+
+    response = _register(client)
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "3600"
+    assert response.json()["detail"] == "account registration is temporarily unavailable"
+    assert not Path(database_path).exists()
+
+
+def test_global_registration_limit_counts_only_created_accounts(monkeypatch, tmp_path) -> None:
+    client, database_path = _client(monkeypatch, tmp_path)
+    monkeypatch.setenv("ASTRO_ABM_GLOBAL_REGISTRATION_RATE_PER_HOUR", "2")
+
+    assert _register(client, "alice").status_code == 201
+    assert _register(client, "alice").status_code == 409
+    assert _register(client, "bob").status_code == 201
+    rejected = _register(client, "charlie")
+
+    assert rejected.status_code == 429
+    assert rejected.headers["Retry-After"] == "3600"
+    assert rejected.json()["detail"] == "global account registration rate limit reached"
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 2
 
 
 def test_guest_worldline_is_forced_public_and_mutation_stays_with_owner(
