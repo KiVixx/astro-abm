@@ -1,21 +1,33 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+EMAIL_PATTERN = re.compile(
+    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+)
 
 
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    username: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
+    username: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=12, max_length=128)
     display_name: str | None = Field(default=None, max_length=80)
 
     @field_validator("username")
     @classmethod
     def normalize_username(cls, value: str) -> str:
-        return value.strip().lower()
+        normalized = value.strip().lower()
+        if USERNAME_PATTERN.fullmatch(normalized) or EMAIL_PATTERN.fullmatch(normalized):
+            return normalized
+        raise ValueError("enter a valid username or email address")
 
     @field_validator("display_name")
     @classmethod
@@ -29,7 +41,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    username: str = Field(min_length=1, max_length=80)
+    username: str = Field(min_length=1, max_length=254)
     password: str = Field(min_length=1, max_length=128)
 
 

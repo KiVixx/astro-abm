@@ -37,6 +37,23 @@ export class ApiError extends Error {
   }
 }
 
+function formatApiErrorDetail(detail: unknown): string | null {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail.flatMap((item) => {
+      if (!item || typeof item !== "object" || !("msg" in item)) {
+        return [];
+      }
+      const message = String(item.msg || "").replace(/^Value error,\s*/i, "").trim();
+      return message ? [message] : [];
+    });
+    return messages.length ? messages.join(" ") : null;
+  }
+  return null;
+}
+
 export function getApiBaseUrl(): string {
   if (typeof window === "undefined") {
     return (
@@ -70,7 +87,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     let detail = response.statusText;
     try {
       const body = (await response.json()) as { detail?: unknown };
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      detail = formatApiErrorDetail(body.detail) || detail;
     } catch {
       // Keep status text when the API returns a non-JSON error.
     }

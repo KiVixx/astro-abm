@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { useI18n } from "@/i18n/useI18n";
+import { ApiError } from "@/lib/api";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const { login, register } = useAuth();
@@ -33,7 +34,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       router.push("/account");
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("common.unknownError"));
+      if (caught instanceof ApiError && caught.status === 422) {
+        setError(t(mode === "register" ? "auth.invalidRegistration" : "auth.invalidLogin"));
+      } else {
+        setError(caught instanceof Error ? caught.message : t("common.unknownError"));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -43,8 +48,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     <form className="auth-form stack" onSubmit={submit}>
       <label className="form-field">
         <span>{t("auth.username")}</span>
-        <input autoComplete="username" minLength={3} name="username" required />
+        <input autoComplete="username" maxLength={254} minLength={mode === "register" ? 3 : 1} name="username" required />
       </label>
+      {mode === "register" ? <p className="muted">{t("auth.usernameHelp")}</p> : null}
       {mode === "register" ? (
         <label className="form-field">
           <span>{t("auth.displayName")}</span>
