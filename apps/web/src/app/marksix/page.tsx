@@ -16,6 +16,7 @@ import type {
   MarkSixStatus,
   MarkSixWorldlineResponse,
   MarkSixMotionCondition,
+  MarkSixMoonPhaseCondition,
 } from "@/lib/types";
 
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
@@ -30,7 +31,9 @@ export default function MarkSixPage() {
   const [result, setResult] = useState<MarkSixWorldlineResponse | null>(null);
   const [research, setResearch] = useState<MarkSixAstroResearch | null>(null);
   const [researchBody, setResearchBody] = useState("Mercury");
+  const [contextType, setContextType] = useState<"planet_motion" | "moon_phase">("planet_motion");
   const [researchCondition, setResearchCondition] = useState<MarkSixMotionCondition>("retrograde");
+  const [moonPhase, setMoonPhase] = useState<MarkSixMoonPhaseCondition>("full_moon_zone");
   const [numberRole, setNumberRole] = useState<"main" | "extra">("main");
   const [researchLoading, setResearchLoading] = useState(false);
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
@@ -67,6 +70,8 @@ export default function MarkSixPage() {
         generation_mode: worldlineMode,
         astro_body: researchBody as "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn",
         astro_condition: researchCondition,
+        astro_context_type: contextType,
+        moon_phase_condition: moonPhase,
       }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -80,7 +85,8 @@ export default function MarkSixPage() {
     setError(null);
     try {
       setResearch(await getMarkSixAstroResearch({
-        body: researchBody, condition: researchCondition, numberRole,
+        contextType, body: researchBody,
+        condition: contextType === "moon_phase" ? moonPhase : researchCondition, numberRole,
       }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -118,7 +124,13 @@ export default function MarkSixPage() {
           <p>{t("marksix.astroResearchLead")}</p>
         </header>
         <div className="marksix-research-controls">
-          <label>{t("marksix.planet")}
+          <label>{t("marksix.contextType")}
+            <select value={contextType} onChange={(event) => setContextType(event.target.value as typeof contextType)}>
+              <option value="planet_motion">{t("marksix.planetMotion")}</option>
+              <option value="moon_phase">{t("marksix.moonPhase")}</option>
+            </select>
+          </label>
+          {contextType === "planet_motion" ? <><label>{t("marksix.planet")}
             <select value={researchBody} onChange={(event) => setResearchBody(event.target.value)}>
               {["Mercury", "Venus", "Mars", "Jupiter", "Saturn"].map((body) => <option key={body}>{body}</option>)}
             </select>
@@ -133,7 +145,16 @@ export default function MarkSixPage() {
               <option value="retrograde_exit">{t("marksix.retrogradeExit")}</option>
               <option value="post_station">{t("marksix.postStation")}</option>
             </select>
-          </label>
+          </label></> : <label>{t("marksix.moonPhase")}
+            <select value={moonPhase} onChange={(event) => setMoonPhase(event.target.value as MarkSixMoonPhaseCondition)}>
+              <option value="new_moon_zone">{t("marksix.newMoon")}</option>
+              <option value="first_quarter_zone">{t("marksix.firstQuarter")}</option>
+              <option value="full_moon_zone">{t("marksix.fullMoon")}</option>
+              <option value="last_quarter_zone">{t("marksix.lastQuarter")}</option>
+              <option value="waxing_other">{t("marksix.waxingOther")}</option>
+              <option value="waning_other">{t("marksix.waningOther")}</option>
+            </select>
+          </label>}
           <label>{t("marksix.numberRole")}
             <select value={numberRole} onChange={(event) => setNumberRole(event.target.value as "main" | "extra")}>
               <option value="main">{t("marksix.mainNumber")}</option>

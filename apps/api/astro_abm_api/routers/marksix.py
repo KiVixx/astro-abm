@@ -11,7 +11,10 @@ from astro_abm.marksix import (
     list_draws,
     number_frequencies,
 )
-from astro_abm.marksix_astro import CURRENT_RULE_START, MOTION_CONDITIONS, SUPPORTED_BODIES, analyze_retrograde_numbers
+from astro_abm.marksix_astro import (
+    CURRENT_RULE_START, MOON_PHASE_CONDITIONS, MOTION_CONDITIONS, SUPPORTED_BODIES,
+    analyze_moon_phase_numbers, analyze_retrograde_numbers,
+)
 from astro_abm_api.models.marksix import (
     MarkSixDrawRecord,
     MarkSixFrequency,
@@ -57,11 +60,19 @@ def get_marksix_frequencies() -> list[MarkSixFrequency]:
 
 @router.get("/astro-research", response_model=MarkSixAstroResearch)
 def get_marksix_astro_research(
+    context_type: str = Query(default="planet_motion", pattern="^(planet_motion|moon_phase)$"),
     body: str = Query(default="Mercury"),
     condition: str = Query(default="retrograde"),
     number_role: str = Query(default="main", pattern="^(main|extra)$"),
     start_date: str = Query(default=CURRENT_RULE_START, pattern=r"^\d{4}-\d{2}-\d{2}$"),
 ) -> MarkSixAstroResearch:
+    if context_type == "moon_phase":
+        if condition not in MOON_PHASE_CONDITIONS:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=f"Unsupported moon phase: {condition}")
+        return MarkSixAstroResearch.model_validate(analyze_moon_phase_numbers(
+            condition=condition, number_role=number_role, start_date=start_date  # type: ignore[arg-type]
+        ))
     normalized_body = body.strip().title()
     if normalized_body not in SUPPORTED_BODIES:
         from fastapi import HTTPException
@@ -81,10 +92,14 @@ def create_marksix_worldlines(request: MarkSixWorldlineRequest) -> MarkSixWorldl
     number_weights = None
     astro_context = None
     if request.generation_mode == "astro_association_entertainment_v1":
-        analysis = analyze_retrograde_numbers(body=request.astro_body, condition=request.astro_condition)
+        if request.astro_context_type == "moon_phase":
+            analysis = analyze_moon_phase_numbers(condition=request.moon_phase_condition)
+        else:
+            analysis = analyze_retrograde_numbers(body=request.astro_body, condition=request.astro_condition)
         number_weights = {row["number"]: row["lift"] or 1.0 for row in analysis["numbers"]}
         astro_context = {
-            "body": request.astro_body, "condition": request.astro_condition,
+            "context_type": request.astro_context_type,
+            "body": analysis["body"], "condition": analysis["condition"],
             "condition_draws": analysis["condition_draws"], "baseline_draws": analysis["baseline_draws"],
             "rule_era": analysis["rule_era"],
             "note": "Historical association weights for entertainment only; no predictive advantage is established.",

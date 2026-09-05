@@ -72,3 +72,28 @@ def test_motion_phase_calendar_distinguishes_station_and_core_windows() -> None:
     assert phases["2026-01-20"][1] == "retrograde_core"
     assert phases["2026-01-26"][1] == "retrograde_exit"
     assert phases["2026-02-05"][1] == "post_station"
+
+
+def test_moon_phase_zones_wrap_and_classify_quarters() -> None:
+    assert marksix_astro._moon_phase_label(359) == "new_moon_zone"
+    assert marksix_astro._moon_phase_label(90) == "first_quarter_zone"
+    assert marksix_astro._moon_phase_label(180) == "full_moon_zone"
+    assert marksix_astro._moon_phase_label(270) == "last_quarter_zone"
+
+
+def test_moon_phase_number_analysis(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / "marksix.sqlite3"
+    _seed(path)
+
+    class MoonBackend:
+        def get_position(self, body: str, ts):
+            angle = {4: 0, 5: 90, 6: 180, 7: 270}[ts.day]
+            return SimpleNamespace(lon_deg=angle if body == "Moon" else 0.0)
+
+    monkeypatch.setattr(marksix_astro, "SwissEphemerisBackend", MoonBackend)
+    result = marksix_astro.analyze_moon_phase_numbers(
+        condition="full_moon_zone", path=path,
+    )
+    assert result["context_type"] == "moon_phase"
+    assert result["condition_draws"] == 1
+    assert result["numbers"][0]["condition_rate"] == 1.0

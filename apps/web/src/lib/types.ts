@@ -6,6 +6,9 @@ export type WorldlineProvider = "deterministic_mock" | "llm";
 export type MarkSixMotionCondition =
   | "retrograde" | "direct" | "pre_station" | "retrograde_entry"
   | "retrograde_core" | "retrograde_exit" | "post_station";
+export type MarkSixMoonPhaseCondition =
+  | "new_moon_zone" | "first_quarter_zone" | "full_moon_zone"
+  | "last_quarter_zone" | "waxing_other" | "waning_other";
 
 export interface MarkSixStatus {
   total_draws: number;
@@ -47,6 +50,8 @@ export interface MarkSixWorldlineRequest {
   generation_mode?: "uniform_random_demo_v1" | "astro_association_entertainment_v1";
   astro_body?: "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn";
   astro_condition?: MarkSixMotionCondition;
+  astro_context_type?: "planet_motion" | "moon_phase";
+  moon_phase_condition?: MarkSixMoonPhaseCondition;
 }
 
 export interface MarkSixWorldline {
@@ -84,7 +89,8 @@ export interface MarkSixAstroNumberStat {
 
 export interface MarkSixAstroResearch {
   body: string;
-  condition: MarkSixMotionCondition;
+  condition: MarkSixMotionCondition | MarkSixMoonPhaseCondition;
+  context_type: "planet_motion" | "moon_phase";
   number_role: "main" | "extra";
   start_date: string;
   end_date?: string | null;

@@ -49,6 +49,8 @@ class MarkSixWorldlineRequest(BaseModel):
     generation_mode: Literal["uniform_random_demo_v1", "astro_association_entertainment_v1"] = "uniform_random_demo_v1"
     astro_body: Literal["Mercury", "Venus", "Mars", "Jupiter", "Saturn"] = "Mercury"
     astro_condition: Literal["retrograde", "direct", "pre_station", "retrograde_entry", "retrograde_core", "retrograde_exit", "post_station"] = "retrograde"
+    astro_context_type: Literal["planet_motion", "moon_phase"] = "planet_motion"
+    moon_phase_condition: Literal["new_moon_zone", "first_quarter_zone", "full_moon_zone", "last_quarter_zone", "waxing_other", "waning_other"] = "full_moon_zone"
 
 
 class MarkSixSimulatedDraw(BaseModel):
@@ -87,6 +89,7 @@ class MarkSixAstroNumberStat(BaseModel):
 
 
 class MarkSixAstroResearch(BaseModel):
+    context_type: str = "planet_motion"
     body: str
     condition: str
     number_role: str

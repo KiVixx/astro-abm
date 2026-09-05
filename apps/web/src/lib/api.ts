@@ -16,6 +16,7 @@ import type {
   MarkSixDrawRecord,
   MarkSixAstroResearch,
   MarkSixMotionCondition,
+  MarkSixMoonPhaseCondition,
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineRequest,
@@ -354,11 +355,13 @@ export async function getMarkSixFrequencies(): Promise<MarkSixFrequency[]> {
 }
 
 export async function getMarkSixAstroResearch(params: {
+  contextType: "planet_motion" | "moon_phase";
   body: string;
-  condition: MarkSixMotionCondition;
+  condition: MarkSixMotionCondition | MarkSixMoonPhaseCondition;
   numberRole: "main" | "extra";
 }): Promise<MarkSixAstroResearch> {
   const query = new URLSearchParams({
+    context_type: params.contextType,
     body: params.body,
     condition: params.condition,
     number_role: params.numberRole,
