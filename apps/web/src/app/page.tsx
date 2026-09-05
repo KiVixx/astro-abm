@@ -25,9 +25,6 @@ export default function HomePage() {
             <Link className="button secondary" href="/worldlines">
               {t("home.exploreWorldlines")}
             </Link>
-            <Link className="button secondary home-marksix-link" href="/marksix">
-              {t("home.openMarkSix")}
-            </Link>
           </div>
           <p className="home-local-status">
             <span aria-hidden="true" />
