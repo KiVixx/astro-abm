@@ -14,6 +14,7 @@ import type {
   MarketSeriesListResponse,
   MarketSeriesRefreshResponse,
   MarkSixDrawRecord,
+  MarkSixAstroResearch,
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineRequest,
@@ -349,6 +350,19 @@ export async function getMarkSixDraws(limit = 12): Promise<MarkSixDrawRecord[]> 
 
 export async function getMarkSixFrequencies(): Promise<MarkSixFrequency[]> {
   return apiFetch<MarkSixFrequency[]>("/marksix/frequencies");
+}
+
+export async function getMarkSixAstroResearch(params: {
+  body: string;
+  condition: "retrograde" | "direct";
+  numberRole: "main" | "extra";
+}): Promise<MarkSixAstroResearch> {
+  const query = new URLSearchParams({
+    body: params.body,
+    condition: params.condition,
+    number_role: params.numberRole,
+  });
+  return apiFetch<MarkSixAstroResearch>(`/marksix/astro-research?${query.toString()}`);
 }
 
 export async function createMarkSixWorldlines(

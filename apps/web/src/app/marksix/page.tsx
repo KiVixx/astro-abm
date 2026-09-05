@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/i18n/useI18n";
 import {
   createMarkSixWorldlines,
+  getMarkSixAstroResearch,
   getMarkSixDraws,
   getMarkSixFrequencies,
   getMarkSixStatus,
 } from "@/lib/api";
 import type {
   MarkSixDrawRecord,
+  MarkSixAstroResearch,
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineResponse,
@@ -25,8 +27,14 @@ export default function MarkSixPage() {
   const [draws, setDraws] = useState<MarkSixDrawRecord[]>([]);
   const [frequencies, setFrequencies] = useState<MarkSixFrequency[]>([]);
   const [result, setResult] = useState<MarkSixWorldlineResponse | null>(null);
+  const [research, setResearch] = useState<MarkSixAstroResearch | null>(null);
+  const [researchBody, setResearchBody] = useState("Mercury");
+  const [researchCondition, setResearchCondition] = useState<"retrograde" | "direct">("retrograde");
+  const [numberRole, setNumberRole] = useState<"main" | "extra">("main");
+  const [researchLoading, setResearchLoading] = useState(false);
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
   const [count, setCount] = useState(1);
+  const [worldlineMode, setWorldlineMode] = useState<"uniform_random_demo_v1" | "astro_association_entertainment_v1">("uniform_random_demo_v1");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +63,9 @@ export default function MarkSixPage() {
         horizon_draws: horizon,
         worldline_count: count,
         language,
+        generation_mode: worldlineMode,
+        astro_body: researchBody as "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn",
+        astro_condition: researchCondition,
       }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -63,10 +74,24 @@ export default function MarkSixPage() {
     }
   }
 
+  async function runResearch() {
+    setResearchLoading(true);
+    setError(null);
+    try {
+      setResearch(await getMarkSixAstroResearch({
+        body: researchBody, condition: researchCondition, numberRole,
+      }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setResearchLoading(false);
+    }
+  }
+
   return (
     <div className="page stack marksix-page">
       <header className="marksix-hero">
-        <p className="pixel-kicker">MARK SIX // UNIFORM RANDOM WORLDLINES</p>
+        <p className="pixel-kicker">MARK SIX // ASTRO RESEARCH + ENTERTAINMENT WORLDLINES</p>
         <h1>{t("marksix.title")}</h1>
         <p className="lead">{t("marksix.lead")}</p>
       </header>
@@ -85,12 +110,70 @@ export default function MarkSixPage() {
       </section>
       {status?.coverage_note ? <p className="marksix-coverage-note">{t("marksix.coverageNote")}</p> : null}
 
+      <section className="marksix-research">
+        <header>
+          <p className="pixel-kicker">ASTRO × DRAW HISTORY</p>
+          <h2>{t("marksix.astroResearchTitle")}</h2>
+          <p>{t("marksix.astroResearchLead")}</p>
+        </header>
+        <div className="marksix-research-controls">
+          <label>{t("marksix.planet")}
+            <select value={researchBody} onChange={(event) => setResearchBody(event.target.value)}>
+              {["Mercury", "Venus", "Mars", "Jupiter", "Saturn"].map((body) => <option key={body}>{body}</option>)}
+            </select>
+          </label>
+          <label>{t("marksix.motionCondition")}
+            <select value={researchCondition} onChange={(event) => setResearchCondition(event.target.value as "retrograde" | "direct")}>
+              <option value="retrograde">{t("marksix.retrograde")}</option>
+              <option value="direct">{t("marksix.direct")}</option>
+            </select>
+          </label>
+          <label>{t("marksix.numberRole")}
+            <select value={numberRole} onChange={(event) => setNumberRole(event.target.value as "main" | "extra")}>
+              <option value="main">{t("marksix.mainNumber")}</option>
+              <option value="extra">{t("marksix.extraNumber")}</option>
+            </select>
+          </label>
+          <button disabled={researchLoading} onClick={runResearch} type="button">
+            {researchLoading ? t("marksix.researching") : t("marksix.runResearch")}
+          </button>
+        </div>
+        {research ? <div className="marksix-research-result">
+          <p className="marksix-sample-line">
+            {research.start_date} → {research.end_date} · {t("marksix.conditionSamples")}: {research.condition_draws} · {t("marksix.baselineSamples")}: {research.baseline_draws}
+          </p>
+          <div className="marksix-number-heatmap">
+            {research.numbers.map((item) => {
+              const intensity = Math.max(-1, Math.min(1, item.rate_difference * 12));
+              return <button
+                className="marksix-number-cell"
+                key={item.number}
+                style={{ "--difference": intensity } as React.CSSProperties}
+                title={`${item.number} · lift ${item.lift?.toFixed(2) ?? "-"} · Δ ${(item.rate_difference * 100).toFixed(1)}pp · q ${item.q_value_fdr.toFixed(3)}`}
+                type="button"
+              >
+                <strong>{item.number}</strong>
+                <small>{item.lift?.toFixed(2) ?? "-"}×</small>
+              </button>;
+            })}
+          </div>
+          <div className="marksix-research-legend"><span>{t("marksix.lowerAssociation")}</span><i /><span>{t("marksix.higherAssociation")}</span></div>
+          <p className="marksix-method-note">{t("marksix.astroResearchCaveat")}</p>
+        </div> : null}
+      </section>
+
       <section className="marksix-builder">
         <header>
           <p className="pixel-kicker">WORLDLINE GENERATOR</p>
           <h2>{t("marksix.generateTitle")}</h2>
         </header>
         <div className="marksix-controls">
+          <label>{t("marksix.worldlineMode")}
+            <select value={worldlineMode} onChange={(event) => setWorldlineMode(event.target.value as typeof worldlineMode)}>
+              <option value="uniform_random_demo_v1">{t("marksix.uniformMode")}</option>
+              <option value="astro_association_entertainment_v1">{t("marksix.astroMode")}</option>
+            </select>
+          </label>
           <label>{t("marksix.horizon")}
             <select value={horizon} onChange={(event) => setHorizon(Number(event.target.value) as 1 | 3 | 5 | 10)}>
               {[1, 3, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}
@@ -117,6 +200,7 @@ export default function MarkSixPage() {
             </div>)}
           </div>
           <p>{worldline.disclaimer}</p>
+          {worldline.astro_context ? <p>{t("marksix.astroModeNote")}</p> : null}
         </article>)}
       </section> : null}
 

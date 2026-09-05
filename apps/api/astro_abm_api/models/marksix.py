@@ -46,6 +46,9 @@ class MarkSixWorldlineRequest(BaseModel):
     worldline_count: int = Field(default=1, ge=1, le=5)
     seed: str | None = Field(default=None, max_length=128)
     language: Literal["en", "zh-Hant"] = "zh-Hant"
+    generation_mode: Literal["uniform_random_demo_v1", "astro_association_entertainment_v1"] = "uniform_random_demo_v1"
+    astro_body: Literal["Mercury", "Venus", "Mars", "Jupiter", "Saturn"] = "Mercury"
+    astro_condition: Literal["retrograde", "direct"] = "retrograde"
 
 
 class MarkSixSimulatedDraw(BaseModel):
@@ -60,6 +63,7 @@ class MarkSixWorldline(BaseModel):
     generation_mode: str
     draws: list[MarkSixSimulatedDraw]
     disclaimer: str
+    astro_context: dict | None = None
 
 
 class MarkSixWorldlineResponse(BaseModel):
@@ -68,3 +72,29 @@ class MarkSixWorldlineResponse(BaseModel):
     coverage_start: date | None = None
     coverage_end: date | None = None
     method_note: str
+
+
+class MarkSixAstroNumberStat(BaseModel):
+    number: int
+    condition_hits: int
+    condition_rate: float
+    baseline_hits: int
+    baseline_rate: float
+    rate_difference: float
+    lift: float | None = None
+    p_value: float
+    q_value_fdr: float
+
+
+class MarkSixAstroResearch(BaseModel):
+    body: str
+    condition: str
+    number_role: str
+    start_date: date
+    end_date: date | None = None
+    rule_era: str
+    total_draws: int
+    condition_draws: int
+    baseline_draws: int
+    numbers: list[MarkSixAstroNumberStat]
+    method_notes: list[str]
