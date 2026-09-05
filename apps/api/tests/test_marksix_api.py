@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from astro_abm.marksix import MarkSixDraw, _connect, _upsert
+from astro_abm import marksix_astro
+from types import SimpleNamespace
 from astro_abm_api.main import app
 
 
@@ -50,3 +52,22 @@ def test_marksix_worldline_rejects_unbounded_request() -> None:
         "horizon_draws": 30, "worldline_count": 20,
     })
     assert response.status_code == 422
+
+
+def test_marksix_astro_research_endpoint(monkeypatch) -> None:
+    _seed_draw()
+    monkeypatch.setattr(
+        marksix_astro,
+        "SwissEphemerisBackend",
+        lambda: SimpleNamespace(get_position=lambda body, ts: SimpleNamespace(lon_speed_deg_day=-1.0)),
+    )
+    response = TestClient(app).get("/marksix/astro-research?body=Mercury&condition=retrograde")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["body"] == "Mercury"
+    assert len(payload["numbers"]) == 49
+
+
+def test_marksix_astro_research_rejects_unknown_body() -> None:
+    response = TestClient(app).get("/marksix/astro-research?body=Earth")
+    assert response.status_code == 400

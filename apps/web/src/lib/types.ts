@@ -3,6 +3,12 @@ export type ScenarioMode = "daily_association_only";
 export type LlmProvider = "mock" | "openai_compatible";
 export type ReportLanguage = "en" | "zh-Hant";
 export type WorldlineProvider = "deterministic_mock" | "llm";
+export type MarkSixMotionCondition =
+  | "retrograde" | "direct" | "pre_station" | "retrograde_entry"
+  | "retrograde_core" | "retrograde_exit" | "post_station";
+export type MarkSixMoonPhaseCondition =
+  | "new_moon_zone" | "first_quarter_zone" | "full_moon_zone"
+  | "last_quarter_zone" | "waxing_other" | "waning_other";
 
 export interface MarkSixStatus {
   total_draws: number;
@@ -41,6 +47,11 @@ export interface MarkSixWorldlineRequest {
   worldline_count: number;
   seed?: string | null;
   language: ReportLanguage;
+  generation_mode?: "uniform_random_demo_v1" | "astro_association_entertainment_v1";
+  astro_body?: "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn";
+  astro_condition?: MarkSixMotionCondition;
+  astro_context_type?: "planet_motion" | "moon_phase";
+  moon_phase_condition?: MarkSixMoonPhaseCondition;
 }
 
 export interface MarkSixWorldline {
@@ -53,6 +64,7 @@ export interface MarkSixWorldline {
     extra_number: number;
   }>;
   disclaimer: string;
+  astro_context?: Record<string, unknown> | null;
 }
 
 export interface MarkSixWorldlineResponse {
@@ -61,6 +73,56 @@ export interface MarkSixWorldlineResponse {
   coverage_start?: string | null;
   coverage_end?: string | null;
   method_note: string;
+}
+
+export interface MarkSixAstroNumberStat {
+  number: number;
+  condition_hits: number;
+  condition_rate: number;
+  baseline_hits: number;
+  baseline_rate: number;
+  rate_difference: number;
+  lift?: number | null;
+  p_value: number;
+  q_value_fdr: number;
+}
+
+export interface MarkSixAstroResearch {
+  body: string;
+  condition: MarkSixMotionCondition | MarkSixMoonPhaseCondition;
+  context_type: "planet_motion" | "moon_phase";
+  number_role: "main" | "extra";
+  start_date: string;
+  end_date?: string | null;
+  rule_era: string;
+  total_draws: number;
+  condition_draws: number;
+  baseline_draws: number;
+  numbers: MarkSixAstroNumberStat[];
+  method_notes: string[];
+}
+
+export interface MarkSixLlmWorldlineRequest {
+  base_url: string;
+  model: string;
+  api_key?: string | null;
+  timeout_seconds: number;
+  language: ReportLanguage;
+  astro_context_type: "planet_motion" | "moon_phase";
+  astro_body: "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn";
+  astro_condition: MarkSixMotionCondition;
+  moon_phase_condition: MarkSixMoonPhaseCondition;
+}
+
+export interface MarkSixLlmWorldlineResponse {
+  worldline: MarkSixWorldline;
+  rationale: string;
+  confidence: string;
+  caveats: string[];
+  provider: string;
+  model: string;
+  network_call_performed: boolean;
+  prompt_context: Record<string, unknown>;
 }
 
 export interface LlmPresetSummary {

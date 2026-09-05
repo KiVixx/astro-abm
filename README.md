@@ -68,6 +68,12 @@ start in 1993. Recent draws are refreshed from HKJC. Generated number Worldlines
 random entertainment only: every valid combination has equal probability and
 historical frequency does not predict future draws. Adults 18+ only.
 
+The workbench can also compare dated draws in the current 6/49 era with
+Mercury, Venus, Mars, Jupiter, or Saturn retrograde/direct conditions. It reports
+historical rates, lift, and FDR-adjusted exploratory statistics. Its optional
+astro-association worldline uses those lifts only as entertainment weights; it
+does not establish a predictive advantage. Uniform random remains the baseline.
+
 The first `make bootstrap` builds the local database and 100-year core daily astronomy dataset, so it may take a while. Later updates are incremental through the maintenance container.
 
 ## Give This to Codex

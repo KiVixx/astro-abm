@@ -409,7 +409,8 @@ def _next_draw_dates(start: date, count: int) -> list[date]:
 
 def generate_worldlines(
     *, horizon_draws: int, worldline_count: int, seed: str | None = None,
-    language: str = "zh-Hant",
+    language: str = "zh-Hant", generation_mode: str = "uniform_random_demo_v1",
+    number_weights: dict[int, float] | None = None, astro_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     seed_material = seed or os.urandom(24).hex()
     dates = _next_draw_dates(datetime.now(UTC).date() + timedelta(days=1), horizon_draws)
@@ -419,20 +420,35 @@ def generate_worldlines(
         rng = random.Random(int.from_bytes(digest))
         simulated = []
         for draw_index, draw_date in enumerate(dates):
-            selected = rng.sample(range(1, 50), 7)
+            pool = list(range(1, 50))
+            selected: list[int] = []
+            for _ in range(7):
+                weights = [max(0.01, (number_weights or {}).get(value, 1.0)) for value in pool]
+                chosen = rng.choices(pool, weights=weights, k=1)[0]
+                selected.append(chosen)
+                pool.remove(chosen)
             simulated.append({
                 "date": draw_date.isoformat(), "draw_index": draw_index + 1,
                 "numbers": sorted(selected[:6]), "extra_number": selected[6],
             })
-        disclaimer = (
-            "每個合法號碼組合的機率相同；歷史結果不能預測未來開獎。僅供娛樂與情境推演，非投注或財務建議。只限18歲或以上人士。"
-            if language == "zh-Hant" else
-            "Every valid combination has equal probability; historical results cannot predict future draws. For entertainment and scenario rehearsal only, not betting or financial advice. Adults 18+ only."
-        )
+        weighted = generation_mode == "astro_association_entertainment_v1"
+        if language == "zh-Hant":
+            disclaimer = (
+                "此娛樂世界線以歷史天象關聯作模擬權重，但真實六合彩每個合法組合的機率仍然相同；"
+                "歷史結果不能預測未來開獎。非投注或財務建議，只限18歲或以上人士。"
+                if weighted else
+                "每個合法號碼組合的機率相同；歷史結果不能預測未來開獎。僅供娛樂與情境推演，非投注或財務建議。只限18歲或以上人士。"
+            )
+        else:
+            disclaimer = (
+                "This entertainment worldline applies historical astro-association simulation weights, but every valid combination in the real draw remains equally probable. Historical results cannot predict future draws. Not betting or financial advice. Adults 18+ only."
+                if weighted else
+                "Every valid combination has equal probability; historical results cannot predict future draws. For entertainment and scenario rehearsal only, not betting or financial advice. Adults 18+ only."
+            )
         worldlines.append({
             "worldline_id": f"marksix-{hashlib.sha256(digest).hexdigest()[:10]}",
-            "generation_mode": "uniform_random_demo_v1", "draws": simulated,
-            "disclaimer": disclaimer,
+            "generation_mode": generation_mode, "draws": simulated,
+            "disclaimer": disclaimer, "astro_context": astro_context,
         })
     return worldlines
 

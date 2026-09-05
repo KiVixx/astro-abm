@@ -62,3 +62,14 @@ def test_worldline_numbers_are_valid_and_seeded() -> None:
             values = [*draw["numbers"], draw["extra_number"]]
             assert len(values) == len(set(values)) == 7
             assert all(1 <= value <= 49 for value in values)
+
+
+def test_astro_association_worldline_records_context() -> None:
+    worldline = marksix.generate_worldlines(
+        horizon_draws=1, worldline_count=1, seed="astro",
+        generation_mode="astro_association_entertainment_v1",
+        number_weights={1: 2.0}, astro_context={"body": "Mercury"},
+    )[0]
+    assert worldline["generation_mode"] == "astro_association_entertainment_v1"
+    assert worldline["astro_context"] == {"body": "Mercury"}
+    assert "機率仍然相同" in worldline["disclaimer"]

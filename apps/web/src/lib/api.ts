@@ -14,6 +14,11 @@ import type {
   MarketSeriesListResponse,
   MarketSeriesRefreshResponse,
   MarkSixDrawRecord,
+  MarkSixAstroResearch,
+  MarkSixMotionCondition,
+  MarkSixMoonPhaseCondition,
+  MarkSixLlmWorldlineRequest,
+  MarkSixLlmWorldlineResponse,
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineRequest,
@@ -351,10 +356,34 @@ export async function getMarkSixFrequencies(): Promise<MarkSixFrequency[]> {
   return apiFetch<MarkSixFrequency[]>("/marksix/frequencies");
 }
 
+export async function getMarkSixAstroResearch(params: {
+  contextType: "planet_motion" | "moon_phase";
+  body: string;
+  condition: MarkSixMotionCondition | MarkSixMoonPhaseCondition;
+  numberRole: "main" | "extra";
+}): Promise<MarkSixAstroResearch> {
+  const query = new URLSearchParams({
+    context_type: params.contextType,
+    body: params.body,
+    condition: params.condition,
+    number_role: params.numberRole,
+  });
+  return apiFetch<MarkSixAstroResearch>(`/marksix/astro-research?${query.toString()}`);
+}
+
 export async function createMarkSixWorldlines(
   payload: MarkSixWorldlineRequest,
 ): Promise<MarkSixWorldlineResponse> {
   return apiFetch<MarkSixWorldlineResponse>("/marksix/worldlines", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createMarkSixLlmWorldline(
+  payload: MarkSixLlmWorldlineRequest,
+): Promise<MarkSixLlmWorldlineResponse> {
+  return apiFetch<MarkSixLlmWorldlineResponse>("/marksix/llm-worldlines", {
     method: "POST",
     body: JSON.stringify(payload),
   });
