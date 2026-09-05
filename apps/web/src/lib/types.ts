@@ -102,6 +102,29 @@ export interface MarkSixAstroResearch {
   method_notes: string[];
 }
 
+export interface MarkSixLlmWorldlineRequest {
+  base_url: string;
+  model: string;
+  api_key?: string | null;
+  timeout_seconds: number;
+  language: ReportLanguage;
+  astro_context_type: "planet_motion" | "moon_phase";
+  astro_body: "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn";
+  astro_condition: MarkSixMotionCondition;
+  moon_phase_condition: MarkSixMoonPhaseCondition;
+}
+
+export interface MarkSixLlmWorldlineResponse {
+  worldline: MarkSixWorldline;
+  rationale: string;
+  confidence: string;
+  caveats: string[];
+  provider: string;
+  model: string;
+  network_call_performed: boolean;
+  prompt_context: Record<string, unknown>;
+}
+
 export interface LlmPresetSummary {
   preset_id: string;
   name: string;

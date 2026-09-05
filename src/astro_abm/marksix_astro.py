@@ -274,3 +274,27 @@ def analyze_moon_phase_numbers(
             "Lift and p/q values are exploratory historical associations and do not change future draw probability.",
         ],
     }
+
+
+def planetary_snapshot(target_date: date) -> dict[str, Any]:
+    backend = SwissEphemerisBackend()
+    timestamp = datetime.combine(target_date, datetime.min.time(), tzinfo=UTC) + timedelta(hours=12)
+    planets: list[dict[str, Any]] = []
+    for body in SUPPORTED_BODIES:
+        position = backend.get_position(body, timestamp)
+        phase = _motion_phase_calendar(
+            body=body, start=target_date, end=target_date, backend=backend,
+        )[target_date.isoformat()][1]
+        planets.append({
+            "body": body, "longitude_deg": round(position.lon_deg, 4),
+            "longitude_speed_deg_day": round(position.lon_speed_deg_day, 6),
+            "is_retrograde": position.lon_speed_deg_day < 0, "motion_phase": phase,
+        })
+    moon = backend.get_position("Moon", timestamp)
+    sun = backend.get_position("Sun", timestamp)
+    moon_angle = (moon.lon_deg - sun.lon_deg) % 360
+    return {
+        "date": target_date.isoformat(), "sample_time": "12:00:00 UTC",
+        "planets": planets, "moon_phase_angle_deg": round(moon_angle, 4),
+        "moon_phase_zone": _moon_phase_label(moon_angle),
+    }

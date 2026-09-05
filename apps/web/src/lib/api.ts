@@ -17,6 +17,8 @@ import type {
   MarkSixAstroResearch,
   MarkSixMotionCondition,
   MarkSixMoonPhaseCondition,
+  MarkSixLlmWorldlineRequest,
+  MarkSixLlmWorldlineResponse,
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineRequest,
@@ -373,6 +375,15 @@ export async function createMarkSixWorldlines(
   payload: MarkSixWorldlineRequest,
 ): Promise<MarkSixWorldlineResponse> {
   return apiFetch<MarkSixWorldlineResponse>("/marksix/worldlines", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createMarkSixLlmWorldline(
+  payload: MarkSixLlmWorldlineRequest,
+): Promise<MarkSixLlmWorldlineResponse> {
+  return apiFetch<MarkSixLlmWorldlineResponse>("/marksix/llm-worldlines", {
     method: "POST",
     body: JSON.stringify(payload),
   });

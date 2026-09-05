@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+import requests
+from fastapi import APIRouter, HTTPException, Query
 
 from astro_abm.marksix import (
     HISTORY_URL,
@@ -22,7 +23,11 @@ from astro_abm_api.models.marksix import (
     MarkSixWorldlineRequest,
     MarkSixWorldlineResponse,
     MarkSixAstroResearch,
+    MarkSixLlmWorldlineRequest,
+    MarkSixLlmWorldlineResponse,
 )
+from astro_abm_api.services.llm_client import safe_llm_request_error_message
+from astro_abm_api.services.marksix_llm import generate_marksix_llm_worldline
 
 
 router = APIRouter(prefix="/marksix", tags=["marksix"])
@@ -123,3 +128,13 @@ def create_marksix_worldlines(request: MarkSixWorldlineRequest) -> MarkSixWorldl
             "change the probability of a future valid combination. Future dates are illustrative."
         ),
     )
+
+
+@router.post("/llm-worldlines", response_model=MarkSixLlmWorldlineResponse)
+def create_marksix_llm_worldline(request: MarkSixLlmWorldlineRequest) -> MarkSixLlmWorldlineResponse:
+    try:
+        return MarkSixLlmWorldlineResponse.model_validate(generate_marksix_llm_worldline(request))
+    except requests.RequestException as error:
+        raise HTTPException(status_code=502, detail=safe_llm_request_error_message(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error

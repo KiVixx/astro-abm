@@ -773,6 +773,15 @@ pre {
 .marksix-research-legend i { background: linear-gradient(90deg, var(--surface), var(--signal-magenta)); display: block; height: 8px; width: 120px; }
 .marksix-builder { align-items: end; border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); display: grid; gap: 24px; grid-template-columns: 1fr 1.4fr; padding: 28px 0; }
 .marksix-builder h2, .marksix-history h2, .marksix-frequency h2 { margin: 0; }
+.marksix-builder header { align-items: flex-start; display: grid; gap: 8px; }
+.marksix-llm-open { justify-self: start; margin-top: 8px; }
+.marksix-llm-backdrop { align-items: center; background: rgb(0 0 0 / 58%); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 90; }
+.marksix-llm-dialog { background: var(--background); border: 1px solid var(--border-strong); box-shadow: 12px 12px 0 rgb(0 0 0 / 24%); display: grid; gap: 18px; max-height: calc(100vh - 40px); max-width: 680px; overflow-y: auto; padding: 24px; width: 100%; }
+.marksix-llm-dialog > header, .marksix-llm-result > header { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; }
+.marksix-llm-dialog h2, .marksix-llm-result h2 { margin: 0; }
+.marksix-llm-dialog > p, .marksix-llm-result > p, .marksix-llm-result li { line-height: 1.55; }
+.marksix-llm-result { border: 1px solid var(--border-strong); display: grid; gap: 12px; padding: 20px; }
+.marksix-llm-result h3 { font-size: 15px; margin: 8px 0 0; }
 .marksix-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
 .marksix-controls label { display: grid; font-size: 12px; gap: 6px; }
 .marksix-worldlines { display: grid; gap: 16px; }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class MarkSixDrawRecord(BaseModel):
@@ -101,3 +101,34 @@ class MarkSixAstroResearch(BaseModel):
     baseline_draws: int
     numbers: list[MarkSixAstroNumberStat]
     method_notes: list[str]
+
+
+class MarkSixLlmWorldlineRequest(BaseModel):
+    base_url: str = Field(min_length=8, max_length=500)
+    model: str = Field(min_length=1, max_length=200)
+    api_key: str | None = Field(default=None, max_length=1000, exclude=True, repr=False)
+    timeout_seconds: float = Field(default=120, ge=5, le=300)
+    language: Literal["en", "zh-Hant"] = "zh-Hant"
+    astro_context_type: Literal["planet_motion", "moon_phase"] = "planet_motion"
+    astro_body: Literal["Mercury", "Venus", "Mars", "Jupiter", "Saturn"] = "Mercury"
+    astro_condition: Literal["retrograde", "direct", "pre_station", "retrograde_entry", "retrograde_core", "retrograde_exit", "post_station"] = "retrograde"
+    moon_phase_condition: Literal["new_moon_zone", "first_quarter_zone", "full_moon_zone", "last_quarter_zone", "waxing_other", "waning_other"] = "full_moon_zone"
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        if not normalized.startswith(("http://", "https://")):
+            raise ValueError("base_url must use http or https")
+        return normalized
+
+
+class MarkSixLlmWorldlineResponse(BaseModel):
+    worldline: MarkSixWorldline
+    rationale: str
+    confidence: str
+    caveats: list[str]
+    provider: str = "openai_compatible"
+    model: str
+    network_call_performed: bool = True
+    prompt_context: dict

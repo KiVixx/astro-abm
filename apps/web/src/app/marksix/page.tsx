@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/i18n/useI18n";
 import {
   createMarkSixWorldlines,
+  createMarkSixLlmWorldline,
   getMarkSixAstroResearch,
   getMarkSixDraws,
   getMarkSixFrequencies,
@@ -17,6 +18,7 @@ import type {
   MarkSixWorldlineResponse,
   MarkSixMotionCondition,
   MarkSixMoonPhaseCondition,
+  MarkSixLlmWorldlineResponse,
 } from "@/lib/types";
 
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
@@ -36,6 +38,12 @@ export default function MarkSixPage() {
   const [moonPhase, setMoonPhase] = useState<MarkSixMoonPhaseCondition>("full_moon_zone");
   const [numberRole, setNumberRole] = useState<"main" | "extra">("main");
   const [researchLoading, setResearchLoading] = useState(false);
+  const [llmOpen, setLlmOpen] = useState(false);
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmBaseUrl, setLlmBaseUrl] = useState("https://api.openai.com/v1");
+  const [llmModel, setLlmModel] = useState("");
+  const [llmApiKey, setLlmApiKey] = useState("");
+  const [llmResult, setLlmResult] = useState<MarkSixLlmWorldlineResponse | null>(null);
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
   const [count, setCount] = useState(1);
   const [worldlineMode, setWorldlineMode] = useState<"uniform_random_demo_v1" | "astro_association_entertainment_v1">("uniform_random_demo_v1");
@@ -92,6 +100,26 @@ export default function MarkSixPage() {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setResearchLoading(false);
+    }
+  }
+
+  async function generateWithLlm() {
+    setLlmLoading(true);
+    setError(null);
+    try {
+      const next = await createMarkSixLlmWorldline({
+        base_url: llmBaseUrl, model: llmModel, api_key: llmApiKey || null,
+        timeout_seconds: 120, language, astro_context_type: contextType,
+        astro_body: researchBody as "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn",
+        astro_condition: researchCondition, moon_phase_condition: moonPhase,
+      });
+      setLlmResult(next);
+      setLlmOpen(false);
+      setLlmApiKey("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setLlmLoading(false);
     }
   }
 
@@ -193,6 +221,9 @@ export default function MarkSixPage() {
         <header>
           <p className="pixel-kicker">WORLDLINE GENERATOR</p>
           <h2>{t("marksix.generateTitle")}</h2>
+          <button className="secondary marksix-llm-open" onClick={() => setLlmOpen(true)} type="button">
+            {t("marksix.llmButton")}
+          </button>
         </header>
         <div className="marksix-controls">
           <label>{t("marksix.worldlineMode")}
@@ -216,6 +247,36 @@ export default function MarkSixPage() {
           </button>
         </div>
       </section>
+
+      {llmOpen ? <div className="marksix-llm-backdrop" role="presentation" onMouseDown={() => setLlmOpen(false)}>
+        <section aria-labelledby="marksix-llm-title" aria-modal="true" className="marksix-llm-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+          <header><div><p className="pixel-kicker">OPENAI-COMPATIBLE</p><h2 id="marksix-llm-title">{t("marksix.llmTitle")}</h2></div>
+            <button className="secondary" onClick={() => setLlmOpen(false)} type="button">{t("marksix.close")}</button>
+          </header>
+          <p>{t("marksix.llmLead")}</p>
+          <div className="form-grid">
+            <label className="form-field"><span>{t("marksix.llmEndpoint")}</span><input onChange={(event) => setLlmBaseUrl(event.target.value)} placeholder="https://provider.example/v1" value={llmBaseUrl} /></label>
+            <label className="form-field"><span>{t("marksix.llmModel")}</span><input onChange={(event) => setLlmModel(event.target.value)} placeholder="model-name" value={llmModel} /></label>
+            <label className="form-field"><span>{t("marksix.llmApiKey")}</span><input autoComplete="off" onChange={(event) => setLlmApiKey(event.target.value)} type="password" value={llmApiKey} /></label>
+          </div>
+          <p className="marksix-method-note">{t("marksix.llmPrivacy")}</p>
+          <button disabled={llmLoading || !llmBaseUrl.trim() || !llmModel.trim()} onClick={generateWithLlm} type="button">
+            {llmLoading ? t("marksix.llmGenerating") : t("marksix.llmGenerate")}
+          </button>
+        </section>
+      </div> : null}
+
+      {llmResult ? <section className="marksix-llm-result">
+        <header><div><p className="pixel-kicker">LLM ASTRO GUESS</p><h2>{t("marksix.llmResult")}</h2></div><small>{llmResult.model}</small></header>
+        <div className="marksix-simulated-draw">
+          <time>{llmResult.worldline.draws[0].date}</time>
+          <div>{llmResult.worldline.draws[0].numbers.map((number) => <Ball key={number} number={number} />)}<span className="marksix-plus">+</span><Ball extra number={llmResult.worldline.draws[0].extra_number} /></div>
+        </div>
+        <h3>{t("marksix.llmRationale")}</h3><p>{llmResult.rationale}</p>
+        <p><strong>{t("marksix.llmConfidence")}:</strong> {llmResult.confidence}</p>
+        {llmResult.caveats.length ? <ul>{llmResult.caveats.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+        <p className="marksix-method-note">{llmResult.worldline.disclaimer}</p>
+      </section> : null}
 
       {result ? <section className="marksix-worldlines">
         {result.worldlines.map((worldline, index) => <article key={worldline.worldline_id}>
