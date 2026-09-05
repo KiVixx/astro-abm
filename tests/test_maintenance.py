@@ -107,6 +107,7 @@ def test_run_daily_maintenance_uses_archive_windows(monkeypatch):
     monkeypatch.setattr(maintain_daily, "run_noaa_swpc_recent_backfill", record("swpc"))
     monkeypatch.setattr(maintain_daily, "run_space_weather_backfill", record("omni"))
     monkeypatch.setattr(maintain_daily, "run_ephemeris_backfill", record("ephemeris"))
+    monkeypatch.setattr(maintain_daily, "sync_marksix", lambda **kwargs: Summary())
 
     summary = maintain_daily.run_daily_maintenance(
         run_ts=datetime(2024, 4, 15, 10, 37, tzinfo=UTC),
@@ -123,6 +124,7 @@ def test_run_daily_maintenance_uses_archive_windows(monkeypatch):
         "noaa_swpc_recent_overlay",
         "nasa_omni_recent_authoritative",
         "ephemeris_recent_and_forward",
+        "marksix_recent",
     ]
     assert calls[0][1]["start_utc"] == datetime(2024, 4, 8, 10, tzinfo=UTC)
     assert calls[2][1]["start_utc"] == datetime(2024, 4, 12, 10, tzinfo=UTC)

@@ -4,6 +4,65 @@ export type LlmProvider = "mock" | "openai_compatible";
 export type ReportLanguage = "en" | "zh-Hant";
 export type WorldlineProvider = "deterministic_mock" | "llm";
 
+export interface MarkSixStatus {
+  total_draws: number;
+  coverage_start?: string | null;
+  coverage_end?: string | null;
+  official_verified_draws: number;
+  history_start_year?: number | null;
+  legacy_draws_without_dates: number;
+  historical_source: string;
+  legacy_historical_source: string;
+  official_source: string;
+  coverage_note: string;
+}
+
+export interface MarkSixDrawRecord {
+  draw_id: string;
+  draw_date?: string | null;
+  draw_year: number;
+  draw_number: number;
+  numbers: number[];
+  extra_number: number;
+  draw_type: string;
+  is_snowball: boolean;
+  source: string;
+  source_is_official: boolean;
+}
+
+export interface MarkSixFrequency {
+  number: number;
+  main_count: number;
+  extra_count: number;
+}
+
+export interface MarkSixWorldlineRequest {
+  horizon_draws: 1 | 3 | 5 | 10;
+  worldline_count: number;
+  seed?: string | null;
+  language: ReportLanguage;
+}
+
+export interface MarkSixWorldline {
+  worldline_id: string;
+  generation_mode: string;
+  draws: Array<{
+    date: string;
+    draw_index: number;
+    numbers: number[];
+    extra_number: number;
+  }>;
+  disclaimer: string;
+}
+
+export interface MarkSixWorldlineResponse {
+  worldlines: MarkSixWorldline[];
+  historical_draw_count: number;
+  coverage_start?: string | null;
+  coverage_end?: string | null;
+  method_note: string;
+}
+
 export interface LlmPresetSummary {
   preset_id: string;
   name: string;

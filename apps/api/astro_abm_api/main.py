@@ -15,6 +15,7 @@ from astro_abm_api.routers import (
     health,
     llm,
     market_series,
+    marksix,
     portability,
     scenarios,
 )
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(agents.router)
     app.include_router(assets.router)
     app.include_router(market_series.router)
+    app.include_router(marksix.router)
     app.include_router(auth.router)
     app.include_router(portability.router)
     app.include_router(scenarios.router)

@@ -687,6 +687,8 @@ pre {
   border-color: transparent;
 }
 
+.home-command-dock .home-marksix-link { grid-column: 1 / -1; }
+
 .home-local-status {
   align-items: center;
   color: var(--muted);
@@ -745,7 +747,48 @@ pre {
 .home-system-grid {
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.marksix-page { max-width: 1180px; padding-bottom: 72px; }
+.marksix-hero { border-bottom: 1px solid var(--border-strong); padding: 42px 0 28px; }
+.marksix-hero h1 { font-size: clamp(38px, 6vw, 68px); margin: 0 0 18px; }
+.marksix-responsible { background: #fff8dc; border: 1px solid #8a6c00; padding: 16px 18px; }
+.marksix-responsible p { line-height: 1.55; margin: 7px 0 0; }
+.marksix-status-grid { border: 1px solid var(--border); display: grid; grid-template-columns: repeat(3, 1fr); }
+.marksix-status-grid > div { display: grid; gap: 8px; padding: 18px; }
+.marksix-status-grid > div + div { border-left: 1px solid var(--border); }
+.marksix-status-grid span, .marksix-status-grid strong { min-width: 0; overflow-wrap: anywhere; }
+.marksix-status-grid span { color: var(--muted); font-size: 12px; }
+.marksix-coverage-note { color: var(--muted); font-size: 13px; margin: 0; }
+.marksix-builder { align-items: end; border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); display: grid; gap: 24px; grid-template-columns: 1fr 1.4fr; padding: 28px 0; }
+.marksix-builder h2, .marksix-history h2, .marksix-frequency h2 { margin: 0; }
+.marksix-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: 1fr 1fr auto; }
+.marksix-controls label { display: grid; font-size: 12px; gap: 6px; }
+.marksix-worldlines { display: grid; gap: 16px; }
+.marksix-worldlines article { border: 1px solid var(--border-strong); padding: 18px; }
+.marksix-worldlines article > header { align-items: center; display: flex; justify-content: space-between; }
+.marksix-worldlines article > p { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.marksix-simulated-draws { display: grid; gap: 9px; margin-top: 16px; }
+.marksix-simulated-draw { align-items: center; border-top: 1px solid var(--border); display: grid; gap: 14px; grid-template-columns: 110px 1fr; padding-top: 9px; }
+.marksix-simulated-draw > div, .marksix-history-row > div { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.marksix-ball { align-items: center; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 50%; display: inline-flex; font-family: var(--font-signal); font-size: 12px; font-weight: 800; height: 30px; justify-content: center; width: 30px; }
+.marksix-ball.is-extra { background: var(--signal-magenta); border-color: var(--signal-magenta); color: white; }
+.marksix-plus { color: var(--muted); padding: 0 2px; }
+.marksix-history-grid { display: grid; gap: 32px; grid-template-columns: 1.5fr 0.8fr; margin-top: 28px; }
+.marksix-history-row { align-items: center; border-bottom: 1px solid var(--border); display: grid; gap: 12px; grid-template-columns: 100px 1fr 140px; padding: 12px 0; }
+.marksix-history-row small { color: var(--muted); text-align: right; }
+.marksix-frequency > p { color: var(--muted); line-height: 1.55; }
+.marksix-frequency > div { display: grid; gap: 9px; grid-template-columns: repeat(4, 1fr); }
+.marksix-frequency > div > span { align-items: center; border: 1px solid var(--border); display: flex; gap: 7px; padding: 7px; }
+
+@media (max-width: 760px) {
+  .marksix-status-grid, .marksix-builder, .marksix-history-grid { grid-template-columns: 1fr; }
+  .marksix-status-grid > div + div { border-left: 0; border-top: 1px solid var(--border); }
+  .marksix-controls { grid-template-columns: 1fr 1fr; }
+  .marksix-controls button { grid-column: 1 / -1; }
+  .marksix-history-row { grid-template-columns: 86px 1fr; }
+  .marksix-history-row small { grid-column: 2; text-align: left; }
 }
 
 .home-system-item {

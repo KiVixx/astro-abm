@@ -14,6 +14,14 @@ In particular, the repository does not redistribute the local SPX, Gold, DXY,
 or credit-proxy CSV files referenced by
 `astro_research/data/local/LOCAL_DATA_PROVENANCE.json`.
 
+The Hong Kong Mark Six database is also downloaded at runtime and stored below
+the ignored `astro_research/data/local/marksix/` directory. Dated history from
+1993 onward is obtained from Renavon, legacy 1976–1992 number records are read
+from the public NFD yearly archive, and recent results are refreshed from HKJC.
+These records remain subject to their respective source terms. The AGPL
+software license does not grant permission to redistribute those records,
+HKJC branding, or provider content.
+
 ## User Responsibility
 
 Users who fetch or supply data are responsible for:
