@@ -13,6 +13,11 @@ import type {
   MarketSeriesProfile,
   MarketSeriesListResponse,
   MarketSeriesRefreshResponse,
+  MarkSixDrawRecord,
+  MarkSixFrequency,
+  MarkSixStatus,
+  MarkSixWorldlineRequest,
+  MarkSixWorldlineResponse,
   RegisterRequest,
   ScenarioCreateRequest,
   ScenarioExportEnvelope,
@@ -332,4 +337,25 @@ export async function regenerateScenarioWorldlineFromChunk(
       body: JSON.stringify(payload),
     },
   );
+}
+
+export async function getMarkSixStatus(): Promise<MarkSixStatus> {
+  return apiFetch<MarkSixStatus>("/marksix/status");
+}
+
+export async function getMarkSixDraws(limit = 12): Promise<MarkSixDrawRecord[]> {
+  return apiFetch<MarkSixDrawRecord[]>(`/marksix/draws?limit=${limit}`);
+}
+
+export async function getMarkSixFrequencies(): Promise<MarkSixFrequency[]> {
+  return apiFetch<MarkSixFrequency[]>("/marksix/frequencies");
+}
+
+export async function createMarkSixWorldlines(
+  payload: MarkSixWorldlineRequest,
+): Promise<MarkSixWorldlineResponse> {
+  return apiFetch<MarkSixWorldlineResponse>("/marksix/worldlines", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

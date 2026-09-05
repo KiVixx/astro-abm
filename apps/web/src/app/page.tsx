@@ -25,6 +25,9 @@ export default function HomePage() {
             <Link className="button secondary" href="/worldlines">
               {t("home.exploreWorldlines")}
             </Link>
+            <Link className="button secondary home-marksix-link" href="/marksix">
+              {t("home.openMarkSix")}
+            </Link>
           </div>
           <p className="home-local-status">
             <span aria-hidden="true" />
@@ -48,6 +51,13 @@ export default function HomePage() {
             <div>
               <h3>{t("home.dailyDataTitle")}</h3>
               <p>{t("home.dailyDataText")}</p>
+            </div>
+          </div>
+          <div className="home-system-item">
+            <span className="home-system-index">04</span>
+            <div>
+              <h3>{t("home.marksixTitle")}</h3>
+              <p>{t("home.marksixText")}</p>
             </div>
           </div>
           <div className="home-system-item">

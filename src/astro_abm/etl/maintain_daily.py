@@ -18,6 +18,7 @@ from astro_abm.etl.maintenance import (
     split_symbols,
 )
 from astro_abm.etl.pipeline import normalize_to_utc_hour
+from astro_abm.marksix import sync_marksix
 
 
 def run_daily_maintenance(
@@ -34,6 +35,7 @@ def run_daily_maintenance(
     refresh_swpc_recent: bool = True,
     refresh_omni: bool = True,
     refresh_ephemeris: bool = True,
+    refresh_marksix: bool = True,
 ) -> MaintenanceSummary:
     if archive_lookback_days <= 0:
         raise ValueError("archive_lookback_days must be greater than 0.")
@@ -117,6 +119,10 @@ def run_daily_maintenance(
                 ),
             )
         )
+    if refresh_marksix:
+        summary_starts.append(bucket_ts)
+        summary_ends.append(bucket_ts)
+        tasks.append(("marksix_recent", lambda: sync_marksix(full_history=None)))
     return MaintenanceSummary(
         run_ts=bucket_ts,
         window_start=min(summary_starts) if summary_starts else bucket_ts,
@@ -147,6 +153,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--skip-swpc", action="store_true")
     parser.add_argument("--skip-omni", action="store_true")
     parser.add_argument("--skip-ephemeris", action="store_true")
+    parser.add_argument("--skip-marksix", action="store_true")
     args = parser.parse_args(argv)
 
     summary = run_daily_maintenance(
@@ -162,6 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         refresh_swpc_recent=not args.skip_swpc,
         refresh_omni=not args.skip_omni,
         refresh_ephemeris=not args.skip_ephemeris,
+        refresh_marksix=not args.skip_marksix,
     )
     print(format_maintenance_summary(summary, title="Daily Maintenance Summary"))
     return 1 if summary.failed else 0

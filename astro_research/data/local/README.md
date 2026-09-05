@@ -1,5 +1,13 @@
 # Local Research Data
 
+## Hong Kong Mark Six
+
+`make marksix-maintain` creates `marksix/marksix.sqlite3` locally. The database
+is intentionally ignored by Git. Number records cover 1976 onward. The legacy
+1976–1992 rows lack exact dates; complete dated history begins on 1993-01-05,
+and recent results are refreshed from HKJC. Source data terms remain
+separate from the repository's AGPL software license.
+
 This directory is reserved for local CSV datasets that cannot be committed to
 the repository because of size, licensing, or provenance constraints.
 

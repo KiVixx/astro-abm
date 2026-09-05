@@ -27,6 +27,11 @@ export function SiteHeader() {
       active: pathname.startsWith("/market-series"),
     },
     {
+      href: "/marksix",
+      label: t("nav.marksix"),
+      active: pathname.startsWith("/marksix"),
+    },
+    {
       href: "/agents",
       label: t("nav.agents"),
       active: pathname.startsWith("/agents"),

@@ -17,3 +17,4 @@ def isolated_accounts_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         str(tmp_path / "market-data"),
     )
     monkeypatch.setenv("ASTRO_ABM_ENV", "development")
+    monkeypatch.setenv("ASTRO_ABM_MARKSIX_DB_PATH", str(tmp_path / "marksix.sqlite3"))
