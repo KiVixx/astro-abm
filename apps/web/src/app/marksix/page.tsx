@@ -21,6 +21,13 @@ import type {
   MarkSixLlmWorldlineResponse,
 } from "@/lib/types";
 
+const MARKSIX_LLM_SETTINGS_KEY = "astro_abm_marksix_llm_settings_v1";
+
+type MarkSixGenerationMode =
+  | "uniform_random_demo_v1"
+  | "astro_association_entertainment_v1"
+  | "llm_astro_entertainment_v1";
+
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
   return <span className={extra ? "marksix-ball is-extra" : "marksix-ball"}>{number}</span>;
 }
@@ -43,11 +50,13 @@ export default function MarkSixPage() {
   const [llmBaseUrl, setLlmBaseUrl] = useState("https://api.openai.com/v1");
   const [llmModel, setLlmModel] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
+  const [llmTimeoutSeconds, setLlmTimeoutSeconds] = useState(120);
+  const [llmSettingsSaved, setLlmSettingsSaved] = useState(false);
   const [llmResult, setLlmResult] = useState<MarkSixLlmWorldlineResponse | null>(null);
   const [llmError, setLlmError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
   const [count, setCount] = useState(1);
-  const [worldlineMode, setWorldlineMode] = useState<"uniform_random_demo_v1" | "astro_association_entertainment_v1">("uniform_random_demo_v1");
+  const [worldlineMode, setWorldlineMode] = useState<MarkSixGenerationMode>("uniform_random_demo_v1");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,15 +72,46 @@ export default function MarkSixPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(MARKSIX_LLM_SETTINGS_KEY);
+      if (!saved) return;
+      const settings = JSON.parse(saved) as Partial<{
+        baseUrl: string;
+        model: string;
+        apiKey: string;
+        timeoutSeconds: number;
+      }>;
+      if (typeof settings.baseUrl === "string") setLlmBaseUrl(settings.baseUrl);
+      if (typeof settings.model === "string") setLlmModel(settings.model);
+      if (typeof settings.apiKey === "string") setLlmApiKey(settings.apiKey);
+      if (typeof settings.timeoutSeconds === "number" && settings.timeoutSeconds > 0) {
+        setLlmTimeoutSeconds(settings.timeoutSeconds);
+      }
+    } catch {
+      window.localStorage.removeItem(MARKSIX_LLM_SETTINGS_KEY);
+    }
+  }, []);
+
   const topFrequencies = useMemo(
     () => [...frequencies].sort((a, b) => b.main_count - a.main_count).slice(0, 8),
     [frequencies],
   );
 
   async function generate() {
+    if (worldlineMode === "llm_astro_entertainment_v1") {
+      if (!llmBaseUrl.trim() || !llmModel.trim()) {
+        setLlmError(t("marksix.llmMissingSettings"));
+        setLlmOpen(true);
+        return;
+      }
+      await generateWithLlm();
+      return;
+    }
     setGenerating(true);
     setError(null);
     try {
+      setLlmResult(null);
       setResult(await createMarkSixWorldlines({
         horizon_draws: horizon,
         worldline_count: count,
@@ -106,22 +146,38 @@ export default function MarkSixPage() {
 
   async function generateWithLlm() {
     setLlmLoading(true);
+    setError(null);
     setLlmError(null);
     try {
       const next = await createMarkSixLlmWorldline({
         base_url: llmBaseUrl, model: llmModel, api_key: llmApiKey || null,
-        timeout_seconds: 120, language, astro_context_type: contextType,
+        timeout_seconds: llmTimeoutSeconds, language, astro_context_type: contextType,
         astro_body: researchBody as "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn",
         astro_condition: researchCondition, moon_phase_condition: moonPhase,
       });
+      setResult(null);
       setLlmResult(next);
-      setLlmOpen(false);
-      setLlmApiKey("");
     } catch (reason) {
-      setLlmError(reason instanceof Error ? reason.message : String(reason));
+      setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setLlmLoading(false);
     }
+  }
+
+  function saveLlmSettings() {
+    setLlmError(null);
+    if (!llmBaseUrl.trim() || !llmModel.trim()) {
+      setLlmError(t("marksix.llmMissingSettings"));
+      return;
+    }
+    window.localStorage.setItem(MARKSIX_LLM_SETTINGS_KEY, JSON.stringify({
+      baseUrl: llmBaseUrl.trim(),
+      model: llmModel.trim(),
+      apiKey: llmApiKey,
+      timeoutSeconds: llmTimeoutSeconds,
+    }));
+    setLlmSettingsSaved(true);
+    setLlmOpen(false);
   }
 
   return (
@@ -222,7 +278,7 @@ export default function MarkSixPage() {
         <header>
           <p className="pixel-kicker">WORLDLINE GENERATOR</p>
           <h2>{t("marksix.generateTitle")}</h2>
-          <button className="secondary marksix-llm-open" onClick={() => setLlmOpen(true)} type="button">
+          <button className="secondary marksix-llm-open" onClick={() => { setLlmSettingsSaved(false); setLlmError(null); setLlmOpen(true); }} type="button">
             {t("marksix.llmButton")}
           </button>
         </header>
@@ -231,22 +287,25 @@ export default function MarkSixPage() {
             <select value={worldlineMode} onChange={(event) => setWorldlineMode(event.target.value as typeof worldlineMode)}>
               <option value="uniform_random_demo_v1">{t("marksix.uniformMode")}</option>
               <option value="astro_association_entertainment_v1">{t("marksix.astroMode")}</option>
+              <option value="llm_astro_entertainment_v1">{t("marksix.llmMode")}</option>
             </select>
           </label>
           <label>{t("marksix.horizon")}
-            <select value={horizon} onChange={(event) => setHorizon(Number(event.target.value) as 1 | 3 | 5 | 10)}>
+            <select disabled={worldlineMode === "llm_astro_entertainment_v1"} value={horizon} onChange={(event) => setHorizon(Number(event.target.value) as 1 | 3 | 5 | 10)}>
               {[1, 3, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
           <label>{t("marksix.worldlineCount")}
-            <select value={count} onChange={(event) => setCount(Number(event.target.value))}>
+            <select disabled={worldlineMode === "llm_astro_entertainment_v1"} value={count} onChange={(event) => setCount(Number(event.target.value))}>
               {[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
-          <button disabled={generating} onClick={generate} type="button">
-            {generating ? t("marksix.generating") : t("marksix.generate")}
+          <button disabled={generating || llmLoading} onClick={generate} type="button">
+            {llmLoading ? t("marksix.llmGenerating") : generating ? t("marksix.generating") : t("marksix.generate")}
           </button>
         </div>
+        {worldlineMode === "llm_astro_entertainment_v1" ? <p className="marksix-method-note">{t("marksix.llmModeNote")}</p> : null}
+        {llmSettingsSaved ? <p className="marksix-method-note" role="status">{t("marksix.llmSaved")}</p> : null}
       </section>
 
       {llmOpen ? <div className="marksix-llm-backdrop" role="presentation" onMouseDown={() => setLlmOpen(false)}>
@@ -254,16 +313,17 @@ export default function MarkSixPage() {
           <header><div><p className="pixel-kicker">OPENAI-COMPATIBLE</p><h2 id="marksix-llm-title">{t("marksix.llmTitle")}</h2></div>
             <button className="secondary" onClick={() => setLlmOpen(false)} type="button">{t("marksix.close")}</button>
           </header>
-          <p>{t("marksix.llmLead")}</p>
+          <p>{t("marksix.llmSettingsLead")}</p>
           <div className="form-grid">
             <label className="form-field"><span>{t("marksix.llmEndpoint")}</span><input onChange={(event) => setLlmBaseUrl(event.target.value)} placeholder="https://provider.example/v1" value={llmBaseUrl} /></label>
             <label className="form-field"><span>{t("marksix.llmModel")}</span><input onChange={(event) => setLlmModel(event.target.value)} placeholder="model-name" value={llmModel} /></label>
             <label className="form-field"><span>{t("marksix.llmApiKey")}</span><input autoComplete="off" onChange={(event) => setLlmApiKey(event.target.value)} type="password" value={llmApiKey} /></label>
+            <label className="form-field"><span>{t("marksix.llmTimeout")}</span><input min={1} onChange={(event) => setLlmTimeoutSeconds(Math.max(1, Number(event.target.value) || 1))} type="number" value={llmTimeoutSeconds} /></label>
           </div>
           <p className="marksix-method-note">{t("marksix.llmPrivacy")}</p>
           {llmError ? <p className="notice marksix-llm-error" role="alert">{llmError}</p> : null}
-          <footer><button disabled={llmLoading || !llmBaseUrl.trim() || !llmModel.trim()} onClick={generateWithLlm} type="button">
-              {llmLoading ? t("marksix.llmGenerating") : t("marksix.llmGenerate")}
+          <footer><button disabled={!llmBaseUrl.trim() || !llmModel.trim()} onClick={saveLlmSettings} type="button">
+              {t("marksix.llmSave")}
           </button></footer>
         </section>
       </div> : null}
