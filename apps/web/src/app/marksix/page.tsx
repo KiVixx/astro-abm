@@ -44,6 +44,7 @@ export default function MarkSixPage() {
   const [llmModel, setLlmModel] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmResult, setLlmResult] = useState<MarkSixLlmWorldlineResponse | null>(null);
+  const [llmError, setLlmError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
   const [count, setCount] = useState(1);
   const [worldlineMode, setWorldlineMode] = useState<"uniform_random_demo_v1" | "astro_association_entertainment_v1">("uniform_random_demo_v1");
@@ -105,7 +106,7 @@ export default function MarkSixPage() {
 
   async function generateWithLlm() {
     setLlmLoading(true);
-    setError(null);
+    setLlmError(null);
     try {
       const next = await createMarkSixLlmWorldline({
         base_url: llmBaseUrl, model: llmModel, api_key: llmApiKey || null,
@@ -117,7 +118,7 @@ export default function MarkSixPage() {
       setLlmOpen(false);
       setLlmApiKey("");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setLlmError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setLlmLoading(false);
     }
@@ -260,9 +261,10 @@ export default function MarkSixPage() {
             <label className="form-field"><span>{t("marksix.llmApiKey")}</span><input autoComplete="off" onChange={(event) => setLlmApiKey(event.target.value)} type="password" value={llmApiKey} /></label>
           </div>
           <p className="marksix-method-note">{t("marksix.llmPrivacy")}</p>
-          <button disabled={llmLoading || !llmBaseUrl.trim() || !llmModel.trim()} onClick={generateWithLlm} type="button">
-            {llmLoading ? t("marksix.llmGenerating") : t("marksix.llmGenerate")}
-          </button>
+          {llmError ? <p className="notice marksix-llm-error" role="alert">{llmError}</p> : null}
+          <footer><button disabled={llmLoading || !llmBaseUrl.trim() || !llmModel.trim()} onClick={generateWithLlm} type="button">
+              {llmLoading ? t("marksix.llmGenerating") : t("marksix.llmGenerate")}
+          </button></footer>
         </section>
       </div> : null}
 
