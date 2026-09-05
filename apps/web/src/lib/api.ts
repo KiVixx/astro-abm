@@ -15,6 +15,7 @@ import type {
   MarketSeriesRefreshResponse,
   MarkSixDrawRecord,
   MarkSixAstroResearch,
+  MarkSixMotionCondition,
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineRequest,
@@ -354,7 +355,7 @@ export async function getMarkSixFrequencies(): Promise<MarkSixFrequency[]> {
 
 export async function getMarkSixAstroResearch(params: {
   body: string;
-  condition: "retrograde" | "direct";
+  condition: MarkSixMotionCondition;
   numberRole: "main" | "extra";
 }): Promise<MarkSixAstroResearch> {
   const query = new URLSearchParams({

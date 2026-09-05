@@ -11,7 +11,7 @@ from astro_abm.marksix import (
     list_draws,
     number_frequencies,
 )
-from astro_abm.marksix_astro import CURRENT_RULE_START, SUPPORTED_BODIES, analyze_retrograde_numbers
+from astro_abm.marksix_astro import CURRENT_RULE_START, MOTION_CONDITIONS, SUPPORTED_BODIES, analyze_retrograde_numbers
 from astro_abm_api.models.marksix import (
     MarkSixDrawRecord,
     MarkSixFrequency,
@@ -58,7 +58,7 @@ def get_marksix_frequencies() -> list[MarkSixFrequency]:
 @router.get("/astro-research", response_model=MarkSixAstroResearch)
 def get_marksix_astro_research(
     body: str = Query(default="Mercury"),
-    condition: str = Query(default="retrograde", pattern="^(retrograde|direct)$"),
+    condition: str = Query(default="retrograde"),
     number_role: str = Query(default="main", pattern="^(main|extra)$"),
     start_date: str = Query(default=CURRENT_RULE_START, pattern=r"^\d{4}-\d{2}-\d{2}$"),
 ) -> MarkSixAstroResearch:
@@ -66,6 +66,9 @@ def get_marksix_astro_research(
     if normalized_body not in SUPPORTED_BODIES:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=f"Unsupported body: {body}")
+    if condition not in MOTION_CONDITIONS:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"Unsupported condition: {condition}")
     result = analyze_retrograde_numbers(
         body=normalized_body, condition=condition, number_role=number_role, start_date=start_date  # type: ignore[arg-type]
     )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -11,6 +11,10 @@ from .marksix import _connect
 
 SUPPORTED_BODIES = ("Mercury", "Venus", "Mars", "Jupiter", "Saturn")
 CURRENT_RULE_START = "2002-07-04"
+MOTION_CONDITIONS = (
+    "retrograde", "direct", "pre_station", "retrograde_entry",
+    "retrograde_core", "retrograde_exit", "post_station",
+)
 
 
 @dataclass(frozen=True)
@@ -20,6 +24,7 @@ class _ObservedDraw:
     numbers: frozenset[int]
     extra_number: int
     is_retrograde: bool
+    motion_phase: str
 
 
 class SwissEphemerisBackend:
@@ -65,6 +70,53 @@ def _bh_q_values(p_values: list[float]) -> list[float]:
     return result
 
 
+def _motion_phase_calendar(
+    *, body: str, start: date, end: date, backend: SwissEphemerisBackend,
+    station_phase_days: int = 7, station_window_days: int = 14,
+) -> dict[str, tuple[bool, str]]:
+    scan_start = start - timedelta(days=station_window_days + 2)
+    scan_end = end + timedelta(days=station_window_days + 2)
+    speeds: list[tuple[date, bool]] = []
+    cursor = scan_start
+    while cursor <= scan_end:
+        ts = datetime.combine(cursor, datetime.min.time(), tzinfo=UTC) + timedelta(hours=12)
+        speeds.append((cursor, backend.get_position(body, ts).lon_speed_deg_day < 0))
+        cursor += timedelta(days=1)
+    stations: list[tuple[date, str]] = []
+    for (previous_date, previous_retrograde), (current_date, current_retrograde) in zip(speeds, speeds[1:]):
+        if previous_retrograde == current_retrograde:
+            continue
+        station_type = "direct_to_retrograde" if current_retrograde else "retrograde_to_direct"
+        stations.append((current_date, station_type))
+
+    calendar: dict[str, tuple[bool, str]] = {}
+    for current_date, is_retrograde in speeds:
+        previous_events = [(event_date, event_type) for event_date, event_type in stations if event_date <= current_date]
+        next_events = [(event_date, event_type) for event_date, event_type in stations if event_date >= current_date]
+        previous_station = previous_events[-1] if previous_events else None
+        next_station = next_events[0] if next_events else None
+        if is_retrograde:
+            days_from_entry = (current_date - previous_station[0]).days if previous_station and previous_station[1] == "direct_to_retrograde" else 999
+            days_to_exit = (next_station[0] - current_date).days if next_station and next_station[1] == "retrograde_to_direct" else 999
+            if days_from_entry <= station_phase_days:
+                phase = "retrograde_entry"
+            elif days_to_exit <= station_phase_days:
+                phase = "retrograde_exit"
+            else:
+                phase = "retrograde_core"
+        else:
+            days_to_entry = (next_station[0] - current_date).days if next_station and next_station[1] == "direct_to_retrograde" else 999
+            days_from_exit = (current_date - previous_station[0]).days if previous_station and previous_station[1] == "retrograde_to_direct" else 999
+            if 0 < days_to_entry <= station_window_days:
+                phase = "pre_station"
+            elif 0 <= days_from_exit <= station_window_days:
+                phase = "post_station"
+            else:
+                phase = "direct"
+        calendar[current_date.isoformat()] = (is_retrograde, phase)
+    return calendar
+
+
 def _load_draws(*, body: str, path: Path | None, start_date: str, end_date: str | None) -> list[_ObservedDraw]:
     backend = SwissEphemerisBackend()
     clauses = ["draw_date IS NOT NULL", "draw_date >= ?"]
@@ -78,28 +130,41 @@ def _load_draws(*, body: str, path: Path | None, start_date: str, end_date: str 
             f"FROM marksix_draws WHERE {' AND '.join(clauses)} ORDER BY draw_date",
             params,
         ).fetchall()
+    if not rows:
+        return []
+    calendar = _motion_phase_calendar(
+        body=body, start=date.fromisoformat(rows[0]["draw_date"]),
+        end=date.fromisoformat(rows[-1]["draw_date"]), backend=backend,
+    )
     output: list[_ObservedDraw] = []
     for row in rows:
-        timestamp = datetime.fromisoformat(f"{row['draw_date']}T12:00:00+00:00").astimezone(UTC)
-        speed = backend.get_position(body, timestamp).lon_speed_deg_day
+        is_retrograde, motion_phase = calendar[row["draw_date"]]
         output.append(_ObservedDraw(
             draw_id=row["draw_id"], draw_date=row["draw_date"],
             numbers=frozenset(int(row[f"ball_{index}"]) for index in range(1, 7)),
-            extra_number=int(row["extra_number"]), is_retrograde=speed < 0,
+            extra_number=int(row["extra_number"]), is_retrograde=is_retrograde,
+            motion_phase=motion_phase,
         ))
     return output
 
 
 def analyze_retrograde_numbers(
-    *, body: str = "Mercury", condition: Literal["retrograde", "direct"] = "retrograde",
+    *, body: str = "Mercury", condition: str = "retrograde",
     number_role: Literal["main", "extra"] = "main", start_date: str = CURRENT_RULE_START,
     end_date: str | None = None, path: Path | None = None,
 ) -> dict[str, Any]:
     body = body.strip().title()
     if body not in SUPPORTED_BODIES:
         raise ValueError(f"Unsupported retrograde body: {body}")
+    if condition not in MOTION_CONDITIONS:
+        raise ValueError(f"Unsupported motion condition: {condition}")
     draws = _load_draws(body=body, path=path, start_date=start_date, end_date=end_date)
-    selected = [draw for draw in draws if draw.is_retrograde == (condition == "retrograde")]
+    if condition == "retrograde":
+        selected = [draw for draw in draws if draw.is_retrograde]
+    elif condition == "direct":
+        selected = [draw for draw in draws if not draw.is_retrograde]
+    else:
+        selected = [draw for draw in draws if draw.motion_phase == condition]
     baseline = [draw for draw in draws if draw not in selected]
     rows: list[dict[str, Any]] = []
     p_values: list[float] = []
@@ -126,7 +191,8 @@ def analyze_retrograde_numbers(
         "condition_draws": len(selected), "baseline_draws": len(baseline), "numbers": rows,
         "method_notes": [
             "Only dated draws in the current 6/49 era are included by default.",
-            "Retrograde is determined from geocentric tropical longitude speed at 12:00 UTC on each draw date.",
+            "Motion phase is derived from geocentric tropical longitude speed sampled daily at 12:00 UTC.",
+            "Station entry/exit phases use seven days; pre/post station research windows use fourteen days.",
             "Lift and p/q values are exploratory historical associations; they do not change future draw probability.",
             "Main and extra numbers are analyzed separately, with Benjamini-Hochberg FDR across 49 numbers.",
         ],

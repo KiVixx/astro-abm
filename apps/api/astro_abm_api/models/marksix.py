@@ -48,7 +48,7 @@ class MarkSixWorldlineRequest(BaseModel):
     language: Literal["en", "zh-Hant"] = "zh-Hant"
     generation_mode: Literal["uniform_random_demo_v1", "astro_association_entertainment_v1"] = "uniform_random_demo_v1"
     astro_body: Literal["Mercury", "Venus", "Mars", "Jupiter", "Saturn"] = "Mercury"
-    astro_condition: Literal["retrograde", "direct"] = "retrograde"
+    astro_condition: Literal["retrograde", "direct", "pre_station", "retrograde_entry", "retrograde_core", "retrograde_exit", "post_station"] = "retrograde"
 
 
 class MarkSixSimulatedDraw(BaseModel):

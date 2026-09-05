@@ -15,6 +15,7 @@ import type {
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineResponse,
+  MarkSixMotionCondition,
 } from "@/lib/types";
 
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
@@ -29,7 +30,7 @@ export default function MarkSixPage() {
   const [result, setResult] = useState<MarkSixWorldlineResponse | null>(null);
   const [research, setResearch] = useState<MarkSixAstroResearch | null>(null);
   const [researchBody, setResearchBody] = useState("Mercury");
-  const [researchCondition, setResearchCondition] = useState<"retrograde" | "direct">("retrograde");
+  const [researchCondition, setResearchCondition] = useState<MarkSixMotionCondition>("retrograde");
   const [numberRole, setNumberRole] = useState<"main" | "extra">("main");
   const [researchLoading, setResearchLoading] = useState(false);
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
@@ -123,9 +124,14 @@ export default function MarkSixPage() {
             </select>
           </label>
           <label>{t("marksix.motionCondition")}
-            <select value={researchCondition} onChange={(event) => setResearchCondition(event.target.value as "retrograde" | "direct")}>
+            <select value={researchCondition} onChange={(event) => setResearchCondition(event.target.value as MarkSixMotionCondition)}>
               <option value="retrograde">{t("marksix.retrograde")}</option>
               <option value="direct">{t("marksix.direct")}</option>
+              <option value="pre_station">{t("marksix.preStation")}</option>
+              <option value="retrograde_entry">{t("marksix.retrogradeEntry")}</option>
+              <option value="retrograde_core">{t("marksix.retrogradeCore")}</option>
+              <option value="retrograde_exit">{t("marksix.retrogradeExit")}</option>
+              <option value="post_station">{t("marksix.postStation")}</option>
             </select>
           </label>
           <label>{t("marksix.numberRole")}

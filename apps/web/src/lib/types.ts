@@ -3,6 +3,9 @@ export type ScenarioMode = "daily_association_only";
 export type LlmProvider = "mock" | "openai_compatible";
 export type ReportLanguage = "en" | "zh-Hant";
 export type WorldlineProvider = "deterministic_mock" | "llm";
+export type MarkSixMotionCondition =
+  | "retrograde" | "direct" | "pre_station" | "retrograde_entry"
+  | "retrograde_core" | "retrograde_exit" | "post_station";
 
 export interface MarkSixStatus {
   total_draws: number;
@@ -43,7 +46,7 @@ export interface MarkSixWorldlineRequest {
   language: ReportLanguage;
   generation_mode?: "uniform_random_demo_v1" | "astro_association_entertainment_v1";
   astro_body?: "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn";
-  astro_condition?: "retrograde" | "direct";
+  astro_condition?: MarkSixMotionCondition;
 }
 
 export interface MarkSixWorldline {
@@ -81,7 +84,7 @@ export interface MarkSixAstroNumberStat {
 
 export interface MarkSixAstroResearch {
   body: string;
-  condition: "retrograde" | "direct";
+  condition: MarkSixMotionCondition;
   number_role: "main" | "extra";
   start_date: string;
   end_date?: string | null;

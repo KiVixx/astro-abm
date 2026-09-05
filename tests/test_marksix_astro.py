@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from datetime import date
 
 from astro_abm import marksix
 from astro_abm import marksix_astro
@@ -55,3 +56,19 @@ def test_current_rule_era_excludes_older_draws(monkeypatch, tmp_path: Path) -> N
 
     result = marksix_astro.analyze_retrograde_numbers(path=path)
     assert result["total_draws"] == 4
+
+
+def test_motion_phase_calendar_distinguishes_station_and_core_windows() -> None:
+    class Backend:
+        def get_position(self, _body: str, ts):
+            retrograde = date(2026, 1, 10) <= ts.date() < date(2026, 1, 30)
+            return SimpleNamespace(lon_speed_deg_day=-1.0 if retrograde else 1.0)
+
+    phases = marksix_astro._motion_phase_calendar(
+        body="Mercury", start=date(2026, 1, 1), end=date(2026, 2, 10), backend=Backend(),
+    )
+    assert phases["2026-01-05"][1] == "pre_station"
+    assert phases["2026-01-10"][1] == "retrograde_entry"
+    assert phases["2026-01-20"][1] == "retrograde_core"
+    assert phases["2026-01-26"][1] == "retrograde_exit"
+    assert phases["2026-02-05"][1] == "post_station"
