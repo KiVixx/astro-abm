@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/i18n/useI18n";
 import {
   createMarkSixWorldlines,
@@ -27,6 +27,19 @@ type MarkSixGenerationMode =
   | "uniform_random_demo_v1"
   | "astro_association_entertainment_v1"
   | "llm_astro_entertainment_v1";
+
+interface GenerationContextSnapshot {
+  mode: MarkSixGenerationMode;
+  contextType: "planet_motion" | "moon_phase";
+  body: string;
+  condition: MarkSixMotionCondition;
+  moonPhase: MarkSixMoonPhaseCondition;
+}
+
+function promptContextText(context: Record<string, unknown>, key: string): string | null {
+  const value = context[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
 
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
   return <span className={extra ? "marksix-ball is-extra" : "marksix-ball"}>{number}</span>;
@@ -60,6 +73,9 @@ export default function MarkSixPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generationSnapshot, setGenerationSnapshot] = useState<GenerationContextSnapshot | null>(null);
+  const researchControlsRef = useRef<HTMLElement>(null);
+  const generationReviewRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     Promise.all([getMarkSixStatus(), getMarkSixDraws(), getMarkSixFrequencies()])
@@ -98,6 +114,77 @@ export default function MarkSixPage() {
     [frequencies],
   );
 
+  useEffect(() => {
+    if (result || llmResult) generationReviewRef.current?.focus();
+  }, [result, llmResult]);
+
+  function currentGenerationSnapshot(): GenerationContextSnapshot {
+    return {
+      mode: worldlineMode,
+      contextType,
+      body: researchBody,
+      condition: researchCondition,
+      moonPhase,
+    };
+  }
+
+  function editAstroContext() {
+    researchControlsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    researchControlsRef.current?.focus({ preventScroll: true });
+  }
+
+  function conditionLabel(snapshot: GenerationContextSnapshot): string {
+    if (snapshot.contextType === "moon_phase") {
+      const labels: Record<MarkSixMoonPhaseCondition, string> = {
+        new_moon_zone: t("marksix.newMoon"), first_quarter_zone: t("marksix.firstQuarter"),
+        full_moon_zone: t("marksix.fullMoon"), last_quarter_zone: t("marksix.lastQuarter"),
+        waxing_other: t("marksix.waxingOther"), waning_other: t("marksix.waningOther"),
+      };
+      return labels[snapshot.moonPhase];
+    }
+    const labels: Record<MarkSixMotionCondition, string> = {
+      retrograde: t("marksix.retrograde"), direct: t("marksix.direct"),
+      pre_station: t("marksix.preStation"), retrograde_entry: t("marksix.retrogradeEntry"),
+      retrograde_core: t("marksix.retrogradeCore"), retrograde_exit: t("marksix.retrogradeExit"),
+      post_station: t("marksix.postStation"),
+    };
+    return labels[snapshot.condition];
+  }
+
+  function resolvedConditionLabel(rawValue: string, snapshot: GenerationContextSnapshot): string {
+    const motionValues: MarkSixMotionCondition[] = [
+      "retrograde", "direct", "pre_station", "retrograde_entry",
+      "retrograde_core", "retrograde_exit", "post_station",
+    ];
+    const moonValues: MarkSixMoonPhaseCondition[] = [
+      "new_moon_zone", "first_quarter_zone", "full_moon_zone",
+      "last_quarter_zone", "waxing_other", "waning_other",
+    ];
+    if (snapshot.contextType === "planet_motion" && motionValues.includes(rawValue as MarkSixMotionCondition)) {
+      return conditionLabel({ ...snapshot, condition: rawValue as MarkSixMotionCondition });
+    }
+    if (snapshot.contextType === "moon_phase" && moonValues.includes(rawValue as MarkSixMoonPhaseCondition)) {
+      return conditionLabel({ ...snapshot, moonPhase: rawValue as MarkSixMoonPhaseCondition });
+    }
+    return rawValue;
+  }
+
+  function generationContextSummary(snapshot: GenerationContextSnapshot, review = false) {
+    if (snapshot.mode === "uniform_random_demo_v1") {
+      return <p>{t("marksix.generationUniformContext")}</p>;
+    }
+    const isLlm = snapshot.mode === "llm_astro_entertainment_v1";
+    return <>
+      <p><strong>{t("marksix.activeAstroContext")}:</strong>{" "}
+        {snapshot.contextType === "planet_motion"
+          ? `${t("marksix.planetMotion")} · ${snapshot.body}${isLlm ? "" : ` · ${conditionLabel(snapshot)}`}`
+          : `${t("marksix.moonPhase")} ${isLlm ? "" : `· ${conditionLabel(snapshot)}`}`}
+      </p>
+      <p>{isLlm ? t("marksix.generationLlmResolvedContext") : t("marksix.generationAstroMainLift")}</p>
+      {!review ? <button className="secondary marksix-edit-context" onClick={editAstroContext} type="button">{t("marksix.editAstroContext")}</button> : null}
+    </>;
+  }
+
   async function generate() {
     if (worldlineMode === "llm_astro_entertainment_v1") {
       if (!llmBaseUrl.trim() || !llmModel.trim()) {
@@ -108,11 +195,13 @@ export default function MarkSixPage() {
       await generateWithLlm();
       return;
     }
+    const snapshot = currentGenerationSnapshot();
     setGenerating(true);
     setError(null);
+    setGenerationSnapshot(null);
     try {
       setLlmResult(null);
-      setResult(await createMarkSixWorldlines({
+      const next = await createMarkSixWorldlines({
         horizon_draws: horizon,
         worldline_count: count,
         language,
@@ -121,7 +210,9 @@ export default function MarkSixPage() {
         astro_condition: researchCondition,
         astro_context_type: contextType,
         moon_phase_condition: moonPhase,
-      }));
+      });
+      setResult(next);
+      setGenerationSnapshot(snapshot);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -145,9 +236,11 @@ export default function MarkSixPage() {
   }
 
   async function generateWithLlm() {
+    const snapshot = currentGenerationSnapshot();
     setLlmLoading(true);
     setError(null);
     setLlmError(null);
+    setGenerationSnapshot(null);
     try {
       const next = await createMarkSixLlmWorldline({
         base_url: llmBaseUrl, model: llmModel, api_key: llmApiKey || null,
@@ -157,6 +250,7 @@ export default function MarkSixPage() {
       });
       setResult(null);
       setLlmResult(next);
+      setGenerationSnapshot(snapshot);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -202,7 +296,7 @@ export default function MarkSixPage() {
       </section>
       {status?.coverage_note ? <p className="marksix-coverage-note">{t("marksix.coverageNote")}</p> : null}
 
-      <section className="marksix-research">
+      <section className="marksix-research" ref={researchControlsRef} tabIndex={-1}>
         <header>
           <p className="pixel-kicker">ASTRO × DRAW HISTORY</p>
           <h2>{t("marksix.astroResearchTitle")}</h2>
@@ -300,6 +394,10 @@ export default function MarkSixPage() {
               {[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
+          <div className="marksix-generation-context" id="marksix-generation-context">
+            <h3>{t("marksix.generationContext")}</h3>
+            {generationContextSummary(currentGenerationSnapshot())}
+          </div>
           <button disabled={generating || llmLoading} onClick={generate} type="button">
             {llmLoading ? t("marksix.llmGenerating") : generating ? t("marksix.generating") : t("marksix.generate")}
           </button>
@@ -328,6 +426,23 @@ export default function MarkSixPage() {
         </section>
       </div> : null}
 
+      {(llmResult || result) && generationSnapshot ? <section
+        aria-labelledby="marksix-generation-review-title"
+        className="marksix-generation-review"
+        ref={generationReviewRef}
+        tabIndex={-1}
+      >
+        <header>
+          <h2 id="marksix-generation-review-title">{t("marksix.generationReview")}</h2>
+        </header>
+        <div className="marksix-generation-context is-review">
+          {generationContextSummary(generationSnapshot, true)}
+          {llmResult ? <div className="marksix-resolved-context">
+            {promptContextText(llmResult.prompt_context, "next_draw_date") ? <span><strong>{t("marksix.resolvedDrawDate")}:</strong> {promptContextText(llmResult.prompt_context, "next_draw_date")}</span> : null}
+            {promptContextText(llmResult.prompt_context, "historical_condition") ? <span><strong>{t("marksix.resolvedCondition")}:</strong> {resolvedConditionLabel(promptContextText(llmResult.prompt_context, "historical_condition")!, generationSnapshot)}</span> : null}
+          </div> : null}
+        </div>
+
       {llmResult ? <section className="marksix-llm-result">
         <header><div><p className="pixel-kicker">LLM ASTRO GUESS</p><h2>{t("marksix.llmResult")}</h2></div><small>{llmResult.model}</small></header>
         <div className="marksix-simulated-draw">
@@ -352,6 +467,7 @@ export default function MarkSixPage() {
           <p>{worldline.disclaimer}</p>
           {worldline.astro_context ? <p>{t("marksix.astroModeNote")}</p> : null}
         </article>)}
+      </section> : null}
       </section> : null}
 
       <div className="marksix-history-grid">
