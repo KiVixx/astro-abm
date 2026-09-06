@@ -761,6 +761,8 @@ pre {
 .marksix-status-grid span, .marksix-status-grid strong { min-width: 0; overflow-wrap: anywhere; }
 .marksix-status-grid span { color: var(--muted); font-size: 12px; }
 .marksix-coverage-note { color: var(--muted); font-size: 13px; margin: 0; }
+.marksix-overview-warning { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
+.marksix-overview-state { color: var(--muted); line-height: 1.55; }
 .marksix-research { border-bottom: 1px solid var(--border); display: grid; gap: 22px; padding: 28px 0; }
 .marksix-research header > p:last-child, .marksix-method-note, .marksix-sample-line { color: var(--muted); line-height: 1.55; }
 .marksix-research-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
@@ -821,6 +823,7 @@ pre {
   .marksix-research-controls { grid-template-columns: 1fr 1fr; }
   .marksix-research-controls button { grid-column: 1 / -1; }
   .marksix-controls button { grid-column: 1 / -1; }
+  .marksix-overview-warning { align-items: flex-start; flex-direction: column; }
   .marksix-history-row { grid-template-columns: 86px 1fr; }
   .marksix-history-row small { grid-column: 2; text-align: left; }
 }

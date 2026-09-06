@@ -27,6 +27,7 @@ type MarkSixGenerationMode =
   | "uniform_random_demo_v1"
   | "astro_association_entertainment_v1"
   | "llm_astro_entertainment_v1";
+type OverviewLoadState = "loading" | "ready" | "error";
 
 interface GenerationContextSnapshot {
   mode: MarkSixGenerationMode;
@@ -70,7 +71,9 @@ export default function MarkSixPage() {
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
   const [count, setCount] = useState(1);
   const [worldlineMode, setWorldlineMode] = useState<MarkSixGenerationMode>("uniform_random_demo_v1");
-  const [loading, setLoading] = useState(true);
+  const [statusLoadState, setStatusLoadState] = useState<OverviewLoadState>("loading");
+  const [drawsLoadState, setDrawsLoadState] = useState<OverviewLoadState>("loading");
+  const [frequenciesLoadState, setFrequenciesLoadState] = useState<OverviewLoadState>("loading");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generationSnapshot, setGenerationSnapshot] = useState<GenerationContextSnapshot | null>(null);
@@ -78,15 +81,35 @@ export default function MarkSixPage() {
   const generationReviewRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    Promise.all([getMarkSixStatus(), getMarkSixDraws(), getMarkSixFrequencies()])
-      .then(([nextStatus, nextDraws, nextFrequencies]) => {
-        setStatus(nextStatus);
-        setDraws(nextDraws);
-        setFrequencies(nextFrequencies);
-      })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
-      .finally(() => setLoading(false));
+    void loadOverview();
   }, []);
+
+  async function loadOverview() {
+    setStatusLoadState("loading");
+    setDrawsLoadState("loading");
+    setFrequenciesLoadState("loading");
+    const [nextStatus, nextDraws, nextFrequencies] = await Promise.allSettled([
+      getMarkSixStatus(), getMarkSixDraws(), getMarkSixFrequencies(),
+    ]);
+    if (nextStatus.status === "fulfilled") {
+      setStatus(nextStatus.value);
+      setStatusLoadState("ready");
+    } else {
+      setStatusLoadState("error");
+    }
+    if (nextDraws.status === "fulfilled") {
+      setDraws(nextDraws.value);
+      setDrawsLoadState("ready");
+    } else {
+      setDrawsLoadState("error");
+    }
+    if (nextFrequencies.status === "fulfilled") {
+      setFrequencies(nextFrequencies.value);
+      setFrequenciesLoadState("ready");
+    } else {
+      setFrequenciesLoadState("error");
+    }
+  }
 
   useEffect(() => {
     try {
@@ -113,6 +136,14 @@ export default function MarkSixPage() {
     () => [...frequencies].sort((a, b) => b.main_count - a.main_count).slice(0, 8),
     [frequencies],
   );
+  const overviewLoading = [statusLoadState, drawsLoadState, frequenciesLoadState].includes("loading");
+  const overviewHasError = [statusLoadState, drawsLoadState, frequenciesLoadState].includes("error");
+
+  function statusMetric(value: string | number | null | undefined): string | number {
+    if (statusLoadState === "loading") return "...";
+    if (statusLoadState === "error") return t("marksix.unavailable");
+    return value ?? "-";
+  }
 
   useEffect(() => {
     if (result || llmResult) generationReviewRef.current?.focus();
@@ -288,13 +319,19 @@ export default function MarkSixPage() {
       </section>
 
       {error ? <p className="notice">{error}</p> : null}
+      {overviewHasError ? <div className="notice marksix-overview-warning" role="status">
+        <span>{t("marksix.overviewPartialError")}</span>
+        <button className="secondary" disabled={overviewLoading} onClick={() => void loadOverview()} type="button">
+          {overviewLoading ? t("marksix.archiveLoading") : t("marksix.retryArchive")}
+        </button>
+      </div> : null}
 
-      <section className="marksix-status-grid">
-        <div><span>{t("marksix.drawCount")}</span><strong>{loading ? "..." : status?.total_draws ?? 0}</strong></div>
-        <div><span>{t("marksix.coverage")}</span><strong>{status?.history_start_year ?? "-"} → {status?.coverage_end ?? "-"}</strong></div>
-        <div><span>{t("marksix.officialVerified")}</span><strong>{status?.official_verified_draws ?? 0}</strong></div>
+      <section aria-busy={statusLoadState === "loading"} className="marksix-status-grid">
+        <div><span>{t("marksix.drawCount")}</span><strong>{statusMetric(status?.total_draws)}</strong></div>
+        <div><span>{t("marksix.coverage")}</span><strong>{statusLoadState === "ready" ? `${status?.history_start_year ?? "-"} → ${status?.coverage_end ?? "-"}` : statusMetric(null)}</strong></div>
+        <div><span>{t("marksix.officialVerified")}</span><strong>{statusMetric(status?.official_verified_draws)}</strong></div>
       </section>
-      {status?.coverage_note ? <p className="marksix-coverage-note">{t("marksix.coverageNote")}</p> : null}
+      {statusLoadState === "ready" && status?.coverage_note ? <p className="marksix-coverage-note">{t("marksix.coverageNote")}</p> : null}
 
       <section className="marksix-research" ref={researchControlsRef} tabIndex={-1}>
         <header>
@@ -471,18 +508,24 @@ export default function MarkSixPage() {
       </section> : null}
 
       <div className="marksix-history-grid">
-        <section className="marksix-history">
+        <section aria-busy={drawsLoadState === "loading"} className="marksix-history">
           <header><p className="pixel-kicker">LOCAL DATABASE</p><h2>{t("marksix.latestDraws")}</h2></header>
-          {draws.map((draw) => <div className="marksix-history-row" key={draw.draw_id}>
+          {drawsLoadState === "loading" ? <p className="marksix-overview-state" role="status">{t("marksix.archiveLoading")}</p> : null}
+          {drawsLoadState === "error" ? <p className="marksix-overview-state">{t("marksix.latestUnavailable")}</p> : null}
+          {drawsLoadState === "ready" && draws.length === 0 ? <p className="marksix-overview-state">{t("marksix.noStoredDraws")}</p> : null}
+          {drawsLoadState === "ready" ? draws.map((draw) => <div className="marksix-history-row" key={draw.draw_id}>
             <time>{draw.draw_date}</time>
             <div>{draw.numbers.map((number) => <Ball key={number} number={number} />)}<Ball extra number={draw.extra_number} /></div>
             <small>{draw.source_is_official ? t("marksix.official") : t("marksix.archive")}</small>
-          </div>)}
+          </div>) : null}
         </section>
-        <section className="marksix-frequency">
+        <section aria-busy={frequenciesLoadState === "loading"} className="marksix-frequency">
           <header><p className="pixel-kicker">DESCRIPTIVE ONLY</p><h2>{t("marksix.frequency")}</h2></header>
           <p>{t("marksix.frequencyNote")}</p>
-          <div>{topFrequencies.map((item) => <span key={item.number}><Ball number={item.number} /><small>{item.main_count}</small></span>)}</div>
+          {frequenciesLoadState === "loading" ? <p className="marksix-overview-state" role="status">{t("marksix.archiveLoading")}</p> : null}
+          {frequenciesLoadState === "error" ? <p className="marksix-overview-state">{t("marksix.frequencyUnavailable")}</p> : null}
+          {frequenciesLoadState === "ready" && topFrequencies.length === 0 ? <p className="marksix-overview-state">{t("marksix.noFrequencyData")}</p> : null}
+          {frequenciesLoadState === "ready" && topFrequencies.length > 0 ? <div>{topFrequencies.map((item) => <span key={item.number}><Ball number={item.number} /><small>{item.main_count}</small></span>)}</div> : null}
         </section>
       </div>
     </div>
