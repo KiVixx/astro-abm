@@ -761,6 +761,8 @@ pre {
 .marksix-status-grid span, .marksix-status-grid strong { min-width: 0; overflow-wrap: anywhere; }
 .marksix-status-grid span { color: var(--muted); font-size: 12px; }
 .marksix-coverage-note { color: var(--muted); font-size: 13px; margin: 0; }
+.marksix-overview-warning { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
+.marksix-overview-state { color: var(--muted); line-height: 1.55; }
 .marksix-research { border-bottom: 1px solid var(--border); display: grid; gap: 22px; padding: 28px 0; }
 .marksix-research header > p:last-child, .marksix-method-note, .marksix-sample-line { color: var(--muted); line-height: 1.55; }
 .marksix-research-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
@@ -786,6 +788,17 @@ pre {
 .marksix-llm-error { margin: 0; }
 .marksix-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
 .marksix-controls label { display: grid; font-size: 12px; gap: 6px; }
+.marksix-generation-context { background: color-mix(in srgb, var(--surface) 82%, var(--signal-cyan)); border-left: 3px solid var(--signal-cyan); display: grid; gap: 8px; grid-column: 1 / -1; padding: 13px 15px; }
+.marksix-generation-context h3, .marksix-generation-context p { margin: 0; }
+.marksix-generation-context h3 { font-size: 13px; }
+.marksix-generation-context p { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.marksix-edit-context { justify-self: start; }
+.marksix-generation-review { display: grid; gap: 16px; outline: 0; scroll-margin-top: 24px; }
+.marksix-generation-review:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal-cyan) 45%, transparent); }
+.marksix-generation-review > header h2 { margin: 0; }
+.marksix-generation-context.is-review { border: 1px solid var(--border); border-left: 3px solid var(--signal-cyan); }
+.marksix-resolved-context { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.marksix-resolved-context span { color: var(--foreground); font-size: 12px; }
 .marksix-worldlines { display: grid; gap: 16px; }
 .marksix-worldlines article { border: 1px solid var(--border-strong); padding: 18px; }
 .marksix-worldlines article > header { align-items: center; display: flex; justify-content: space-between; }
@@ -810,6 +823,7 @@ pre {
   .marksix-research-controls { grid-template-columns: 1fr 1fr; }
   .marksix-research-controls button { grid-column: 1 / -1; }
   .marksix-controls button { grid-column: 1 / -1; }
+  .marksix-overview-warning { align-items: flex-start; flex-direction: column; }
   .marksix-history-row { grid-template-columns: 86px 1fr; }
   .marksix-history-row small { grid-column: 2; text-align: left; }
 }

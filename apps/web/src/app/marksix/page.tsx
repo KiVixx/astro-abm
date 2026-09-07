@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/i18n/useI18n";
 import {
   createMarkSixWorldlines,
@@ -27,6 +27,20 @@ type MarkSixGenerationMode =
   | "uniform_random_demo_v1"
   | "astro_association_entertainment_v1"
   | "llm_astro_entertainment_v1";
+type OverviewLoadState = "loading" | "ready" | "error";
+
+interface GenerationContextSnapshot {
+  mode: MarkSixGenerationMode;
+  contextType: "planet_motion" | "moon_phase";
+  body: string;
+  condition: MarkSixMotionCondition;
+  moonPhase: MarkSixMoonPhaseCondition;
+}
+
+function promptContextText(context: Record<string, unknown>, key: string): string | null {
+  const value = context[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
 
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
   return <span className={extra ? "marksix-ball is-extra" : "marksix-ball"}>{number}</span>;
@@ -57,20 +71,45 @@ export default function MarkSixPage() {
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
   const [count, setCount] = useState(1);
   const [worldlineMode, setWorldlineMode] = useState<MarkSixGenerationMode>("uniform_random_demo_v1");
-  const [loading, setLoading] = useState(true);
+  const [statusLoadState, setStatusLoadState] = useState<OverviewLoadState>("loading");
+  const [drawsLoadState, setDrawsLoadState] = useState<OverviewLoadState>("loading");
+  const [frequenciesLoadState, setFrequenciesLoadState] = useState<OverviewLoadState>("loading");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generationSnapshot, setGenerationSnapshot] = useState<GenerationContextSnapshot | null>(null);
+  const researchControlsRef = useRef<HTMLElement>(null);
+  const generationReviewRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    Promise.all([getMarkSixStatus(), getMarkSixDraws(), getMarkSixFrequencies()])
-      .then(([nextStatus, nextDraws, nextFrequencies]) => {
-        setStatus(nextStatus);
-        setDraws(nextDraws);
-        setFrequencies(nextFrequencies);
-      })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
-      .finally(() => setLoading(false));
+    void loadOverview();
   }, []);
+
+  async function loadOverview() {
+    setStatusLoadState("loading");
+    setDrawsLoadState("loading");
+    setFrequenciesLoadState("loading");
+    const [nextStatus, nextDraws, nextFrequencies] = await Promise.allSettled([
+      getMarkSixStatus(), getMarkSixDraws(), getMarkSixFrequencies(),
+    ]);
+    if (nextStatus.status === "fulfilled") {
+      setStatus(nextStatus.value);
+      setStatusLoadState("ready");
+    } else {
+      setStatusLoadState("error");
+    }
+    if (nextDraws.status === "fulfilled") {
+      setDraws(nextDraws.value);
+      setDrawsLoadState("ready");
+    } else {
+      setDrawsLoadState("error");
+    }
+    if (nextFrequencies.status === "fulfilled") {
+      setFrequencies(nextFrequencies.value);
+      setFrequenciesLoadState("ready");
+    } else {
+      setFrequenciesLoadState("error");
+    }
+  }
 
   useEffect(() => {
     try {
@@ -97,6 +136,85 @@ export default function MarkSixPage() {
     () => [...frequencies].sort((a, b) => b.main_count - a.main_count).slice(0, 8),
     [frequencies],
   );
+  const overviewLoading = [statusLoadState, drawsLoadState, frequenciesLoadState].includes("loading");
+  const overviewHasError = [statusLoadState, drawsLoadState, frequenciesLoadState].includes("error");
+
+  function statusMetric(value: string | number | null | undefined): string | number {
+    if (statusLoadState === "loading") return "...";
+    if (statusLoadState === "error") return t("marksix.unavailable");
+    return value ?? "-";
+  }
+
+  useEffect(() => {
+    if (result || llmResult) generationReviewRef.current?.focus();
+  }, [result, llmResult]);
+
+  function currentGenerationSnapshot(): GenerationContextSnapshot {
+    return {
+      mode: worldlineMode,
+      contextType,
+      body: researchBody,
+      condition: researchCondition,
+      moonPhase,
+    };
+  }
+
+  function editAstroContext() {
+    researchControlsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    researchControlsRef.current?.focus({ preventScroll: true });
+  }
+
+  function conditionLabel(snapshot: GenerationContextSnapshot): string {
+    if (snapshot.contextType === "moon_phase") {
+      const labels: Record<MarkSixMoonPhaseCondition, string> = {
+        new_moon_zone: t("marksix.newMoon"), first_quarter_zone: t("marksix.firstQuarter"),
+        full_moon_zone: t("marksix.fullMoon"), last_quarter_zone: t("marksix.lastQuarter"),
+        waxing_other: t("marksix.waxingOther"), waning_other: t("marksix.waningOther"),
+      };
+      return labels[snapshot.moonPhase];
+    }
+    const labels: Record<MarkSixMotionCondition, string> = {
+      retrograde: t("marksix.retrograde"), direct: t("marksix.direct"),
+      pre_station: t("marksix.preStation"), retrograde_entry: t("marksix.retrogradeEntry"),
+      retrograde_core: t("marksix.retrogradeCore"), retrograde_exit: t("marksix.retrogradeExit"),
+      post_station: t("marksix.postStation"),
+    };
+    return labels[snapshot.condition];
+  }
+
+  function resolvedConditionLabel(rawValue: string, snapshot: GenerationContextSnapshot): string {
+    const motionValues: MarkSixMotionCondition[] = [
+      "retrograde", "direct", "pre_station", "retrograde_entry",
+      "retrograde_core", "retrograde_exit", "post_station",
+    ];
+    const moonValues: MarkSixMoonPhaseCondition[] = [
+      "new_moon_zone", "first_quarter_zone", "full_moon_zone",
+      "last_quarter_zone", "waxing_other", "waning_other",
+    ];
+    if (snapshot.contextType === "planet_motion" && motionValues.includes(rawValue as MarkSixMotionCondition)) {
+      return conditionLabel({ ...snapshot, condition: rawValue as MarkSixMotionCondition });
+    }
+    if (snapshot.contextType === "moon_phase" && moonValues.includes(rawValue as MarkSixMoonPhaseCondition)) {
+      return conditionLabel({ ...snapshot, moonPhase: rawValue as MarkSixMoonPhaseCondition });
+    }
+    return rawValue;
+  }
+
+  function generationContextSummary(snapshot: GenerationContextSnapshot, review = false) {
+    if (snapshot.mode === "uniform_random_demo_v1") {
+      return <p>{t("marksix.generationUniformContext")}</p>;
+    }
+    const isLlm = snapshot.mode === "llm_astro_entertainment_v1";
+    return <>
+      <p><strong>{t("marksix.activeAstroContext")}:</strong>{" "}
+        {snapshot.contextType === "planet_motion"
+          ? `${t("marksix.planetMotion")} · ${snapshot.body}${isLlm ? "" : ` · ${conditionLabel(snapshot)}`}`
+          : `${t("marksix.moonPhase")} ${isLlm ? "" : `· ${conditionLabel(snapshot)}`}`}
+      </p>
+      <p>{isLlm ? t("marksix.generationLlmResolvedContext") : t("marksix.generationAstroMainLift")}</p>
+      {!review ? <button className="secondary marksix-edit-context" onClick={editAstroContext} type="button">{t("marksix.editAstroContext")}</button> : null}
+    </>;
+  }
 
   async function generate() {
     if (worldlineMode === "llm_astro_entertainment_v1") {
@@ -108,11 +226,13 @@ export default function MarkSixPage() {
       await generateWithLlm();
       return;
     }
+    const snapshot = currentGenerationSnapshot();
     setGenerating(true);
     setError(null);
+    setGenerationSnapshot(null);
     try {
       setLlmResult(null);
-      setResult(await createMarkSixWorldlines({
+      const next = await createMarkSixWorldlines({
         horizon_draws: horizon,
         worldline_count: count,
         language,
@@ -121,7 +241,9 @@ export default function MarkSixPage() {
         astro_condition: researchCondition,
         astro_context_type: contextType,
         moon_phase_condition: moonPhase,
-      }));
+      });
+      setResult(next);
+      setGenerationSnapshot(snapshot);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -145,9 +267,11 @@ export default function MarkSixPage() {
   }
 
   async function generateWithLlm() {
+    const snapshot = currentGenerationSnapshot();
     setLlmLoading(true);
     setError(null);
     setLlmError(null);
+    setGenerationSnapshot(null);
     try {
       const next = await createMarkSixLlmWorldline({
         base_url: llmBaseUrl, model: llmModel, api_key: llmApiKey || null,
@@ -157,6 +281,7 @@ export default function MarkSixPage() {
       });
       setResult(null);
       setLlmResult(next);
+      setGenerationSnapshot(snapshot);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -194,15 +319,21 @@ export default function MarkSixPage() {
       </section>
 
       {error ? <p className="notice">{error}</p> : null}
+      {overviewHasError ? <div className="notice marksix-overview-warning" role="status">
+        <span>{t("marksix.overviewPartialError")}</span>
+        <button className="secondary" disabled={overviewLoading} onClick={() => void loadOverview()} type="button">
+          {overviewLoading ? t("marksix.archiveLoading") : t("marksix.retryArchive")}
+        </button>
+      </div> : null}
 
-      <section className="marksix-status-grid">
-        <div><span>{t("marksix.drawCount")}</span><strong>{loading ? "..." : status?.total_draws ?? 0}</strong></div>
-        <div><span>{t("marksix.coverage")}</span><strong>{status?.history_start_year ?? "-"} → {status?.coverage_end ?? "-"}</strong></div>
-        <div><span>{t("marksix.officialVerified")}</span><strong>{status?.official_verified_draws ?? 0}</strong></div>
+      <section aria-busy={statusLoadState === "loading"} className="marksix-status-grid">
+        <div><span>{t("marksix.drawCount")}</span><strong>{statusMetric(status?.total_draws)}</strong></div>
+        <div><span>{t("marksix.coverage")}</span><strong>{statusLoadState === "ready" ? `${status?.history_start_year ?? "-"} → ${status?.coverage_end ?? "-"}` : statusMetric(null)}</strong></div>
+        <div><span>{t("marksix.officialVerified")}</span><strong>{statusMetric(status?.official_verified_draws)}</strong></div>
       </section>
-      {status?.coverage_note ? <p className="marksix-coverage-note">{t("marksix.coverageNote")}</p> : null}
+      {statusLoadState === "ready" && status?.coverage_note ? <p className="marksix-coverage-note">{t("marksix.coverageNote")}</p> : null}
 
-      <section className="marksix-research">
+      <section className="marksix-research" ref={researchControlsRef} tabIndex={-1}>
         <header>
           <p className="pixel-kicker">ASTRO × DRAW HISTORY</p>
           <h2>{t("marksix.astroResearchTitle")}</h2>
@@ -300,6 +431,10 @@ export default function MarkSixPage() {
               {[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
+          <div className="marksix-generation-context" id="marksix-generation-context">
+            <h3>{t("marksix.generationContext")}</h3>
+            {generationContextSummary(currentGenerationSnapshot())}
+          </div>
           <button disabled={generating || llmLoading} onClick={generate} type="button">
             {llmLoading ? t("marksix.llmGenerating") : generating ? t("marksix.generating") : t("marksix.generate")}
           </button>
@@ -328,6 +463,23 @@ export default function MarkSixPage() {
         </section>
       </div> : null}
 
+      {(llmResult || result) && generationSnapshot ? <section
+        aria-labelledby="marksix-generation-review-title"
+        className="marksix-generation-review"
+        ref={generationReviewRef}
+        tabIndex={-1}
+      >
+        <header>
+          <h2 id="marksix-generation-review-title">{t("marksix.generationReview")}</h2>
+        </header>
+        <div className="marksix-generation-context is-review">
+          {generationContextSummary(generationSnapshot, true)}
+          {llmResult ? <div className="marksix-resolved-context">
+            {promptContextText(llmResult.prompt_context, "next_draw_date") ? <span><strong>{t("marksix.resolvedDrawDate")}:</strong> {promptContextText(llmResult.prompt_context, "next_draw_date")}</span> : null}
+            {promptContextText(llmResult.prompt_context, "historical_condition") ? <span><strong>{t("marksix.resolvedCondition")}:</strong> {resolvedConditionLabel(promptContextText(llmResult.prompt_context, "historical_condition")!, generationSnapshot)}</span> : null}
+          </div> : null}
+        </div>
+
       {llmResult ? <section className="marksix-llm-result">
         <header><div><p className="pixel-kicker">LLM ASTRO GUESS</p><h2>{t("marksix.llmResult")}</h2></div><small>{llmResult.model}</small></header>
         <div className="marksix-simulated-draw">
@@ -353,20 +505,27 @@ export default function MarkSixPage() {
           {worldline.astro_context ? <p>{t("marksix.astroModeNote")}</p> : null}
         </article>)}
       </section> : null}
+      </section> : null}
 
       <div className="marksix-history-grid">
-        <section className="marksix-history">
+        <section aria-busy={drawsLoadState === "loading"} className="marksix-history">
           <header><p className="pixel-kicker">LOCAL DATABASE</p><h2>{t("marksix.latestDraws")}</h2></header>
-          {draws.map((draw) => <div className="marksix-history-row" key={draw.draw_id}>
+          {drawsLoadState === "loading" ? <p className="marksix-overview-state" role="status">{t("marksix.archiveLoading")}</p> : null}
+          {drawsLoadState === "error" ? <p className="marksix-overview-state">{t("marksix.latestUnavailable")}</p> : null}
+          {drawsLoadState === "ready" && draws.length === 0 ? <p className="marksix-overview-state">{t("marksix.noStoredDraws")}</p> : null}
+          {drawsLoadState === "ready" ? draws.map((draw) => <div className="marksix-history-row" key={draw.draw_id}>
             <time>{draw.draw_date}</time>
             <div>{draw.numbers.map((number) => <Ball key={number} number={number} />)}<Ball extra number={draw.extra_number} /></div>
             <small>{draw.source_is_official ? t("marksix.official") : t("marksix.archive")}</small>
-          </div>)}
+          </div>) : null}
         </section>
-        <section className="marksix-frequency">
+        <section aria-busy={frequenciesLoadState === "loading"} className="marksix-frequency">
           <header><p className="pixel-kicker">DESCRIPTIVE ONLY</p><h2>{t("marksix.frequency")}</h2></header>
           <p>{t("marksix.frequencyNote")}</p>
-          <div>{topFrequencies.map((item) => <span key={item.number}><Ball number={item.number} /><small>{item.main_count}</small></span>)}</div>
+          {frequenciesLoadState === "loading" ? <p className="marksix-overview-state" role="status">{t("marksix.archiveLoading")}</p> : null}
+          {frequenciesLoadState === "error" ? <p className="marksix-overview-state">{t("marksix.frequencyUnavailable")}</p> : null}
+          {frequenciesLoadState === "ready" && topFrequencies.length === 0 ? <p className="marksix-overview-state">{t("marksix.noFrequencyData")}</p> : null}
+          {frequenciesLoadState === "ready" && topFrequencies.length > 0 ? <div>{topFrequencies.map((item) => <span key={item.number}><Ball number={item.number} /><small>{item.main_count}</small></span>)}</div> : null}
         </section>
       </div>
     </div>

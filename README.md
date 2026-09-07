@@ -73,6 +73,9 @@ Mercury, Venus, Mars, Jupiter, or Saturn retrograde/direct conditions. It report
 historical rates, lift, and FDR-adjusted exploratory statistics. Its optional
 astro-association worldline uses those lifts only as entertainment weights; it
 does not establish a predictive advantage. Uniform random remains the baseline.
+Generator modes are explicit: uniform mode applies no astro weighting;
+astro-association mode uses the selected historical context and main-number lift;
+LLM mode resolves the actual condition from the next illustrative draw snapshot.
 
 The first `make bootstrap` builds the local database and 100-year core daily astronomy dataset, so it may take a while. Later updates are incremental through the maintenance container.
 
