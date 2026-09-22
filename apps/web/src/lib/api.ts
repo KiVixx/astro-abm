@@ -19,6 +19,8 @@ import type {
   MarkSixMoonPhaseCondition,
   MarkSixLlmWorldlineRequest,
   MarkSixLlmWorldlineResponse,
+  MarkSixPublicLlmWorldlineRecord,
+  MarkSixPublicLlmWorldlineSummary,
   MarkSixFrequency,
   MarkSixStatus,
   MarkSixWorldlineRequest,
@@ -387,4 +389,21 @@ export async function createMarkSixLlmWorldline(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getPublicMarkSixLlmWorldlines(
+  limit = 50,
+  offset = 0,
+): Promise<MarkSixPublicLlmWorldlineSummary[]> {
+  return apiFetch<MarkSixPublicLlmWorldlineSummary[]>(
+    `/marksix/llm-worldlines?limit=${limit}&offset=${offset}`,
+  );
+}
+
+export async function getPublicMarkSixLlmWorldline(
+  libraryId: string,
+): Promise<MarkSixPublicLlmWorldlineRecord> {
+  return apiFetch<MarkSixPublicLlmWorldlineRecord>(
+    `/marksix/llm-worldlines/${encodeURIComponent(libraryId)}`,
+  );
 }

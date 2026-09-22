@@ -123,6 +123,31 @@ export interface MarkSixLlmWorldlineResponse {
   model: string;
   network_call_performed: boolean;
   prompt_context: Record<string, unknown>;
+  public_library_id?: string | null;
+}
+
+export interface MarkSixPublicLlmWorldlineSummary {
+  library_id: string;
+  worldline_id: string;
+  created_at: string;
+  draw_date: string;
+  numbers: number[];
+  extra_number: number;
+  language: ReportLanguage;
+  provider: string;
+  model: string;
+  confidence: string;
+  astro_context_type: string;
+  historical_condition: string;
+}
+
+export interface MarkSixPublicLlmWorldlineRecord extends MarkSixPublicLlmWorldlineSummary {
+  generation_mode: string;
+  rationale: string;
+  caveats: string[];
+  disclaimer: string;
+  astro_context: Record<string, unknown>;
+  prompt_context: Record<string, unknown>;
 }
 
 export interface LlmPresetSummary {

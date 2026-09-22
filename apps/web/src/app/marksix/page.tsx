@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/i18n/useI18n";
 import {
@@ -311,6 +312,9 @@ export default function MarkSixPage() {
         <p className="pixel-kicker">MARK SIX // ASTRO RESEARCH + ENTERTAINMENT WORLDLINES</p>
         <h1>{t("marksix.title")}</h1>
         <p className="lead">{t("marksix.lead")}</p>
+        <Link className="button secondary" href="/marksix/worldlines">
+          {t("marksix.publicLibraryOpen")}
+        </Link>
       </header>
 
       <section className="marksix-responsible" aria-label={t("marksix.safetyTitle")}>
@@ -439,7 +443,10 @@ export default function MarkSixPage() {
             {llmLoading ? t("marksix.llmGenerating") : generating ? t("marksix.generating") : t("marksix.generate")}
           </button>
         </div>
-        {worldlineMode === "llm_astro_entertainment_v1" ? <p className="marksix-method-note">{t("marksix.llmModeNote")}</p> : null}
+        {worldlineMode === "llm_astro_entertainment_v1" ? <div className="marksix-public-notice">
+          <strong>{t("marksix.publicLibraryNoticeTitle")}</strong>
+          <p>{t("marksix.publicLibraryNotice")}</p>
+        </div> : null}
         {llmSettingsSaved ? <p className="marksix-method-note" role="status">{t("marksix.llmSaved")}</p> : null}
       </section>
 
@@ -490,6 +497,9 @@ export default function MarkSixPage() {
         <p><strong>{t("marksix.llmConfidence")}:</strong> {llmResult.confidence}</p>
         {llmResult.caveats.length ? <ul>{llmResult.caveats.map((item) => <li key={item}>{item}</li>)}</ul> : null}
         <p className="marksix-method-note">{llmResult.worldline.disclaimer}</p>
+        {llmResult.public_library_id ? <Link className="button secondary" href={`/marksix/worldlines/${llmResult.public_library_id}`}>
+          {t("marksix.publicLibraryViewEntry")}
+        </Link> : null}
       </section> : null}
 
       {result ? <section className="marksix-worldlines">

@@ -138,6 +138,7 @@ function pageTitleKey(pathname: string): string {
   if (pathname === "/agents") {
     return "agents.title";
   }
+  if (pathname.startsWith("/marksix/worldlines")) return "marksix.publicLibraryTitle";
   if (pathname === "/marksix") return "marksix.title";
   if (pathname === "/legal") {
     return "legal.title";
