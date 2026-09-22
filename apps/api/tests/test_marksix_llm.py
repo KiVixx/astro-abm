@@ -60,7 +60,40 @@ def test_llm_marksix_endpoint_returns_safe_validated_payload(monkeypatch) -> Non
     })
     assert response.status_code == 200
     assert response.json()["worldline"]["draws"][0]["extra_number"] == 14
+    assert response.json()["public_library_id"].startswith("marksix-public-")
     assert "never-return-me" not in response.text
+
+    library = TestClient(app).get("/marksix/llm-worldlines")
+    assert library.status_code == 200
+    assert len(library.json()) == 1
+    assert library.json()[0]["library_id"] == response.json()["public_library_id"]
+    assert library.json()[0]["numbers"] == [8, 9, 10, 11, 12, 13]
+    assert "base_url" not in library.text
+    assert "api_key" not in library.text
+    assert "never-return-me" not in library.text
+    assert TestClient(app).get("/marksix/llm-worldlines?limit=1&offset=1").json() == []
+
+    detail = TestClient(app).get(f"/marksix/llm-worldlines/{response.json()['public_library_id']}")
+    assert detail.status_code == 200
+    assert detail.json()["rationale"] == "歷史比較只作娛樂。"
+    assert "credential_status" not in detail.json()["prompt_context"]
+    assert "llm.example" not in detail.text
+
+
+def test_invalid_llm_output_is_not_added_to_public_library(monkeypatch) -> None:
+    _patch_context(monkeypatch)
+    monkeypatch.setattr(marksix_llm, "_call_openai_compatible", lambda *args, **kwargs: "not-json")
+    client = TestClient(app)
+    response = client.post("/marksix/llm-worldlines", json={
+        "base_url": "https://llm.example/v1", "model": "test-model", "api_key": "secret",
+    })
+    assert response.status_code == 502
+    assert client.get("/marksix/llm-worldlines").json() == []
+
+
+def test_public_llm_worldline_missing_record_returns_404() -> None:
+    response = TestClient(app).get("/marksix/llm-worldlines/missing")
+    assert response.status_code == 404
 
 
 def test_history_comparison_matches_next_draw_planet_phase(monkeypatch) -> None:

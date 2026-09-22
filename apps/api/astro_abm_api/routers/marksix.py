@@ -25,9 +25,16 @@ from astro_abm_api.models.marksix import (
     MarkSixAstroResearch,
     MarkSixLlmWorldlineRequest,
     MarkSixLlmWorldlineResponse,
+    MarkSixPublicLlmWorldlineRecord,
+    MarkSixPublicLlmWorldlineSummary,
 )
 from astro_abm_api.services.llm_client import safe_llm_request_error_message
 from astro_abm_api.services.marksix_llm import generate_marksix_llm_worldline
+from astro_abm_api.services.marksix_public_library import (
+    get_public_llm_worldline,
+    list_public_llm_worldlines,
+    save_public_llm_worldline,
+)
 
 
 router = APIRouter(prefix="/marksix", tags=["marksix"])
@@ -133,8 +140,29 @@ def create_marksix_worldlines(request: MarkSixWorldlineRequest) -> MarkSixWorldl
 @router.post("/llm-worldlines", response_model=MarkSixLlmWorldlineResponse)
 def create_marksix_llm_worldline(request: MarkSixLlmWorldlineRequest) -> MarkSixLlmWorldlineResponse:
     try:
-        return MarkSixLlmWorldlineResponse.model_validate(generate_marksix_llm_worldline(request))
+        result = generate_marksix_llm_worldline(request)
+        result["public_library_id"] = save_public_llm_worldline(result, language=request.language)
+        return MarkSixLlmWorldlineResponse.model_validate(result)
     except requests.RequestException as error:
         raise HTTPException(status_code=502, detail=safe_llm_request_error_message(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.get("/llm-worldlines", response_model=list[MarkSixPublicLlmWorldlineSummary])
+def get_public_marksix_llm_worldlines(
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> list[MarkSixPublicLlmWorldlineSummary]:
+    return [
+        MarkSixPublicLlmWorldlineSummary.model_validate(row)
+        for row in list_public_llm_worldlines(limit=limit, offset=offset)
+    ]
+
+
+@router.get("/llm-worldlines/{library_id}", response_model=MarkSixPublicLlmWorldlineRecord)
+def get_public_marksix_llm_worldline(library_id: str) -> MarkSixPublicLlmWorldlineRecord:
+    record = get_public_llm_worldline(library_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Public Mark Six LLM worldline not found")
+    return MarkSixPublicLlmWorldlineRecord.model_validate(record)

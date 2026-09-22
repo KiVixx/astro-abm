@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -131,4 +131,29 @@ class MarkSixLlmWorldlineResponse(BaseModel):
     provider: str = "openai_compatible"
     model: str
     network_call_performed: bool = True
+    prompt_context: dict
+    public_library_id: str | None = None
+
+
+class MarkSixPublicLlmWorldlineSummary(BaseModel):
+    library_id: str
+    worldline_id: str
+    created_at: datetime
+    draw_date: date
+    numbers: list[int]
+    extra_number: int
+    language: Literal["en", "zh-Hant"]
+    provider: str
+    model: str
+    confidence: str
+    astro_context_type: str
+    historical_condition: str
+
+
+class MarkSixPublicLlmWorldlineRecord(MarkSixPublicLlmWorldlineSummary):
+    generation_mode: str
+    rationale: str
+    caveats: list[str]
+    disclaimer: str
+    astro_context: dict
     prompt_context: dict
