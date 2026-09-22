@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from astro_abm.marksix import _next_draw_dates
@@ -157,8 +157,16 @@ def _selected_astro_context(
     return context, history, selected
 
 
-def _messages(*, context: dict[str, Any], language: str) -> list[dict[str, str]]:
+def _messages(
+    *,
+    context: dict[str, Any],
+    language: str,
+    custom_user_prompt: str | None = None,
+) -> list[dict[str, str]]:
     requested_language = "Traditional Chinese" if language == "zh-Hant" else "English"
+    user_context = dict(context)
+    if custom_user_prompt:
+        user_context["user_instructions"] = custom_user_prompt
     return [
         {
             "role": "system",
@@ -171,8 +179,44 @@ def _messages(*, context: dict[str, Any], language: str) -> list[dict[str, str]]
                 f"(string), confidence (string), and caveats (array of strings). Write text in {requested_language}."
             ),
         },
-        {"role": "user", "content": json.dumps(context, ensure_ascii=False, separators=(",", ":"))},
+        {"role": "user", "content": json.dumps(user_context, ensure_ascii=False, separators=(",", ":"))},
     ]
+
+
+def _prompt_context(
+    request: MarkSixLlmWorldlineRequest,
+) -> tuple[date, dict[str, Any], dict[str, Any] | None, list[str], dict[str, Any]]:
+    next_draw_date = _next_draw_dates(datetime.now(UTC).date() + timedelta(days=1), 1)[0]
+    next_draw_snapshot = planetary_snapshot(next_draw_date)
+    astro_context, history_context, selected_features = _selected_astro_context(
+        request, next_draw_snapshot,
+    )
+    context: dict[str, Any] = {
+        "purpose": "entertainment_mark_six_worldline_guess",
+        "next_draw_astro_context": astro_context,
+        "interpretation_boundary": (
+            "Historical associations and LLM output do not change the equal probability of valid combinations."
+        ),
+    }
+    if history_context is not None:
+        context["primary_historical_comparison"] = history_context
+    return next_draw_date, astro_context, history_context, selected_features, context
+
+
+def preview_marksix_llm_prompt(request: MarkSixLlmWorldlineRequest) -> dict[str, Any]:
+    next_draw_date, _astro_context, _history_context_value, selected_features, context = _prompt_context(request)
+    messages = _messages(
+        context=context,
+        language=request.language,
+        custom_user_prompt=request.custom_user_prompt,
+    )
+    return {
+        "next_draw_date": next_draw_date,
+        "system_prompt": messages[0]["content"],
+        "user_prompt": messages[1]["content"],
+        "selected_astro_features": selected_features,
+        "custom_user_prompt": request.custom_user_prompt,
+    }
 
 
 def _validated_numbers(payload: dict[str, Any]) -> tuple[list[int], int]:
@@ -189,26 +233,21 @@ def _validated_numbers(payload: dict[str, Any]) -> tuple[list[int], int]:
 
 
 def generate_marksix_llm_worldline(request: MarkSixLlmWorldlineRequest) -> dict[str, Any]:
-    next_draw_date = _next_draw_dates(datetime.now(UTC).date() + timedelta(days=1), 1)[0]
-    next_draw_snapshot = planetary_snapshot(next_draw_date)
-    astro_context, history_context, selected_features = _selected_astro_context(
-        request, next_draw_snapshot,
-    )
-    context: dict[str, Any] = {
-        "purpose": "entertainment_mark_six_worldline_guess",
-        "next_draw_astro_context": astro_context,
-        "interpretation_boundary": (
-            "Historical associations and LLM output do not change the equal probability of valid combinations."
-        ),
-    }
-    if history_context is not None:
-        context["primary_historical_comparison"] = history_context
+    next_draw_date, astro_context, history_context, selected_features, context = _prompt_context(request)
     config = build_llm_config(
         provider="openai_compatible", base_url=request.base_url, model=request.model,
         api_key=request.api_key, real_enabled=True, timeout_seconds=request.timeout_seconds,
         max_output_tokens=3000,
     )
-    raw_text = _call_openai_compatible(config, _messages(context=context, language=request.language), max_tokens=3000)
+    raw_text = _call_openai_compatible(
+        config,
+        _messages(
+            context=context,
+            language=request.language,
+            custom_user_prompt=request.custom_user_prompt,
+        ),
+        max_tokens=3000,
+    )
     payload = parse_llm_json(raw_text)
     if payload is None:
         raise ValueError("The LLM response was not valid JSON")
@@ -243,6 +282,7 @@ def generate_marksix_llm_worldline(request: MarkSixLlmWorldlineRequest) -> dict[
             "included_astro_sections": [
                 key for key in ("planet_motion", "moon_phase", "major_aspects") if key in astro_context
             ],
+            "custom_user_prompt_used": bool(request.custom_user_prompt),
             "credential_status": "redacted" if request.api_key else "not_configured",
         },
     }

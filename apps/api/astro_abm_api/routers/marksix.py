@@ -25,11 +25,12 @@ from astro_abm_api.models.marksix import (
     MarkSixAstroResearch,
     MarkSixLlmWorldlineRequest,
     MarkSixLlmWorldlineResponse,
+    MarkSixLlmPromptPreviewResponse,
     MarkSixPublicLlmWorldlineRecord,
     MarkSixPublicLlmWorldlineSummary,
 )
 from astro_abm_api.services.llm_client import safe_llm_request_error_message
-from astro_abm_api.services.marksix_llm import generate_marksix_llm_worldline
+from astro_abm_api.services.marksix_llm import generate_marksix_llm_worldline, preview_marksix_llm_prompt
 from astro_abm_api.services.marksix_public_library import (
     get_public_llm_worldline,
     list_public_llm_worldlines,
@@ -147,6 +148,13 @@ def create_marksix_llm_worldline(request: MarkSixLlmWorldlineRequest) -> MarkSix
         raise HTTPException(status_code=502, detail=safe_llm_request_error_message(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.post("/llm-prompt-preview", response_model=MarkSixLlmPromptPreviewResponse)
+def get_marksix_llm_prompt_preview(
+    request: MarkSixLlmWorldlineRequest,
+) -> MarkSixLlmPromptPreviewResponse:
+    return MarkSixLlmPromptPreviewResponse.model_validate(preview_marksix_llm_prompt(request))
 
 
 @router.get("/llm-worldlines", response_model=list[MarkSixPublicLlmWorldlineSummary])

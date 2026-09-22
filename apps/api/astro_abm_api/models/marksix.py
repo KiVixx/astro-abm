@@ -128,6 +128,7 @@ class MarkSixLlmWorldlineRequest(BaseModel):
     astro_condition: Literal["retrograde", "direct", "pre_station", "retrograde_entry", "retrograde_core", "retrograde_exit", "post_station"] = "retrograde"
     moon_phase_condition: Literal["new_moon_zone", "first_quarter_zone", "full_moon_zone", "last_quarter_zone", "waxing_other", "waning_other"] = "full_moon_zone"
     astro_features: list[MarkSixAstroFeature] | None = None
+    custom_user_prompt: str | None = Field(default=None, max_length=6000)
 
     @field_validator("base_url")
     @classmethod
@@ -150,6 +151,22 @@ class MarkSixLlmWorldlineRequest(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("astro features must be unique")
         return value
+
+    @field_validator("custom_user_prompt")
+    @classmethod
+    def normalize_custom_user_prompt(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class MarkSixLlmPromptPreviewResponse(BaseModel):
+    next_draw_date: date
+    system_prompt: str
+    user_prompt: str
+    selected_astro_features: list[MarkSixAstroFeature]
+    custom_user_prompt: str | None = None
 
 
 class MarkSixLlmWorldlineResponse(BaseModel):

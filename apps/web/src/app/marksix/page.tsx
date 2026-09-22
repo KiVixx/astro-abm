@@ -6,6 +6,7 @@ import { useI18n } from "@/i18n/useI18n";
 import {
   createMarkSixWorldlines,
   createMarkSixLlmWorldline,
+  previewMarkSixLlmPrompt,
   getMarkSixAstroResearch,
   getMarkSixDraws,
   getMarkSixFrequencies,
@@ -20,6 +21,8 @@ import type {
   MarkSixMotionCondition,
   MarkSixMoonPhaseCondition,
   MarkSixLlmWorldlineResponse,
+  MarkSixLlmPromptPreview,
+  MarkSixLlmWorldlineRequest,
   MarkSixAstroFeature,
 } from "@/lib/types";
 
@@ -64,6 +67,14 @@ function promptContextList(context: Record<string, unknown>, key: string): strin
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function readablePrompt(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
   return <span className={extra ? "marksix-ball is-extra" : "marksix-ball"}>{number}</span>;
 }
@@ -88,6 +99,10 @@ export default function MarkSixPage() {
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmTimeoutSeconds, setLlmTimeoutSeconds] = useState(120);
   const [llmAstroFeatures, setLlmAstroFeatures] = useState<MarkSixAstroFeature[]>(DEFAULT_LLM_ASTRO_FEATURES);
+  const [llmCustomPrompt, setLlmCustomPrompt] = useState("");
+  const [llmPromptEditing, setLlmPromptEditing] = useState(false);
+  const [llmPromptPreview, setLlmPromptPreview] = useState<MarkSixLlmPromptPreview | null>(null);
+  const [llmPromptPreviewLoading, setLlmPromptPreviewLoading] = useState(false);
   const [llmSettingsSaved, setLlmSettingsSaved] = useState(false);
   const [llmResult, setLlmResult] = useState<MarkSixLlmWorldlineResponse | null>(null);
   const [llmError, setLlmError] = useState<string | null>(null);
@@ -100,7 +115,6 @@ export default function MarkSixPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generationSnapshot, setGenerationSnapshot] = useState<GenerationContextSnapshot | null>(null);
-  const researchControlsRef = useRef<HTMLElement>(null);
   const generationReviewRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -144,6 +158,7 @@ export default function MarkSixPage() {
         apiKey: string;
         timeoutSeconds: number;
         astroFeatures: MarkSixAstroFeature[];
+        customPrompt: string;
       }>;
       if (typeof settings.baseUrl === "string") setLlmBaseUrl(settings.baseUrl);
       if (typeof settings.model === "string") setLlmModel(settings.model);
@@ -157,6 +172,7 @@ export default function MarkSixPage() {
         );
         if (supported.length) setLlmAstroFeatures([...new Set(supported)]);
       }
+      if (typeof settings.customPrompt === "string") setLlmCustomPrompt(settings.customPrompt);
     } catch {
       window.localStorage.removeItem(MARKSIX_LLM_SETTINGS_KEY);
     }
@@ -187,11 +203,6 @@ export default function MarkSixPage() {
       condition: researchCondition,
       moonPhase,
     };
-  }
-
-  function editAstroContext() {
-    researchControlsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    researchControlsRef.current?.focus({ preventScroll: true });
   }
 
   function conditionLabel(snapshot: GenerationContextSnapshot): string {
@@ -240,20 +251,66 @@ export default function MarkSixPage() {
       : [...current, feature]);
   }
 
-  function generationContextSummary(snapshot: GenerationContextSnapshot, review = false) {
+  function generationContextSummary(snapshot: GenerationContextSnapshot) {
     if (snapshot.mode === "uniform_random_demo_v1") {
       return <p>{t("marksix.generationUniformContext")}</p>;
     }
     const isLlm = snapshot.mode === "llm_astro_entertainment_v1";
+    if (isLlm) {
+      return <>
+        <p><strong>{t("marksix.astroFeatureIncluded")}:</strong>{" "}
+          {llmAstroFeatures.map(astroFeatureLabel).join(" · ")}
+        </p>
+        <p>{t("marksix.generationLlmResolvedContext")}</p>
+      </>;
+    }
     return <>
       <p><strong>{t("marksix.activeAstroContext")}:</strong>{" "}
         {snapshot.contextType === "planet_motion"
-          ? `${t("marksix.planetMotion")} · ${snapshot.body}${isLlm ? "" : ` · ${conditionLabel(snapshot)}`}`
-          : `${t("marksix.moonPhase")} ${isLlm ? "" : `· ${conditionLabel(snapshot)}`}`}
+          ? `${t("marksix.planetMotion")} · ${snapshot.body} · ${conditionLabel(snapshot)}`
+          : `${t("marksix.moonPhase")} · ${conditionLabel(snapshot)}`}
       </p>
-      <p>{isLlm ? t("marksix.generationLlmResolvedContext") : t("marksix.generationAstroMainLift")}</p>
-      {!review ? <button className="secondary marksix-edit-context" onClick={editAstroContext} type="button">{t("marksix.editAstroContext")}</button> : null}
+      <p>{t("marksix.generationAstroMainLift")}</p>
     </>;
+  }
+
+  function llmRequestPayload(): MarkSixLlmWorldlineRequest {
+    return {
+      base_url: llmBaseUrl,
+      model: llmModel,
+      api_key: llmApiKey || null,
+      timeout_seconds: llmTimeoutSeconds,
+      language,
+      astro_context_type: contextType,
+      astro_body: researchBody as "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn",
+      astro_condition: researchCondition,
+      moon_phase_condition: moonPhase,
+      astro_features: llmAstroFeatures,
+      custom_user_prompt: llmCustomPrompt.trim() || null,
+    };
+  }
+
+  async function previewLlmPrompt() {
+    setLlmError(null);
+    setLlmPromptPreview(null);
+    if (!llmAstroFeatures.length) {
+      setLlmError(t("marksix.astroFeatureRequired"));
+      return;
+    }
+    setLlmPromptPreviewLoading(true);
+    try {
+      const payload = llmRequestPayload();
+      setLlmPromptPreview(await previewMarkSixLlmPrompt({
+        ...payload,
+        base_url: payload.base_url.trim() || "https://prompt-preview.invalid/v1",
+        model: payload.model.trim() || "prompt-preview",
+        api_key: null,
+      }));
+    } catch (reason) {
+      setLlmError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setLlmPromptPreviewLoading(false);
+    }
   }
 
   async function generate() {
@@ -318,13 +375,7 @@ export default function MarkSixPage() {
     setLlmError(null);
     setGenerationSnapshot(null);
     try {
-      const next = await createMarkSixLlmWorldline({
-        base_url: llmBaseUrl, model: llmModel, api_key: llmApiKey || null,
-        timeout_seconds: llmTimeoutSeconds, language, astro_context_type: contextType,
-        astro_body: researchBody as "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn",
-        astro_condition: researchCondition, moon_phase_condition: moonPhase,
-        astro_features: llmAstroFeatures,
-      });
+      const next = await createMarkSixLlmWorldline(llmRequestPayload());
       setResult(null);
       setLlmResult(next);
       setGenerationSnapshot(snapshot);
@@ -351,6 +402,7 @@ export default function MarkSixPage() {
       apiKey: llmApiKey,
       timeoutSeconds: llmTimeoutSeconds,
       astroFeatures: llmAstroFeatures,
+      customPrompt: llmCustomPrompt,
     }));
     setLlmSettingsSaved(true);
     setLlmOpen(false);
@@ -387,7 +439,7 @@ export default function MarkSixPage() {
       </section>
       {statusLoadState === "ready" && status?.coverage_note ? <p className="marksix-coverage-note">{t("marksix.coverageNote")}</p> : null}
 
-      <section className="marksix-research" ref={researchControlsRef} tabIndex={-1}>
+      <section className="marksix-research">
         <header>
           <p className="pixel-kicker">ASTRO × DRAW HISTORY</p>
           <h2>{t("marksix.astroResearchTitle")}</h2>
@@ -534,6 +586,47 @@ export default function MarkSixPage() {
               </label>)}
             </div>
           </fieldset>
+          <section className="marksix-prompt-editor" aria-labelledby="marksix-prompt-editor-title">
+            <header>
+              <div>
+                <h3 id="marksix-prompt-editor-title">{t("marksix.promptTitle")}</h3>
+                <p>{t("marksix.promptLead")}</p>
+              </div>
+              <div className="marksix-prompt-actions">
+                <button className="secondary" onClick={() => setLlmPromptEditing((value) => !value)} type="button">
+                  {llmPromptEditing ? t("marksix.promptDone") : t("marksix.promptEdit")}
+                </button>
+                <button
+                  className="secondary"
+                  disabled={llmPromptPreviewLoading || !llmAstroFeatures.length}
+                  onClick={() => void previewLlmPrompt()}
+                  type="button"
+                >
+                  {llmPromptPreviewLoading ? t("marksix.promptPreviewing") : t("marksix.promptPreview")}
+                </button>
+              </div>
+            </header>
+            {llmPromptEditing ? <label className="form-field">
+              <span>{t("marksix.promptCustomLabel")}</span>
+              <textarea
+                maxLength={6000}
+                onChange={(event) => { setLlmCustomPrompt(event.target.value); setLlmPromptPreview(null); }}
+                placeholder={t("marksix.promptCustomPlaceholder")}
+                rows={6}
+                value={llmCustomPrompt}
+              />
+              <small>{t("marksix.promptCustomHelp")}</small>
+            </label> : <p className="marksix-prompt-current">
+              {llmCustomPrompt.trim() || t("marksix.promptDefaultOnly")}
+            </p>}
+            {llmPromptPreview ? <div className="marksix-prompt-preview">
+              <p><strong>{t("marksix.promptDrawDate")}:</strong> {llmPromptPreview.next_draw_date}</p>
+              <h4>{t("marksix.promptSystem")}</h4>
+              <pre>{llmPromptPreview.system_prompt}</pre>
+              <h4>{t("marksix.promptUser")}</h4>
+              <pre>{readablePrompt(llmPromptPreview.user_prompt)}</pre>
+            </div> : null}
+          </section>
           <p className="marksix-method-note">{t("marksix.llmPrivacy")}</p>
           {llmError ? <p className="notice marksix-llm-error" role="alert">{llmError}</p> : null}
           <footer><button disabled={!llmBaseUrl.trim() || !llmModel.trim() || !llmAstroFeatures.length} onClick={saveLlmSettings} type="button">
@@ -552,7 +645,7 @@ export default function MarkSixPage() {
           <h2 id="marksix-generation-review-title">{t("marksix.generationReview")}</h2>
         </header>
         <div className="marksix-generation-context is-review">
-          {generationContextSummary(generationSnapshot, true)}
+          {generationContextSummary(generationSnapshot)}
           {llmResult ? <div className="marksix-resolved-context">
             {promptContextText(llmResult.prompt_context, "next_draw_date") ? <span><strong>{t("marksix.resolvedDrawDate")}:</strong> {promptContextText(llmResult.prompt_context, "next_draw_date")}</span> : null}
             {promptContextText(llmResult.prompt_context, "historical_condition") ? <span><strong>{t("marksix.resolvedCondition")}:</strong> {resolvedConditionLabel(promptContextText(llmResult.prompt_context, "historical_condition")!, generationSnapshot)}</span> : null}

@@ -124,6 +124,15 @@ export interface MarkSixLlmWorldlineRequest {
   astro_condition: MarkSixMotionCondition;
   moon_phase_condition: MarkSixMoonPhaseCondition;
   astro_features: MarkSixAstroFeature[];
+  custom_user_prompt?: string | null;
+}
+
+export interface MarkSixLlmPromptPreview {
+  next_draw_date: string;
+  system_prompt: string;
+  user_prompt: string;
+  selected_astro_features: MarkSixAstroFeature[];
+  custom_user_prompt?: string | null;
 }
 
 export interface MarkSixLlmWorldlineResponse {
