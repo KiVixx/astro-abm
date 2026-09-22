@@ -6,6 +6,20 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+MarkSixAstroFeature = Literal[
+    "mercury_motion",
+    "venus_motion",
+    "mars_motion",
+    "jupiter_motion",
+    "saturn_motion",
+    "uranus_motion",
+    "neptune_motion",
+    "pluto_motion",
+    "moon_phase",
+    "major_aspects",
+]
+
+
 class MarkSixDrawRecord(BaseModel):
     draw_id: str
     draw_date: date | None = None
@@ -113,6 +127,7 @@ class MarkSixLlmWorldlineRequest(BaseModel):
     astro_body: Literal["Mercury", "Venus", "Mars", "Jupiter", "Saturn"] = "Mercury"
     astro_condition: Literal["retrograde", "direct", "pre_station", "retrograde_entry", "retrograde_core", "retrograde_exit", "post_station"] = "retrograde"
     moon_phase_condition: Literal["new_moon_zone", "first_quarter_zone", "full_moon_zone", "last_quarter_zone", "waxing_other", "waning_other"] = "full_moon_zone"
+    astro_features: list[MarkSixAstroFeature] | None = None
 
     @field_validator("base_url")
     @classmethod
@@ -121,6 +136,20 @@ class MarkSixLlmWorldlineRequest(BaseModel):
         if not normalized.startswith(("http://", "https://")):
             raise ValueError("base_url must use http or https")
         return normalized
+
+    @field_validator("astro_features")
+    @classmethod
+    def validate_astro_features(
+        cls,
+        value: list[MarkSixAstroFeature] | None,
+    ) -> list[MarkSixAstroFeature] | None:
+        if value is None:
+            return value
+        if not value:
+            raise ValueError("select at least one astro feature")
+        if len(value) != len(set(value)):
+            raise ValueError("astro features must be unique")
+        return value
 
 
 class MarkSixLlmWorldlineResponse(BaseModel):

@@ -18,8 +18,13 @@ def _request() -> MarkSixLlmWorldlineRequest:
 
 def _patch_context(monkeypatch) -> None:
     monkeypatch.setattr(marksix_llm, "planetary_snapshot", lambda value: {
-        "date": value.isoformat(), "planets": [{"body": "Mercury", "longitude_deg": 12.3}],
-        "moon_phase_zone": "full_moon_zone",
+        "date": value.isoformat(), "sample_time": "12:00:00 UTC",
+        "planets": [{
+            "body": "Mercury", "longitude_deg": 12.3,
+            "longitude_speed_deg_day": 1.2, "is_retrograde": False,
+            "motion_phase": "direct",
+        }],
+        "moon_phase_angle_deg": 180.0, "moon_phase_zone": "full_moon_zone",
     })
     monkeypatch.setattr(marksix_llm, "_history_context", lambda request, snapshot: {
         "context_type": request.astro_context_type, "body": request.astro_body,
@@ -114,3 +119,63 @@ def test_history_comparison_matches_next_draw_planet_phase(monkeypatch) -> None:
         "moon_phase_zone": "waning_other",
     })
     assert captured == {"body": "Mercury", "condition": "post_station"}
+
+
+def test_selected_astro_features_limit_prompt_context(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    def analyze(*, body: str, condition: str):
+        captured.update(body=body, condition=condition)
+        return {
+            "context_type": "planet_motion", "body": body, "condition": condition,
+            "rule_era": "current_6_of_49", "start_date": "2002-07-04", "end_date": "2026-09-22",
+            "total_draws": 10, "condition_draws": 2, "baseline_draws": 8,
+            "numbers": [{"number": value, "lift": 1.0, "rate_difference": 0.0, "q_value_fdr": 1.0} for value in range(1, 50)],
+        }
+
+    monkeypatch.setattr(marksix_llm, "analyze_retrograde_numbers", analyze)
+    request = _request().model_copy(update={"astro_features": ["venus_motion"]})
+    astro, history, selected = marksix_llm._selected_astro_context(request, {
+        "date": "2026-09-24", "sample_time": "12:00:00 UTC",
+        "planets": [
+            {"body": "Mercury", "longitude_deg": 10.0, "motion_phase": "direct"},
+            {"body": "Venus", "longitude_deg": 20.0, "motion_phase": "retrograde_core"},
+        ],
+        "moon_phase_angle_deg": 90.0, "moon_phase_zone": "first_quarter_zone",
+    })
+    assert selected == ["venus_motion"]
+    assert [row["body"] for row in astro["planet_motion"]] == ["Venus"]
+    assert "moon_phase" not in astro
+    assert "major_aspects" not in astro
+    assert history is not None
+    assert captured == {"body": "Venus", "condition": "retrograde_core"}
+
+
+def test_major_aspects_can_be_selected_without_history(monkeypatch) -> None:
+    request = _request().model_copy(update={"astro_features": ["major_aspects"]})
+    astro, history, selected = marksix_llm._selected_astro_context(request, {
+        "date": "2026-09-24", "sample_time": "12:00:00 UTC",
+        "planets": [
+            {"body": "Mercury", "longitude_deg": 10.0},
+            {"body": "Venus", "longitude_deg": 100.0},
+            {"body": "Mars", "longitude_deg": 190.0},
+        ],
+        "moon_phase_angle_deg": 90.0, "moon_phase_zone": "first_quarter_zone",
+    })
+    assert selected == ["major_aspects"]
+    assert history is None
+    assert [row["aspect"] for row in astro["major_aspects"]["pairs"]] == [
+        "square", "opposition", "square",
+    ]
+
+
+def test_astro_features_must_not_be_empty_or_duplicated() -> None:
+    with pytest.raises(ValueError, match="select at least one"):
+        MarkSixLlmWorldlineRequest(
+            base_url="https://llm.example/v1", model="test", astro_features=[],
+        )
+    with pytest.raises(ValueError, match="must be unique"):
+        MarkSixLlmWorldlineRequest(
+            base_url="https://llm.example/v1", model="test",
+            astro_features=["moon_phase", "moon_phase"],
+        )

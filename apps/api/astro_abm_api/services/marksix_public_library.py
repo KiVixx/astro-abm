@@ -49,6 +49,8 @@ def _public_prompt_context(value: dict[str, Any]) -> dict[str, Any]:
         "astro_context_type",
         "historical_condition",
         "condition_draws",
+        "selected_astro_features",
+        "included_astro_sections",
     )
     return {key: value[key] for key in allowed if key in value}
 

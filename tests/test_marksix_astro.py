@@ -97,3 +97,24 @@ def test_moon_phase_number_analysis(monkeypatch, tmp_path: Path) -> None:
     assert result["context_type"] == "moon_phase"
     assert result["condition_draws"] == 1
     assert result["numbers"][0]["condition_rate"] == 1.0
+
+
+def test_planetary_snapshot_includes_all_llm_selectable_bodies(monkeypatch) -> None:
+    class SnapshotBackend:
+        def get_position(self, body: str, _ts):
+            body_index = marksix_astro.SNAPSHOT_BODIES.index(body) if body in marksix_astro.SNAPSHOT_BODIES else 0
+            return SimpleNamespace(
+                lon_deg=float(body_index * 20),
+                lon_speed_deg_day=-0.5 if body == "Mercury" else 0.5,
+            )
+
+    monkeypatch.setattr(marksix_astro, "SwissEphemerisBackend", SnapshotBackend)
+    snapshot = marksix_astro.planetary_snapshot(date(2026, 9, 24))
+
+    assert [row["body"] for row in snapshot["planets"]] == list(marksix_astro.SNAPSHOT_BODIES)
+    assert [row["body"] for row in snapshot["luminaries"]] == ["Sun", "Moon"]
+    assert next(row for row in snapshot["planets"] if row["body"] == "Mercury")["is_retrograde"] is True
+    assert snapshot["moon_phase_zone"] in {
+        "new_moon_zone", "waxing_crescent", "first_quarter_zone", "waxing_gibbous",
+        "full_moon_zone", "waning_gibbous", "last_quarter_zone", "waning_crescent",
+    }

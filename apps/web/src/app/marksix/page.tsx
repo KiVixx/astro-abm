@@ -20,9 +20,25 @@ import type {
   MarkSixMotionCondition,
   MarkSixMoonPhaseCondition,
   MarkSixLlmWorldlineResponse,
+  MarkSixAstroFeature,
 } from "@/lib/types";
 
 const MARKSIX_LLM_SETTINGS_KEY = "astro_abm_marksix_llm_settings_v1";
+const MARKSIX_ASTRO_FEATURES: MarkSixAstroFeature[] = [
+  "mercury_motion",
+  "venus_motion",
+  "mars_motion",
+  "jupiter_motion",
+  "saturn_motion",
+  "uranus_motion",
+  "neptune_motion",
+  "pluto_motion",
+  "moon_phase",
+  "major_aspects",
+];
+const DEFAULT_LLM_ASTRO_FEATURES = MARKSIX_ASTRO_FEATURES.filter(
+  (feature) => feature !== "major_aspects",
+);
 
 type MarkSixGenerationMode =
   | "uniform_random_demo_v1"
@@ -41,6 +57,11 @@ interface GenerationContextSnapshot {
 function promptContextText(context: Record<string, unknown>, key: string): string | null {
   const value = context[key];
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function promptContextList(context: Record<string, unknown>, key: string): string[] {
+  const value = context[key];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function Ball({ number, extra = false }: { number: number; extra?: boolean }) {
@@ -66,6 +87,7 @@ export default function MarkSixPage() {
   const [llmModel, setLlmModel] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmTimeoutSeconds, setLlmTimeoutSeconds] = useState(120);
+  const [llmAstroFeatures, setLlmAstroFeatures] = useState<MarkSixAstroFeature[]>(DEFAULT_LLM_ASTRO_FEATURES);
   const [llmSettingsSaved, setLlmSettingsSaved] = useState(false);
   const [llmResult, setLlmResult] = useState<MarkSixLlmWorldlineResponse | null>(null);
   const [llmError, setLlmError] = useState<string | null>(null);
@@ -121,12 +143,19 @@ export default function MarkSixPage() {
         model: string;
         apiKey: string;
         timeoutSeconds: number;
+        astroFeatures: MarkSixAstroFeature[];
       }>;
       if (typeof settings.baseUrl === "string") setLlmBaseUrl(settings.baseUrl);
       if (typeof settings.model === "string") setLlmModel(settings.model);
       if (typeof settings.apiKey === "string") setLlmApiKey(settings.apiKey);
       if (typeof settings.timeoutSeconds === "number" && settings.timeoutSeconds > 0) {
         setLlmTimeoutSeconds(settings.timeoutSeconds);
+      }
+      if (Array.isArray(settings.astroFeatures)) {
+        const supported = settings.astroFeatures.filter(
+          (feature): feature is MarkSixAstroFeature => MARKSIX_ASTRO_FEATURES.includes(feature),
+        );
+        if (supported.length) setLlmAstroFeatures([...new Set(supported)]);
       }
     } catch {
       window.localStorage.removeItem(MARKSIX_LLM_SETTINGS_KEY);
@@ -201,6 +230,16 @@ export default function MarkSixPage() {
     return rawValue;
   }
 
+  function astroFeatureLabel(feature: MarkSixAstroFeature): string {
+    return t(`marksix.astroFeature.${feature}`);
+  }
+
+  function toggleAstroFeature(feature: MarkSixAstroFeature) {
+    setLlmAstroFeatures((current) => current.includes(feature)
+      ? current.filter((item) => item !== feature)
+      : [...current, feature]);
+  }
+
   function generationContextSummary(snapshot: GenerationContextSnapshot, review = false) {
     if (snapshot.mode === "uniform_random_demo_v1") {
       return <p>{t("marksix.generationUniformContext")}</p>;
@@ -221,6 +260,11 @@ export default function MarkSixPage() {
     if (worldlineMode === "llm_astro_entertainment_v1") {
       if (!llmBaseUrl.trim() || !llmModel.trim()) {
         setLlmError(t("marksix.llmMissingSettings"));
+        setLlmOpen(true);
+        return;
+      }
+      if (!llmAstroFeatures.length) {
+        setLlmError(t("marksix.astroFeatureRequired"));
         setLlmOpen(true);
         return;
       }
@@ -279,6 +323,7 @@ export default function MarkSixPage() {
         timeout_seconds: llmTimeoutSeconds, language, astro_context_type: contextType,
         astro_body: researchBody as "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn",
         astro_condition: researchCondition, moon_phase_condition: moonPhase,
+        astro_features: llmAstroFeatures,
       });
       setResult(null);
       setLlmResult(next);
@@ -296,11 +341,16 @@ export default function MarkSixPage() {
       setLlmError(t("marksix.llmMissingSettings"));
       return;
     }
+    if (!llmAstroFeatures.length) {
+      setLlmError(t("marksix.astroFeatureRequired"));
+      return;
+    }
     window.localStorage.setItem(MARKSIX_LLM_SETTINGS_KEY, JSON.stringify({
       baseUrl: llmBaseUrl.trim(),
       model: llmModel.trim(),
       apiKey: llmApiKey,
       timeoutSeconds: llmTimeoutSeconds,
+      astroFeatures: llmAstroFeatures,
     }));
     setLlmSettingsSaved(true);
     setLlmOpen(false);
@@ -419,7 +469,15 @@ export default function MarkSixPage() {
         </header>
         <div className="marksix-controls">
           <label>{t("marksix.worldlineMode")}
-            <select value={worldlineMode} onChange={(event) => setWorldlineMode(event.target.value as typeof worldlineMode)}>
+            <select value={worldlineMode} onChange={(event) => {
+              const nextMode = event.target.value as typeof worldlineMode;
+              setWorldlineMode(nextMode);
+              if (nextMode === "llm_astro_entertainment_v1") {
+                setLlmSettingsSaved(false);
+                setLlmError(null);
+                setLlmOpen(true);
+              }
+            }}>
               <option value="uniform_random_demo_v1">{t("marksix.uniformMode")}</option>
               <option value="astro_association_entertainment_v1">{t("marksix.astroMode")}</option>
               <option value="llm_astro_entertainment_v1">{t("marksix.llmMode")}</option>
@@ -462,9 +520,23 @@ export default function MarkSixPage() {
             <label className="form-field"><span>{t("marksix.llmApiKey")}</span><input autoComplete="off" onChange={(event) => setLlmApiKey(event.target.value)} type="password" value={llmApiKey} /></label>
             <label className="form-field"><span>{t("marksix.llmTimeout")}</span><input min={1} onChange={(event) => setLlmTimeoutSeconds(Math.max(1, Number(event.target.value) || 1))} type="number" value={llmTimeoutSeconds} /></label>
           </div>
+          <fieldset className="marksix-astro-feature-picker">
+            <legend>{t("marksix.astroFeatureTitle")}</legend>
+            <div className="marksix-astro-feature-actions">
+              <button className="secondary" onClick={() => setLlmAstroFeatures([...MARKSIX_ASTRO_FEATURES])} type="button">{t("marksix.astroFeatureSelectAll")}</button>
+              <button className="secondary" onClick={() => setLlmAstroFeatures([])} type="button">{t("marksix.astroFeatureClear")}</button>
+            </div>
+            <p>{t("marksix.astroFeatureLead")}</p>
+            <div className="marksix-astro-feature-grid">
+              {MARKSIX_ASTRO_FEATURES.map((feature) => <label key={feature}>
+                <input checked={llmAstroFeatures.includes(feature)} onChange={() => toggleAstroFeature(feature)} type="checkbox" />
+                <span><strong>{astroFeatureLabel(feature)}</strong><small>{t(`marksix.astroFeatureNote.${feature}`)}</small></span>
+              </label>)}
+            </div>
+          </fieldset>
           <p className="marksix-method-note">{t("marksix.llmPrivacy")}</p>
           {llmError ? <p className="notice marksix-llm-error" role="alert">{llmError}</p> : null}
-          <footer><button disabled={!llmBaseUrl.trim() || !llmModel.trim()} onClick={saveLlmSettings} type="button">
+          <footer><button disabled={!llmBaseUrl.trim() || !llmModel.trim() || !llmAstroFeatures.length} onClick={saveLlmSettings} type="button">
               {t("marksix.llmSave")}
           </button></footer>
         </section>
@@ -484,6 +556,7 @@ export default function MarkSixPage() {
           {llmResult ? <div className="marksix-resolved-context">
             {promptContextText(llmResult.prompt_context, "next_draw_date") ? <span><strong>{t("marksix.resolvedDrawDate")}:</strong> {promptContextText(llmResult.prompt_context, "next_draw_date")}</span> : null}
             {promptContextText(llmResult.prompt_context, "historical_condition") ? <span><strong>{t("marksix.resolvedCondition")}:</strong> {resolvedConditionLabel(promptContextText(llmResult.prompt_context, "historical_condition")!, generationSnapshot)}</span> : null}
+            {promptContextList(llmResult.prompt_context, "selected_astro_features").length ? <span><strong>{t("marksix.astroFeatureIncluded")}:</strong> {promptContextList(llmResult.prompt_context, "selected_astro_features").map((feature) => astroFeatureLabel(feature as MarkSixAstroFeature)).join(" · ")}</span> : null}
           </div> : null}
         </div>
 
