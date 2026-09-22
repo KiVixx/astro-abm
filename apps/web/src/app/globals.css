@@ -801,7 +801,7 @@ pre {
 .marksix-prompt-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
 .marksix-prompt-current { background: var(--surface-muted); border-left: 3px solid var(--accent); color: var(--muted); padding: 12px; }
 .marksix-prompt-preview { display: grid; gap: 10px; min-width: 0; }
-.marksix-prompt-preview pre { background: var(--ink); color: var(--surface); font-size: 11px; line-height: 1.55; margin: 0; max-height: 260px; overflow: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
+.marksix-prompt-preview pre { background: var(--surface-muted); border: 1px solid var(--border); color: var(--text); font-size: 11px; line-height: 1.55; margin: 0; max-height: 260px; overflow: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
 .marksix-llm-error { margin: 0; }
 .marksix-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
 .marksix-controls label { display: grid; font-size: 12px; gap: 6px; }
