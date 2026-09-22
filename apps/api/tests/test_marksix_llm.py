@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -179,3 +180,46 @@ def test_astro_features_must_not_be_empty_or_duplicated() -> None:
             base_url="https://llm.example/v1", model="test",
             astro_features=["moon_phase", "moon_phase"],
         )
+
+
+def test_custom_prompt_is_appended_without_replacing_structured_context() -> None:
+    messages = marksix_llm._messages(
+        context={"purpose": "entertainment_mark_six_worldline_guess", "value": 42},
+        language="zh-Hant",
+        custom_user_prompt="請優先比較月相，但不要捏造資料。",
+    )
+    user_context = json.loads(messages[1]["content"])
+    assert user_context["value"] == 42
+    assert user_context["user_instructions"] == "請優先比較月相，但不要捏造資料。"
+    assert "strict JSON" in messages[0]["content"]
+
+
+def test_prompt_preview_returns_exact_messages_without_network_or_credentials(monkeypatch) -> None:
+    monkeypatch.setattr(marksix_llm, "_prompt_context", lambda request: (
+        date(2026, 9, 24),
+        {"selected_astro_features": ["moon_phase"]},
+        None,
+        ["moon_phase"],
+        {
+            "purpose": "entertainment_mark_six_worldline_guess",
+            "next_draw_astro_context": {"moon_phase": {"zone": "full_moon_zone"}},
+        },
+    ))
+    monkeypatch.setattr(
+        marksix_llm,
+        "_call_openai_compatible",
+        lambda *args, **kwargs: pytest.fail("prompt preview must not call the LLM endpoint"),
+    )
+    response = TestClient(app).post("/marksix/llm-prompt-preview", json={
+        "base_url": "https://llm.example/v1",
+        "model": "test-model",
+        "api_key": "never-return-me",
+        "astro_features": ["moon_phase"],
+        "custom_user_prompt": "只使用已提供的滿月脈絡。",
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["next_draw_date"] == "2026-09-24"
+    assert payload["selected_astro_features"] == ["moon_phase"]
+    assert json.loads(payload["user_prompt"])["user_instructions"] == "只使用已提供的滿月脈絡。"
+    assert "never-return-me" not in response.text
