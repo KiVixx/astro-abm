@@ -93,7 +93,7 @@ export default function MarkSixPage() {
   const [llmError, setLlmError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<1 | 3 | 5 | 10>(3);
   const [count, setCount] = useState(1);
-  const [worldlineMode, setWorldlineMode] = useState<MarkSixGenerationMode>("uniform_random_demo_v1");
+  const [worldlineMode, setWorldlineMode] = useState<MarkSixGenerationMode>("llm_astro_entertainment_v1");
   const [statusLoadState, setStatusLoadState] = useState<OverviewLoadState>("loading");
   const [drawsLoadState, setDrawsLoadState] = useState<OverviewLoadState>("loading");
   const [frequenciesLoadState, setFrequenciesLoadState] = useState<OverviewLoadState>("loading");
