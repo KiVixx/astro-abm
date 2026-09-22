@@ -785,6 +785,15 @@ pre {
 .marksix-llm-result { border: 1px solid var(--border-strong); display: grid; gap: 12px; padding: 20px; }
 .marksix-llm-result h3 { font-size: 15px; margin: 8px 0 0; }
 .marksix-llm-dialog > footer { background: var(--surface); border-top: 1px solid var(--border); bottom: -24px; display: flex; justify-content: flex-end; margin: 0 -24px; padding: 14px 24px; position: sticky; }
+.marksix-astro-feature-picker { border: 1px solid var(--border-strong); display: grid; gap: 14px; margin: 0; padding: 18px; }
+.marksix-astro-feature-picker legend { font-family: var(--font-signal); font-size: 13px; font-weight: 800; padding: 0 7px; }
+.marksix-astro-feature-picker > p { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0; }
+.marksix-astro-feature-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.marksix-astro-feature-grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.marksix-astro-feature-grid label { align-items: flex-start; border: 1px solid var(--border); cursor: pointer; display: flex; gap: 10px; min-height: 72px; padding: 11px; }
+.marksix-astro-feature-grid input { margin-top: 3px; }
+.marksix-astro-feature-grid span { display: grid; gap: 4px; }
+.marksix-astro-feature-grid small { color: var(--muted); line-height: 1.4; }
 .marksix-llm-error { margin: 0; }
 .marksix-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
 .marksix-controls label { display: grid; font-size: 12px; gap: 6px; }
@@ -842,6 +851,7 @@ pre {
   .marksix-history-row { grid-template-columns: 86px 1fr; }
   .marksix-history-row small { grid-column: 2; text-align: left; }
   .marksix-public-grid { grid-template-columns: 1fr; }
+  .marksix-astro-feature-grid { grid-template-columns: 1fr; }
 }
 
 .home-system-item {

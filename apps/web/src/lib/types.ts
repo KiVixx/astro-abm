@@ -9,6 +9,17 @@ export type MarkSixMotionCondition =
 export type MarkSixMoonPhaseCondition =
   | "new_moon_zone" | "first_quarter_zone" | "full_moon_zone"
   | "last_quarter_zone" | "waxing_other" | "waning_other";
+export type MarkSixAstroFeature =
+  | "mercury_motion"
+  | "venus_motion"
+  | "mars_motion"
+  | "jupiter_motion"
+  | "saturn_motion"
+  | "uranus_motion"
+  | "neptune_motion"
+  | "pluto_motion"
+  | "moon_phase"
+  | "major_aspects";
 
 export interface MarkSixStatus {
   total_draws: number;
@@ -112,6 +123,7 @@ export interface MarkSixLlmWorldlineRequest {
   astro_body: "Mercury" | "Venus" | "Mars" | "Jupiter" | "Saturn";
   astro_condition: MarkSixMotionCondition;
   moon_phase_condition: MarkSixMoonPhaseCondition;
+  astro_features: MarkSixAstroFeature[];
 }
 
 export interface MarkSixLlmWorldlineResponse {

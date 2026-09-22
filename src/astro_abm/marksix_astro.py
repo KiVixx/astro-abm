@@ -10,6 +10,7 @@ from .marksix import _connect
 
 
 SUPPORTED_BODIES = ("Mercury", "Venus", "Mars", "Jupiter", "Saturn")
+SNAPSHOT_BODIES = (*SUPPORTED_BODIES, "Uranus", "Neptune", "Pluto")
 CURRENT_RULE_START = "2002-07-04"
 MOTION_CONDITIONS = (
     "retrograde", "direct", "pre_station", "retrograde_entry",
@@ -42,6 +43,7 @@ class SwissEphemerisBackend:
             "Sun": swe.SUN, "Moon": swe.MOON,
             "Mercury": swe.MERCURY, "Venus": swe.VENUS, "Mars": swe.MARS,
             "Jupiter": swe.JUPITER, "Saturn": swe.SATURN,
+            "Uranus": swe.URANUS, "Neptune": swe.NEPTUNE, "Pluto": swe.PLUTO,
         }
 
     def get_position(self, body: str, ts: datetime) -> Any:
@@ -280,7 +282,7 @@ def planetary_snapshot(target_date: date) -> dict[str, Any]:
     backend = SwissEphemerisBackend()
     timestamp = datetime.combine(target_date, datetime.min.time(), tzinfo=UTC) + timedelta(hours=12)
     planets: list[dict[str, Any]] = []
-    for body in SUPPORTED_BODIES:
+    for body in SNAPSHOT_BODIES:
         position = backend.get_position(body, timestamp)
         phase = _motion_phase_calendar(
             body=body, start=target_date, end=target_date, backend=backend,
@@ -297,4 +299,8 @@ def planetary_snapshot(target_date: date) -> dict[str, Any]:
         "date": target_date.isoformat(), "sample_time": "12:00:00 UTC",
         "planets": planets, "moon_phase_angle_deg": round(moon_angle, 4),
         "moon_phase_zone": _moon_phase_label(moon_angle),
+        "luminaries": [
+            {"body": "Sun", "longitude_deg": round(sun.lon_deg, 4)},
+            {"body": "Moon", "longitude_deg": round(moon.lon_deg, 4)},
+        ],
     }
