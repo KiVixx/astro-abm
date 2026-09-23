@@ -40,6 +40,7 @@ import type {
 } from "./types";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+let verifiedCsrfToken: string | null = null;
 
 export class ApiError extends Error {
   constructor(
@@ -81,7 +82,7 @@ export function getApiBaseUrl(): string {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const csrfToken = typeof document === "undefined" ? null : readCookie("astro_abm_csrf");
+  const csrfToken = typeof document === "undefined" ? null : currentCsrfToken();
   const method = (init?.method || "GET").toUpperCase();
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
@@ -110,35 +111,54 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function readCookie(name: string): string | null {
+function readCookieValues(name: string): string[] {
   const prefix = `${encodeURIComponent(name)}=`;
-  const match = document.cookie.split("; ").find((item) => item.startsWith(prefix));
-  return match ? decodeURIComponent(match.slice(prefix.length)) : null;
+  return document.cookie.split(";").map((item) => item.trim())
+    .filter((item) => item.startsWith(prefix))
+    .map((item) => decodeURIComponent(item.slice(prefix.length)));
+}
+
+function currentCsrfToken(): string | null {
+  const cookies = readCookieValues("astro_abm_csrf");
+  return (verifiedCsrfToken && cookies.includes(verifiedCsrfToken)
+    ? verifiedCsrfToken : cookies.at(-1)) || null;
+}
+
+function rememberCsrfToken(token: string | null | undefined): void {
+  if (typeof window !== "undefined") verifiedCsrfToken = token || null;
 }
 
 export async function getAuthSession(): Promise<AuthSessionResponse> {
-  return apiFetch<AuthSessionResponse>("/auth/me");
+  const session = await apiFetch<AuthSessionResponse>("/auth/me");
+  rememberCsrfToken(session.csrf_token);
+  return session;
 }
 
 export async function registerAccount(payload: RegisterRequest): Promise<AuthSessionResponse> {
-  return apiFetch<AuthSessionResponse>("/auth/register", {
+  const session = await apiFetch<AuthSessionResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+  rememberCsrfToken(session.csrf_token);
+  return session;
 }
 
 export async function loginAccount(payload: LoginRequest): Promise<AuthSessionResponse> {
-  return apiFetch<AuthSessionResponse>("/auth/login", {
+  const session = await apiFetch<AuthSessionResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+  rememberCsrfToken(session.csrf_token);
+  return session;
 }
 
 export async function logoutAccount(): Promise<{ logged_out: boolean }> {
-  return apiFetch<{ logged_out: boolean }>("/auth/logout", {
+  const result = await apiFetch<{ logged_out: boolean }>("/auth/logout", {
     method: "POST",
     body: "{}",
   });
+  rememberCsrfToken(null);
+  return result;
 }
 
 export async function claimGuestWorldlines(): Promise<{ claimed_worldline_count: number }> {

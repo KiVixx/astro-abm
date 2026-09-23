@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 
 from fastapi import HTTPException, Request, Response
 
@@ -80,11 +81,32 @@ def require_current_user(request: Request) -> CurrentUser:
     return user
 
 
+def csrf_cookie_values(request: Request) -> list[str]:
+    # Cookie parsers collapse duplicate names, which can hide the current host cookie.
+    values: list[str] = []
+    for cookie in request.headers.get("cookie", "").split(";"):
+        name, separator, value = cookie.strip().partition("=")
+        if separator and name == CSRF_COOKIE and value not in values:
+            values.append(value)
+    return values[:8]
+
+
+def current_csrf_token(request: Request) -> str | None:
+    session_token = request.cookies.get(SESSION_COOKIE)
+    store = AuthStore()
+    for value in csrf_cookie_values(request):
+        if store.validate_csrf(session_token, value):
+            return value
+    return None
+
+
 def require_csrf(request: Request) -> None:
     session_token = request.cookies.get(SESSION_COOKIE)
-    csrf_cookie = request.cookies.get(CSRF_COOKIE)
     csrf_header = request.headers.get("X-CSRF-Token")
-    if not csrf_cookie or not csrf_header or csrf_cookie != csrf_header:
+    if not csrf_header or not any(
+        secrets.compare_digest(cookie, csrf_header)
+        for cookie in csrf_cookie_values(request)
+    ):
         raise HTTPException(status_code=403, detail="CSRF validation failed")
     if not AuthStore().validate_csrf(session_token, csrf_header):
         raise HTTPException(status_code=403, detail="CSRF validation failed")

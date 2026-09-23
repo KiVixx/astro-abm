@@ -13,6 +13,7 @@ from astro_abm_api.models.auth import (
 from astro_abm_api.services.auth_session import (
     GUEST_COOKIE,
     clear_auth_cookies,
+    current_csrf_token,
     current_user,
     require_csrf,
     require_current_user,
@@ -78,9 +79,14 @@ def login(payload: LoginRequest, request: Request, response: Response) -> AuthSe
 
 
 @router.get("/me", response_model=AuthSessionResponse)
-def me(request: Request) -> AuthSessionResponse:
+def me(request: Request, response: Response) -> AuthSessionResponse:
+    response.headers["Cache-Control"] = "no-store"
     user = current_user(request)
-    return AuthSessionResponse(authenticated=user is not None, user=user)
+    return AuthSessionResponse(
+        authenticated=user is not None,
+        user=user,
+        csrf_token=current_csrf_token(request) if user else None,
+    )
 
 
 @router.post("/logout", response_model=LogoutResponse)

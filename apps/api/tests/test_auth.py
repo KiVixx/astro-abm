@@ -134,6 +134,36 @@ def test_logout_requires_csrf_and_revokes_session(monkeypatch, tmp_path) -> None
     }
 
 
+def test_logout_uses_csrf_token_for_current_session_with_duplicate_cookies(monkeypatch, tmp_path) -> None:
+    client, _ = _client(monkeypatch, tmp_path)
+    assert _register(client).status_code == 201
+    session = client.cookies.get("astro_abm_session")
+    valid_csrf = client.cookies.get("astro_abm_csrf")
+    assert session and valid_csrf
+    cookies = (
+        f"astro_abm_session={session}; astro_abm_csrf={valid_csrf}; "
+        "astro_abm_csrf=older-session-token"
+    )
+
+    current = client.get("/auth/me", headers={"Cookie": cookies})
+    assert current.status_code == 200
+    assert current.json()["csrf_token"] == valid_csrf
+    assert current.headers["Cache-Control"] == "no-store"
+
+    rejected = client.post(
+        "/auth/logout",
+        headers={"Cookie": cookies, "X-CSRF-Token": "older-session-token"},
+    )
+    assert rejected.status_code == 403
+
+    logged_out = client.post(
+        "/auth/logout",
+        headers={"Cookie": cookies, "X-CSRF-Token": current.json()["csrf_token"]},
+    )
+    assert logged_out.status_code == 200
+    assert client.get("/auth/me").json()["authenticated"] is False
+
+
 def test_change_password_revokes_all_sessions(monkeypatch, tmp_path) -> None:
     first, _ = _client(monkeypatch, tmp_path)
     second = TestClient(app)
