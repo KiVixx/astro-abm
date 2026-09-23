@@ -39,7 +39,8 @@ import type {
   ScenarioWorldlineRegenerateFromResponse,
 } from "./types";
 
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_API_BASE_URL = "/api";
+const DEFAULT_INTERNAL_API_ORIGIN = "http://127.0.0.1:8000";
 let verifiedCsrfToken: string | null = null;
 
 export class ApiError extends Error {
@@ -72,7 +73,7 @@ export function getApiBaseUrl(): string {
   if (typeof window === "undefined") {
     return (
       process.env.ASTRO_ABM_INTERNAL_API_ORIGIN?.replace(/\/$/, "") ||
-      DEFAULT_API_BASE_URL
+      DEFAULT_INTERNAL_API_ORIGIN
     );
   }
   return (
