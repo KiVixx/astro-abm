@@ -773,7 +773,8 @@ pre {
 .marksix-number-cell small { color: var(--muted); font-size: 10px; }
 .marksix-research-legend { align-items: center; color: var(--muted); display: flex; font-size: 11px; gap: 10px; }
 .marksix-research-legend i { background: linear-gradient(90deg, var(--surface), var(--signal-magenta)); display: block; height: 8px; width: 120px; }
-.marksix-builder { align-items: end; border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); display: grid; gap: 24px; grid-template-columns: 1fr 1.4fr; padding: 28px 0; }
+.marksix-builder { align-items: start; border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); padding: 28px 0; }
+.marksix-builder-intro { align-content: start; display: grid; gap: 24px; min-width: 0; padding-top: 18px; }
 .marksix-builder h2, .marksix-history h2, .marksix-frequency h2 { margin: 0; }
 .marksix-builder header { align-items: flex-start; display: grid; gap: 8px; }
 .marksix-llm-open { justify-self: start; margin-top: 8px; }
@@ -803,7 +804,7 @@ pre {
 .marksix-prompt-preview { display: grid; gap: 10px; min-width: 0; }
 .marksix-prompt-preview pre { background: var(--surface-muted); border: 1px solid var(--border); color: var(--text); font-size: 11px; line-height: 1.55; margin: 0; max-height: 260px; overflow: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
 .marksix-llm-error { margin: 0; }
-.marksix-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+.marksix-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; min-width: 0; padding-top: 44px; }
 .marksix-controls label { display: grid; font-size: 12px; gap: 6px; }
 .marksix-generation-context { background: color-mix(in srgb, var(--surface) 82%, var(--signal-cyan)); border-left: 3px solid var(--signal-cyan); display: grid; gap: 8px; grid-column: 1 / -1; padding: 13px 15px; }
 .marksix-generation-context h3, .marksix-generation-context p { margin: 0; }
@@ -850,6 +851,7 @@ pre {
 
 @media (max-width: 760px) {
   .marksix-status-grid, .marksix-builder, .marksix-history-grid { grid-template-columns: 1fr; }
+  .marksix-builder-intro, .marksix-controls { padding-top: 0; }
   .marksix-status-grid > div + div { border-left: 0; border-top: 1px solid var(--border); }
   .marksix-controls { grid-template-columns: 1fr 1fr; }
   .marksix-research-controls { grid-template-columns: 1fr 1fr; }

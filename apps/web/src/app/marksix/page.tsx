@@ -512,13 +512,20 @@ export default function MarkSixPage() {
       </section>
 
       <section className="marksix-builder">
-        <header>
-          <p className="pixel-kicker">WORLDLINE GENERATOR</p>
-          <h2>{t("marksix.generateTitle")}</h2>
-          <button className="secondary marksix-llm-open" onClick={() => { setLlmSettingsSaved(false); setLlmError(null); setLlmOpen(true); }} type="button">
-            {t("marksix.llmButton")}
-          </button>
-        </header>
+        <div className="marksix-builder-intro">
+          <header>
+            <p className="pixel-kicker">WORLDLINE GENERATOR</p>
+            <h2>{t("marksix.generateTitle")}</h2>
+            <button className="secondary marksix-llm-open" onClick={() => { setLlmSettingsSaved(false); setLlmError(null); setLlmOpen(true); }} type="button">
+              {t("marksix.llmButton")}
+            </button>
+          </header>
+          {worldlineMode === "llm_astro_entertainment_v1" ? <div className="marksix-public-notice">
+            <strong>{t("marksix.publicLibraryNoticeTitle")}</strong>
+            <p>{t("marksix.publicLibraryNotice")}</p>
+          </div> : null}
+          {llmSettingsSaved ? <p className="marksix-method-note" role="status">{t("marksix.llmSaved")}</p> : null}
+        </div>
         <div className="marksix-controls">
           <label>{t("marksix.worldlineMode")}
             <select value={worldlineMode} onChange={(event) => {
@@ -553,11 +560,6 @@ export default function MarkSixPage() {
             {llmLoading ? t("marksix.llmGenerating") : generating ? t("marksix.generating") : t("marksix.generate")}
           </button>
         </div>
-        {worldlineMode === "llm_astro_entertainment_v1" ? <div className="marksix-public-notice">
-          <strong>{t("marksix.publicLibraryNoticeTitle")}</strong>
-          <p>{t("marksix.publicLibraryNotice")}</p>
-        </div> : null}
-        {llmSettingsSaved ? <p className="marksix-method-note" role="status">{t("marksix.llmSaved")}</p> : null}
       </section>
 
       {llmOpen ? <div className="marksix-llm-backdrop" role="presentation" onMouseDown={() => setLlmOpen(false)}>
