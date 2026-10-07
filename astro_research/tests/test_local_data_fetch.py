@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import requests
 
 from research.local_data_fetch import (
     LOCAL_PROVENANCE_PATH,
@@ -135,3 +136,61 @@ def test_fetch_local_data_defaults_to_ignored_local_provenance(tmp_path: Path, m
     local = tmp_path / LOCAL_PROVENANCE_PATH
     assert local.exists()
     assert json.loads(local.read_text())["series"][0]["asset"] == "SPX"
+
+
+def test_failed_gold_fetch_preserves_file_and_refreshes_later_assets(tmp_path: Path, monkeypatch):
+    from research import local_data_fetch
+
+    gold_path = tmp_path / local_data_fetch.ASSET_OUTPUTS["Gold"]
+    gold_path.parent.mkdir(parents=True)
+    gold_path.write_text("date,close\n2020-01-02,1500\n")
+    provenance = tmp_path / LOCAL_PROVENANCE_PATH
+    provenance.write_text(json.dumps({"series": [{"asset": "Gold", "coverage_end": "2020-01-02"}]}))
+    response = requests.Response()
+    response.status_code = 403
+
+    def blocked_gold(**kwargs):
+        raise requests.HTTPError("blocked", response=response)
+
+    monkeypatch.setattr(local_data_fetch, "fetch_lbma_gold", blocked_gold)
+    monkeypatch.setattr(
+        local_data_fetch,
+        "fetch_credit_proxy",
+        lambda **kwargs: pd.DataFrame({"date": ["2020-01-03"], "value": [1.5]}),
+    )
+
+    gold, credit = fetch_local_research_data(
+        root=tmp_path,
+        assets=("Gold", "CreditProxy"),
+        start=date(2020, 1, 1),
+        end=date(2020, 1, 3),
+    )
+
+    assert gold.refreshed is False
+    assert gold.coverage_end == "2020-01-02"
+    assert gold.warning == "refresh failed (HTTP 403); existing file preserved"
+    assert gold_path.read_text() == "date,close\n2020-01-02,1500\n"
+    assert credit.refreshed is True
+    assert credit.output_path.exists()
+    records = json.loads(provenance.read_text())["series"]
+    assert next(row for row in records if row["asset"] == "Gold")["coverage_end"] == "2020-01-02"
+    assert any(row["asset"] == "HY_OAS_PROXY" for row in records)
+
+
+def test_empty_refresh_does_not_erase_existing_csv(tmp_path: Path, monkeypatch):
+    from research import local_data_fetch
+
+    path = tmp_path / local_data_fetch.ASSET_OUTPUTS["SPX"]
+    path.parent.mkdir(parents=True)
+    path.write_text("date,close\n2020-01-02,100\n")
+    monkeypatch.setattr(local_data_fetch, "fetch_yahoo_chart", lambda *args, **kwargs: pd.DataFrame())
+
+    (result,) = fetch_local_research_data(
+        root=tmp_path,
+        assets=("SPX",),
+        start=date(2020, 1, 1),
+        end=date(2020, 1, 3),
+    )
+
+    assert result.refreshed is False
+    assert path.read_text() == "date,close\n2020-01-02,100\n"

@@ -118,6 +118,15 @@ uv run python scripts/astro_abm_ops.py fetch-local-data --asset CreditProxy --ac
 
 `CreditProxy` requires `FRED_API_KEY` in `.env`.
 
+The all-assets refresh attempts each source independently. If one source fails,
+its existing CSV and provenance are preserved, the other sources still refresh,
+and the command exits nonzero with a per-asset warning. In particular, the LBMA
+JSON endpoint may return HTTP 403: the Gold series then remains at its last
+observed date. Do not append gold futures or other spot prices to this LBMA
+series under the same label. A current LBMA benchmark feed requires the
+appropriate data access/licence; a separately labelled alternative source
+would need its own provenance and validation.
+
 ## Source methods used by this project
 
 | Local file | Series | Method |

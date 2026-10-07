@@ -43,6 +43,7 @@ class LocalDataFetchResult:
     coverage_end: str | None
     source: str
     warning: str = ""
+    refreshed: bool = True
 
 
 def fetch_local_research_data(
@@ -79,20 +80,41 @@ def fetch_local_research_data(
             )
             continue
 
-        if asset in YAHOO_SYMBOLS:
-            frame = fetch_yahoo_chart(YAHOO_SYMBOLS[asset], start=start, end=end, session=session)
-        elif asset == "Gold":
-            frame = fetch_lbma_gold(start=start, end=end, session=session)
-        elif asset == "CreditProxy":
-            frame = fetch_credit_proxy(start=start, end=end, fred_api_key_env=fred_api_key_env)
-        else:
-            raise ValueError(f"Unsupported local research asset: {asset}")
+        try:
+            if asset in YAHOO_SYMBOLS:
+                frame = fetch_yahoo_chart(YAHOO_SYMBOLS[asset], start=start, end=end, session=session)
+            elif asset == "Gold":
+                frame = fetch_lbma_gold(start=start, end=end, session=session)
+            elif asset == "CreditProxy":
+                frame = fetch_credit_proxy(start=start, end=end, fred_api_key_env=fred_api_key_env)
+            else:
+                raise ValueError(f"Unsupported local research asset: {asset}")
+            if frame.empty:
+                raise ValueError("source returned no observations")
+        except (requests.RequestException, RuntimeError, ValueError) as exc:
+            existing = _existing_result(asset, output_path)
+            status = exc.response.status_code if isinstance(exc, requests.HTTPError) and exc.response is not None else None
+            reason = f"HTTP {status}" if status is not None else type(exc).__name__
+            results.append(
+                LocalDataFetchResult(
+                    asset=asset,
+                    output_path=output_path,
+                    rows=existing.rows,
+                    coverage_start=existing.coverage_start,
+                    coverage_end=existing.coverage_end,
+                    source=_source_name(asset),
+                    warning=f"refresh failed ({reason}); existing file preserved",
+                    refreshed=False,
+                )
+            )
+            continue
         output_path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(output_path, index=False)
         results.append(_result(asset=asset, output_path=output_path, frame=frame))
 
-    if not dry_run and provenance_mode != "none":
-        update_local_data_provenance(root_path, results, path=provenance_path_for_mode(provenance_mode))
+    refreshed = tuple(result for result in results if result.refreshed)
+    if not dry_run and provenance_mode != "none" and refreshed:
+        update_local_data_provenance(root_path, refreshed, path=provenance_path_for_mode(provenance_mode))
     return tuple(results)
 
 
@@ -331,6 +353,21 @@ def _result(*, asset: str, output_path: Path, frame: pd.DataFrame) -> LocalDataF
         coverage_start=coverage_start,
         coverage_end=coverage_end,
         source=_source_name(asset),
+    )
+
+
+def _existing_result(asset: str, output_path: Path) -> LocalDataFetchResult:
+    if not output_path.exists():
+        return LocalDataFetchResult(asset, output_path, 0, None, None, _source_name(asset), refreshed=False)
+    dates = pd.read_csv(output_path, usecols=["date"])["date"]
+    return LocalDataFetchResult(
+        asset,
+        output_path,
+        len(dates),
+        str(dates.min()) if not dates.empty else None,
+        str(dates.max()) if not dates.empty else None,
+        _source_name(asset),
+        refreshed=False,
     )
 
 

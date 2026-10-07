@@ -61,11 +61,11 @@ def main() -> int:
         )
         if result.warning:
             print(f"warning={result.warning}")
-    if args.provenance_mode == "none":
-        print("provenance=skipped")
-    else:
+    if not args.dry_run and args.provenance_mode != "none" and any(result.refreshed for result in results):
         print(f"provenance={provenance_path_for_mode(args.provenance_mode)}")
-    return 0
+    else:
+        print("provenance=unchanged")
+    return 1 if any(not result.refreshed and not args.dry_run for result in results) else 0
 
 
 if __name__ == "__main__":
